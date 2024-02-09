@@ -1,0 +1,49 @@
+name: Util Bot Test
+
+on:
+  pull_request:
+    paths:
+      - 'util-bot/**'
+      - 'assets/**'
+      - 'lib/**'
+  push:
+    branches-ignore:
+      - main
+    paths:
+      - 'util-bot/**'
+      - 'assets/**'
+      - 'lib/**'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.event.pull_request.base.repo.full_name
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Copy in assets and lib
+        run: |
+          cp -r assets util-bot/src
+          cp -r lib util-bot/src
+
+      - uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 20
+          cache: "pnpm"
+
+      - name: Build & Test
+        run: |
+          cd util-bot
+          pnpm install
+          pnpm run build
+          pnpm run test

@@ -1,0 +1,438 @@
+{
+    "unexpected_error": {
+        "title": "Whoopsie!",
+        "apology": "Sorry for the inconvenience. Feel free to try again later.",
+        "reported": "This incident was reported to the developers.",
+        "discord": {
+            "title": "${unexpected_error.title}",
+            "description": "It seems we're currently having trouble communicating with Discord. ${unexpected_error.apology}",
+            "footer": { "text": "${unexpected_error.reported}" }
+        },
+        "database": {
+            "title": "${unexpected_error.title}",
+            "description": "It looks like there is currently a problem with our database. ${unexpected_error.apology}",
+            "footer": { "text": "${unexpected_error.reported}" }
+        },
+        "unknown": {
+            "title": "${unexpected_error.title}",
+            "description": "Unfortunately your command could not be handled due to something unexpected going wrong. ${unexpected_error.apology}",
+            "footer": { "text": "${unexpected_error.reported}" }
+        },
+        "overflow": {
+            "title": "${unexpected_error.title}",
+            "description": "It looks like Discord can't handle the amount of awesomeness I am trying to send you. ${unexpected_error.apology}",
+            "footer": { "text": "${unexpected_error.reported}" }
+        }
+    },
+    "type_error": {
+        "position": {
+            "title": "Invalid Position",
+            "description": "Please pick a valid Bridge Scrims position and try again!"
+        },
+        "role": {
+            "title": "Invalid Role",
+            "description": "Please pick a valid discord role and try again!"
+        },
+        "config_key": {
+            "title": "Invalid Config Key",
+            "description": "Please pick a valid key to configure and try again!"
+        },
+        "user_unidentified": {
+            "title": "Invalid User",
+            "description": "%s has not been added to our system yet. Please choose someone else or try again later."
+        },
+        "position_expiration": {
+            "title": "Invalid Expiration",
+            "description": "Please use a valid duration between 1 minute and 100 years and try again."
+        }
+    },
+    "commands": {
+        "kill": {
+            "name": "kill",
+            "description": "Used to kill the bot cleanly.",
+            "exit_option": {
+                "name": "exit_code",
+                "description": "The exit code to exit the process with."
+            }
+        },
+        "send": {
+            "name": "send",
+            "description": "Used to send pre configured messages.",
+            "message_option": {
+                "name": "message",
+                "description": "The identifier of the message you would like to send."
+            }
+        },
+        "position_roles": {
+            "name": "position-roles",
+            "description": "Set up meaningful roles for the application.",
+            "role_option": {
+                "name": "role",
+                "description": "The Discord role"
+            },
+            "position_option": {
+                "name": "position",
+                "description": "The role of this role in this application"
+            },
+            "status": {
+                "name": "status",
+                "description": "Shows the current configuration"
+            },
+            "reload": {
+                "name": "reload",
+                "description": "Reloads configuration from the database"
+            },
+            "add": {
+                "name": "add",
+                "description": "Connect a role to a position"
+            },
+            "remove": {
+                "name": "remove",
+                "description": "Disconnect a role from a position"
+            }
+        },
+        "find": {
+            "name": "find",
+            "description": "Use this to find Discord users.",
+            "user_option": {
+                "name": "user-resolvable",
+                "description": "Either the user's ID or tag"
+            },
+            "case_option": {
+                "name": "case_sensitive",
+                "description": "If the query should be matched case sensitive [Default: False]"
+            },
+            "none": "*Nothing found.*"
+        },
+        "suggestions": {
+            "delete": {
+                "cm": "Suggestion Delete"
+            },
+            "detach": {
+                "cm": "Suggestion Detach"
+            }
+        },
+        "vouches": {
+            "name": "vouches",
+            "cm": "Vouches",
+            "description": "Use this command to display a players vouches.",
+            "user_option": {
+                "name": "user",
+                "description": "The user to show the vouches of. (Default: YOU)"
+            },
+            "rank_option": {
+                "name": "rank",
+                "description": "What rank to show vouches for. (Default: Next Rank)"
+            },
+            "expired_option": {
+                "name": "show_expired",
+                "description": "If expired vouches should also be showed. (Default: False)"
+            }
+        },
+        "vouch": {
+            "name": "vouch",
+            "description": "Use this command to vouch for someone.",
+            "user_option": {
+                "name": "user",
+                "description": "The user to vouch."
+            },
+            "comment_option": {
+                "name": "reason",
+                "description": "Why are you vouching?"
+            },
+            "rank_option": {
+                "name": "rank",
+                "description": "What rank to vouch someone for. (Default: Next Rank)"
+            }
+        },
+        "remove_vouch": {
+            "name": "remove-vouches",
+            "description": "Use this command to remove someone's vouches.",
+            "user_option": {
+                "name": "user",
+                "description": "The user to remove the vouches from."
+            },
+            "rank_option": {
+                "name": "rank",
+                "description": "What rank to remove vouches for. (Default: Next Rank)"
+            }
+        },
+        "devouch": {
+            "name": "devouch",
+            "description": "Use this command to devouch someone.",
+            "user_option": {
+                "name": "user",
+                "description": "The user to devouch."
+            },
+            "comment_option": {
+                "name": "reason",
+                "description": "Why are you devouching?"
+            },
+            "rank_option": {
+                "name": "rank",
+                "description": "What rank to devouch someone for. (Default: Next Rank)"
+            }
+        },
+        "deny_app": {
+            "name": "deny-app",
+            "description": "Use this command to deny somebody's application."
+        },
+        "accept_app": {
+            "name": "accept-app",
+            "description": "Use this command to accept somebody's application."
+        },
+        "purge": {
+            "name": "purge",
+            "description": "Use this command to remove purge someone down a rank.",
+            "user_option": {
+                "name": "user",
+                "description": "The user that should be purged."
+            },
+            "reason_option": {
+                "name": "reason",
+                "description": "Why is this person getting purged?"
+            }
+        },
+        "config": {
+            "name": "config",
+            "description": "Used to configure the bot for this Discord server.",
+            "key_option": {
+                "name": "key",
+                "description": "What exactly are you trying to configure?"
+            },
+            "val_option": {
+                "name": "value",
+                "description": "What value would you like to assign this key?"
+            },
+            "client_option": {
+                "name": "client",
+                "description": "Who should this configuration effect?"
+            }
+        },
+        "tourney": {
+            "name": "tourney",
+            "description": "Commands related to the tournament.",
+            "start": {
+                "name": "start",
+                "description": "Used to start a round."
+            },
+            "score": {
+                "name": "score",
+                "description": "Used to score a match."
+            },
+            "round_option": {
+                "name": "round",
+                "description": "The round number you would like to start."
+            },
+            "length_option": {
+                "name": "length",
+                "description": "The amount of days this round should last."
+            },
+            "grace_period_option": {
+                "name": "grace_period",
+                "description": "The grace period length in minutes."
+            },
+            "game_score_option": {
+                "name": "game§{0}",
+                "description": "The score of game §{0} written as {winner's points}-{loser's points} (e.g. 5-0)"
+            },
+            "keep_channel_option": {
+                "name": "keep_channel",
+                "description": "If the channel should NOT be deleted. (Default: False)"
+            }
+        }
+    },
+    "party": {
+        "invalid_people": "You can not do this with bots or yourself!",
+        "no_party": "You must be in a party to use this command!",
+        "disbanded": ":ballot_box_with_check:  Your party was disbanded.",
+        "created": ":white_check_mark:  Party created with %s!",
+        "recovered": ":rewind:  Your previous party was recovered and updated!\n:white_check_mark:  You are currently partied with %s.",
+        "missing_scrims_users": "Some of these people have not yet been properly identified by the Bridge Scrims system. Please try again in a moment."
+    },
+    "role_sync": {
+        "confirm": "Are you sure you want to do this? This will remove **§{0}**`incorrect roles` and add **§{1}**`new roles`!",
+        "done": "**§{0}/§{1}** `removed` successfully and **§{2}/§{3}** `added` successfully."
+    },
+    "position_roles": {
+        "no_perms": {
+            "title": "${missing_permissions}",
+            "description": "You can't manage the roles of the positions above yours!"
+        },
+        "none": "You haven't configured anything for this guild yet.",
+        "status": { "title": "Connected Roles" },
+        "reloaded": "Positions and position-roles were reloaded.",
+        "connected": "%s is now connected to **%s**",
+        "exists": "%s is already connected to **%s**!",
+        "confirm_add": "%s is already connected to **%s**. Are you sure you want to also add this?",
+        "not_connected_any": "%s is not connected to any positions!",
+        "not_connected_exact": "%s is not connected to **%s**!",
+        "removed_exact": "%s was disconnected from **%s**.",
+        "removed_all": "%s was disconnected from any positions."
+    },
+    "positions": {
+        "no_perms": {
+            "title": "${missing_permissions}",
+            "description": "You don't have permission to manage this position!"
+        },
+        "none": { "description": "%s doesn't have any positions." },
+        "already_taken": "Couldn't remove **%s**, since %s does not have it!",
+        "update_unavailable": "%s already has `%s` %s",
+        "removed": "%s lost `%s`.",
+        "created": "%s given `%s` %s.",
+        "updated": "%s has `%s` until %s 🢀 %s now"
+    },
+    "operations": {
+        "cancel": "Cancel",
+        "confirm": "Confirm",
+        "add": "Add",
+        "remove": "Remove",
+        "replace": "Replace"
+    },
+    "role_access_warning": "⚠️ I am missing permissions to give/remove this role! \nMake sure that §{0} has permission to `Manage Roles`, that this role is not already being managed and that in **Server Settings** -> **Roles** §{0} is above §{1}.",
+    "recaller_unknown_state": "Sadly, I have lost track of where we were in this process. Please start again.",
+    "operation_cancelled": "Operation cancelled.",
+    "blocked_cancel": "I am currently restarting. Please try again in a minute.",
+    "command_handler": {
+        "missing_permissions": {
+            "title": "${missing_permissions}",
+            "description": "You are missing the required permissions to use this command!"
+        },
+        "missing_handler": "This command does not have a handler. Please refrain from trying again.",
+        "no_host": "This message is no longer being hosted.",
+        "guild_only": {
+            "title": "Guild Only",
+            "description": "This command can only be used in discord servers!"
+        }
+    },
+    "command_failed_title": "Command Failed",
+    "command_failed": "Unfortunately your command cannot be handled at the moment. Please try again later.",
+    "cancel": "Cancel",
+    "guild_only_title": "Guild Only",
+    "guild_only": "This command can only be used in discord servers!",
+    "missing_scrims_user_title": "Unknown Scrims User",
+    "missing_scrims_user": "You have not yet been properly identified by the bridge scrims server. Please try again in a moment.",
+    "missing_permissions": "Insufficient Permissions",
+    "unknown_user": {
+        "title": "Unknown User",
+        "description": "The user you picked has not been added to our system yet."
+    },
+    "page": "Page",
+    "from_unknown_user": "an unknown-user",
+    "invalid_timeout": "Invalid Timeout",
+    "on_cooldown": {
+        "title": "Not so fast!",
+        "description": "You are still on cooldown, <t:%s:R> this cooldown will expire."
+    },
+    "tickets": {
+        "cooldown": {
+            "title": "Not so fast!",
+            "description": "You are still on cooldown, <t:%s:R> this cooldown will expire."
+        },
+        "blacklisted": {
+            "title": "Blacklisted",
+            "description": "You are not allowed to create these tickets, since you didn't follow the rules.?( This will last §{0}!)"
+        },
+        "unauthorized_manage": {
+            "title": "${missing_permissions}",
+            "description": "You do not have management permissions for `%s` tickets!"
+        },
+        "invalid_timeout": {
+            "title": "${invalid_timeout}",
+            "description": "Please use a valid duration greater then 0 and less then a month and try again."
+        },
+        "permissions_already_correct": "The permissions for %s are already set like you requested.",
+        "creator_only": "This decision is reserved for the ticket creator %s!",
+        "permissions_updated": "%s updated the permissions of %s.",
+        "existing": "You have already created one of these (%s)!",
+        "none": "This command can only be used in ticket channels!",
+        "not_position_level": "You don't have permission to manage %s!",
+        "no_target": "Please specify a target (User or Role).",
+        "not_pinged_info": "(%s was not pinged)"
+    },
+    "suggestions": {
+        "blacklisted": {
+            "title": "Blacklisted",
+            "description": "You are not allowed to create suggestions, since you didn't follow the rules.?( This will last §{0}!)"
+        }
+    },
+    "api": {
+        "unavailable": "Unfortunately the %s is currently not available, please try again later.",
+        "throttling": "This application is being throttled by the %s, please try again in a minute.",
+        "timeout": "The response from the %s took too long, please try again later.",
+        "unauthorized": "The %s denied this application access, please try again later.",
+        "request_failed": "Unable to reach the %s at the moment, please try again later."
+    },
+    "vouches": {
+        "none": "%s has no %s vouches!",
+        "description_1": "Given by §{0}?( for *§{1}*).",
+        "description_2": "Decided by the §{0}?( for *§{1}*).",
+        "expired": {
+            "name": "+ §{0}  :stopwatch:  Expired Vouch(es)",
+            "value": "*(Vouches expire after §{1})*"
+        },
+        "as_string": {
+            "negative": "?(**§{0}.**  )?(§{1} )Devouch?( for *§{2}*)",
+            "positive": "?(**§{0}.**  )?(§{1} )Vouch?( for *§{2}*)",
+            "denied": "?(**§{0}.**  )Got Denied?( for *§{1}*)",
+            "purged": "?(**§{0}.**  )Got Purged?( for *§{1}*)",
+            "accepted": "?(**§{0}.**  )Got Accepted?( for *§{1}*)"
+        },
+        "to_field": {
+            "negative": {
+                "name": "?(§{4}.  ):no_entry:  ?(§{2} )Devouch | §{3}",
+                "value": "${vouches.description_1}"
+            },
+            "positive": {
+                "name": "?(§{4}.  ):white_check_mark:  ?(§{2} )Vouch | §{3}",
+                "value": "${vouches.description_1}"
+            },
+            "expired": {
+                "name": "?(§{4}.  ):white_check_mark:  ?(§{2} )Vouch | §{3} (:stopwatch:)",
+                "value": "${vouches.description_1}"
+            },
+            "denied": {
+                "name": "?(§{3}.  ):x:  Got Denied | §{2}",
+                "value": "${vouches.description_2}"
+            },
+            "purged": {
+                "name": "?(§{3}.  ):flag_white:  Got Purged | §{2}",
+                "value": "${vouches.description_2}"
+            },
+            "accepted": {
+                "name": "?(§{3}.  ):ballot_box_with_check:  Got Accepted | §{2}",
+                "value": "${vouches.description_2}"
+            }
+        },
+        "embed_summary": { "title": "%s Vouches" }
+    },
+    "sessions": {
+        "summary": {
+            "title": "%s",
+            "description": "• `ID:` %s\n• `Created by:` %s\n• `Started at:` %s\n• `Ended at:` %s\n• `Duration:` %s"
+        },
+        "details": "• `Type:` %s\n• `Created by:` %s\n• `Started at:` %s\n• `Duration:` %s\n• `Participants:` %s",
+        "participation": { "title": "Participants" },
+        "no_participation": "*nobody participated in this session*"
+    },
+    "mc_player_missing": "A player with the name of **%s** could not be found.",
+    "missing_message_permissions": {
+        "title": "${missing_permissions}",
+        "description": "You are missing the required permissions to send this bot message!"
+    },
+    "bot_message_missing": "No bot message could be found with a Id of `%s`.",
+    "app_not_enough_vouches": {
+        "title": "You need at least %s vouches to apply for %s!",
+        "description": "To learn how to obtain vouches see <#%s>. If you require further assistance, feel free to create a support ticket in <#%s>.",
+        "footer": { "text": "Please also note that vouches expire after %s." }
+    },
+    "app_received": "***Your application was received by the council!***",
+    "vs": "V/S",
+    "games": {
+        "no_participants": "*No Participants*",
+        "user_history": {
+            "title": "%s Game History"
+        }
+    },
+    "no_image_dump": "This image could not be locked, due to this feature not being configured yet."
+}

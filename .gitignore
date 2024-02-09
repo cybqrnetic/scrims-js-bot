@@ -1,0 +1,17 @@
+# testing
+*/node_modules
+*/dist
+*/transcripts
+*/tests
+*/logs
+
+**/src/assets
+**/src/lib
+
+# developing
+.vscode
+.idea
+.env
+
+# misc
+.DS_Store
