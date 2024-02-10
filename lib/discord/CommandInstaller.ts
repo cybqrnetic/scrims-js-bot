@@ -100,7 +100,8 @@ export class CommandInstaller {
             // @ts-ignore
             builder.options?.filter((option) => !option.type).forEach((option) => (option.type = 1))
 
-            builder.setDMPermission(!config?.forceGuild)
+            if (builder.dm_permission === undefined) builder.setDMPermission(!config?.forceGuild)
+
             this.commandBuilders.push(builder)
         }
 

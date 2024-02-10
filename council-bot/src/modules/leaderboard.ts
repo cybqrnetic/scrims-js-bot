@@ -55,8 +55,16 @@ export class LeaderboardFeature extends BotModule {
         const councilRole = PositionRole.getRoles(`${role} Council`, guild.id)[0]
         if (councilRole) embed.setColor(councilRole.color)
 
-        const vouches = await Vouch.find()
-        const getVouches = (id: string) => vouches.filter((v) => v.position === role && v.executorId === id)
+        const vouches = await Vouch.find({ position: role })
+        const councilVouches: Record<string, Vouch[]> = {}
+        for (const vouch of vouches) {
+            const key = vouch.executorId
+            if (councilVouches[key]?.push(vouch) === undefined) {
+                councilVouches[key] = [vouch]
+            }
+        }
+
+        const getVouches = (id: string) => councilVouches[id] ?? []
 
         embed.setDescription(
             council
