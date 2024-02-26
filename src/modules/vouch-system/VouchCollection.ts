@@ -10,6 +10,7 @@ import {
     TimeUtil,
     Vouch,
 } from "lib"
+
 import { VouchUtil } from "./VouchUtil"
 
 type VouchMessageOptions = {
@@ -25,7 +26,11 @@ export class VouchCollection {
         return new VouchCollection(userId, position, vouches)
     }
 
-    constructor(readonly userId: string, readonly position: string, readonly vouches: Vouch[]) {
+    constructor(
+        readonly userId: string,
+        readonly position: string,
+        readonly vouches: Vouch[],
+    ) {
         this.vouches = this.vouches.sort((a, b) => b.givenAt.valueOf() - a.givenAt.valueOf())
     }
 

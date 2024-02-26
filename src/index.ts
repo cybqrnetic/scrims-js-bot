@@ -1,4 +1,4 @@
-import { GatewayIntentBits, PresenceData } from "discord.js"
+import { ActivityType, GatewayIntentBits, PresenceData } from "discord.js"
 import { globSync } from "glob"
 
 import { Settings } from "luxon"
@@ -32,7 +32,9 @@ async function main() {
         GatewayIntentBits.GuildPresences,
     ]
 
-    const presence: PresenceData = {}
+    const presence: PresenceData = {
+        activities: [{ type: ActivityType.Custom, name: "Managing Bridge Scrims" }],
+    }
 
     const bot = new ScrimsBot({ hostGuildId: HOST_GUILD_ID, servesHost: true, intents, presence })
     if (process.argv[2] === "test") {

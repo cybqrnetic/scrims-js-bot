@@ -1,18 +1,10 @@
-name: Util Bot Test
+name: JS Bot Test
 
 on:
   pull_request:
-    paths:
-      - 'util-bot/**'
-      - 'assets/**'
-      - 'lib/**'
   push:
     branches-ignore:
       - main
-    paths:
-      - 'util-bot/**'
-      - 'assets/**'
-      - 'lib/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
@@ -27,11 +19,6 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Copy in assets and lib
-        run: |
-          cp -r assets util-bot/src
-          cp -r lib util-bot/src
-
       - uses: pnpm/action-setup@v2
         with:
           version: 8
@@ -43,7 +30,6 @@ jobs:
 
       - name: Build & Test
         run: |
-          cd util-bot
           pnpm install
           pnpm run build
           pnpm run test

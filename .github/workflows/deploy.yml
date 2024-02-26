@@ -1,14 +1,10 @@
-name: Council Bot Deploy
+name: JS Bot Deploy
 
 on:
   push:
     branches:
       - main
-    paths:
-      - 'council-bot/**'
-      - 'assets/**'
-      - 'lib/**'
- 
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -21,11 +17,6 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
-
-      - name: Copy in assets and lib
-        run: |
-          cp -r assets council-bot/src
-          cp -r lib council-bot/src
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -40,9 +31,9 @@ jobs:
       - name: Build & Push Docker Image
         uses: docker/build-push-action@v5
         with:
-          context: council-bot
+          context: .
           push: true
           platforms: linux/arm64
-          tags: ${{ secrets.REGISTRY_URL }}/council-bot:latest
+          tags: ${{ secrets.REGISTRY_URL }}/scrims-js-bot:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -1,15 +1,24 @@
-import { AuditLogEvent, Events, GuildMember, PartialGuildMember, Role, User } from "discord.js"
+import {
+    AuditLogEvent,
+    Events,
+    GuildMember,
+    PartialGuildMember,
+    Role,
+    SlashCommandBuilder,
+    User,
+} from "discord.js"
 import {
     AuditedGuildBan,
     AuditedRoleUpdate,
     BotModule,
+    Command,
     Config,
     DiscordUtil,
     MessageOptionsBuilder,
     PositionRole,
 } from "lib"
 
-import { RANKS } from "@Constants"
+import { Positions, RANKS } from "@Constants"
 
 const LOG_CHANNEL = Config.declareType("Positions Log Channel")
 
@@ -91,7 +100,10 @@ export class RoleSyncModule extends BotModule {
             if (positions.has(rank)) {
                 Object.values(RANKS)
                     .filter((v) => v !== rank)
-                    .forEach((v) => positions.delete(v))
+                    .forEach((v) => {
+                        positions.delete(v)
+                        forbidden.add(v)
+                    })
                 break
             }
         }
@@ -150,5 +162,21 @@ export class RoleSyncModule extends BotModule {
         })
     }
 }
+
+Command({
+    builder: new SlashCommandBuilder()
+        .setName("sync-roles")
+        .setDescription("Sync Bridge Scrims roles with partner servers")
+        .setDMPermission(false)
+        .setDefaultMemberPermissions("0"),
+
+    config: { permissions: { positionLevel: Positions.Staff } },
+
+    async handler(interaction) {
+        await interaction.deferReply({ ephemeral: true })
+        await RoleSyncModule.getInstance().onInitialized()
+        await interaction.editReply({ content: "Role sync finished." })
+    },
+})
 
 export default RoleSyncModule.getInstance()

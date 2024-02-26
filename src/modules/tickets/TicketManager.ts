@@ -104,7 +104,10 @@ export class TicketManager {
     readonly pendingDeletion = new Set<string>()
     readonly guildConfig
 
-    constructor(readonly type: string, readonly options: TicketManagerConfig = {}) {
+    constructor(
+        readonly type: string,
+        readonly options: TicketManagerConfig = {},
+    ) {
         this.guildConfig = Config.declareTypes({ Category: `Tickets ${this.type} Category` })
         Config.declareType(`${this.type} Transcripts Channel`)
 
@@ -144,13 +147,14 @@ export class TicketManager {
 
     __addListeners() {
         this.bot.on(Events.GuildMemberRemove, (member) => this.onMemberRemove(member))
+        this.bot.on(Events.MessageDelete, (msg) => this.cancelCloseTimeouts(msg.id))
         this.bot.auditedEvents.on(AuditLogEvent.ChannelDelete, (channel) => this.onChannelDelete(channel))
     }
 
-    async cancelCloseTimeouts(ticket: Ticket) {
+    async cancelCloseTimeouts(resolvable: string) {
         await Promise.all(
             Array.from(this.closeTimeouts)
-                .filter((v) => v.ticketId === ticket.id)
+                .filter((v) => v.ticketId === resolvable || v.messageId === resolvable)
                 .map((v) => {
                     clearTimeout(v.timeout)
                     this.closeTimeouts.delete(v)
@@ -307,7 +311,7 @@ export class TicketManager {
         if (!this.pendingDeletion.has(ticket.id!)) {
             this.pendingDeletion.add(ticket.id!)
             try {
-                await this.cancelCloseTimeouts(ticket)
+                await this.cancelCloseTimeouts(ticket.id)
                 if (ticket.status !== "deleted") await transcribeAndClose()
                 if (channel) await channel.delete().catch(() => null)
             } finally {

@@ -55,7 +55,10 @@ function CreateRankApplications(rank: string, cooldown: number) {
 export class RankAppTicketManager extends TicketManager {
     readonly vote
 
-    constructor(readonly rank: string, cooldown: number) {
+    constructor(
+        readonly rank: string,
+        cooldown: number,
+    ) {
         super(`${rank} App`, {
             commonCloseReasons: ["User Denied", "User Accepted", "Joke Application"],
             transcript: { dmUsers: false },
@@ -100,7 +103,10 @@ const APPLICATION_FIELDS = [
 class RankAppCreateHandler extends TicketCreateHandler {
     readonly GuildConfig
 
-    constructor(readonly rank: string, tickets: TicketManager) {
+    constructor(
+        readonly rank: string,
+        tickets: TicketManager,
+    ) {
         super(`${rank}Application`, `${rank} Application`, tickets, APPLICATION_FIELDS)
         this.GuildConfig = Config.declareTypes({
             MinVouches: `${rank} App Min Vouches`,

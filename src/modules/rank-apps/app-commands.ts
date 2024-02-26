@@ -1,12 +1,16 @@
 import {
     ActionRowBuilder,
     ModalBuilder,
+    TextInputBuilder,
     TextInputStyle,
     TimestampStyles,
     User,
     inlineCode,
     userMention,
 } from "discord.js"
+
+import { DateTime } from "luxon"
+
 import {
     Command,
     CommandHandlerInteraction,
@@ -20,10 +24,8 @@ import {
     Vouch,
 } from "lib"
 
-import { DateTime } from "luxon"
-
 import { HOST_GUILD_ID, RANKS } from "@Constants"
-import { TextInputBuilder } from "discord.js"
+
 import { TicketManager } from "../tickets"
 import { AutoPromoteHandler } from "../vouch-system/AutoPromoteHandler"
 import LogUtil from "../vouch-system/LogUtil"
@@ -56,7 +58,7 @@ Command({
     async handler(interaction) {
         const { ticket, ticketManager } = await TicketManager.findTicket(interaction)
         if (!(ticketManager instanceof RankAppTicketManager))
-            throw new Error("Ticket manager should be instance of RankAppTicketManager!")
+            throw new UserError("This command can only be used in rank application channels!")
 
         if (!interaction.userHasPosition(`${ticketManager.rank} Head`))
             throw new LocalizedError("command_handler.missing_permissions")
@@ -107,7 +109,7 @@ Command({
     async handler(interaction) {
         const { ticket, ticketManager } = await TicketManager.findTicket(interaction)
         if (!(ticketManager instanceof RankAppTicketManager))
-            throw new Error("Ticket manager should be instance of RankAppTicketManager!")
+            throw new UserError("This command can only be used in rank application channels!")
 
         if (!interaction.userHasPosition(`${ticketManager.rank} Head`))
             throw new LocalizedError("command_handler.missing_permissions")

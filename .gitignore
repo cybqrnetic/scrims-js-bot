@@ -1,12 +1,9 @@
 # testing
-*/node_modules
-*/dist
-*/transcripts
-*/tests
-*/logs
-
-**/src/assets
-**/src/lib
+node_modules
+dist
+transcripts
+tests
+logs
 
 # developing
 .vscode

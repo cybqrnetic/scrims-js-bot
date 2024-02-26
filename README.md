@@ -6,19 +6,19 @@
     <img src="https://bridgescrims.net/logo.png" alt="Logo" width="80" height="80">
   </a>
 
-<h3 align="center">Bridge Scrims Utility Bot</h3>
+<h3 align="center">Bridge Scrims JS Bot</h3>
 
   <p align="center">
-    The utility bot used in the <a href="https://discord.gg/bridgescrims">Bridge Scrims Discord server</a>.
+    The js bot used in the <a href="https://discord.gg/bridgescrims">Bridge Scrims Discord server</a>.
     <br />
-    <a href="https://github.com/bridge-scrims/util-bot"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/bridge-scrims/scrims-js-bot"><strong>Explore the docs »</strong></a>
     <br />
     <br />
-    <a href="https://github.com/bridge-scrims/util-bot">View Demo</a>
+    <a href="https://github.com/bridge-scrims/scrims-js-bot">View Demo</a>
     ·
-    <a href="https://github.com/bridge-scrims/util-bot/issues">Report Bug</a>
+    <a href="https://github.com/bridge-scrims/scrims-js-bot/issues">Report Bug</a>
     ·
-    <a href="https://github.com/bridge-scrims/util-bot/issues">Request Feature</a>
+    <a href="https://github.com/bridge-scrims/scrims-js-bot/issues">Request Feature</a>
   </p>
 </div>
 
@@ -27,15 +27,9 @@
 - support ticket system with transcripts
 - suggestion system with modals and reactions
 - position (cross server role) management
-- central for js bot permission system
 - dynamic configuration with slash commands
-- teams command with team calls
-
-## Built With
-
-- [discord.js](https://discord.js.org/) to interact with the [Discord API](https://discord.com/developers/docs/intro)
-- [pg](https://github.com/brianc/node-postgres) to interact with a [PostgreSQL](https://www.postgresql.org/) database
-- [moment-timezone](https://github.com/moment/moment-timezone) for working with [IANA Time zones](https://www.iana.org/time-zones)
+- vouch system for keeping track of skill levels
+- rank applications giving people the ability to apply for skill roles
 
 <!-- CONTRIBUTING -->
 ## Contributing

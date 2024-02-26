@@ -233,6 +233,8 @@ async function onTicketCloseResponse(
             components: [],
         })
 
+        await ticketManager.cancelCloseTimeouts(interaction.message.id)
+
         await interaction
             .followUp(
                 new MessageOptionsBuilder()
