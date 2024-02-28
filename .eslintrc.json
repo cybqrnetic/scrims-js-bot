@@ -32,7 +32,7 @@
         "@typescript-eslint/no-explicit-any": "warn",
         "@typescript-eslint/no-unused-vars": "off",
         "@typescript-eslint/prefer-as-const": "error",
-        "@typescript-eslint/prefer-nullish-coalescing": "error",
+        "@typescript-eslint/prefer-nullish-coalescing": "warn",
         "eqeqeq": ["error", "smart"],
         "no-multi-assign": "error",
         "no-unsafe-optional-chaining": "error",

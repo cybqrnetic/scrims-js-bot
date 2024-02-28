@@ -32,13 +32,6 @@ export class PermissionsManager {
         )
     }
 
-    getPositionRoles(position: string, guildId: string): Role[] {
-        return PositionRole.cache
-            .filter((v) => v.position === position && v.guildId === guildId)
-            .map((v) => v.role())
-            .filter((v): v is Role => !!v)
-    }
-
     hasPosition(
         user: User | GuildMember,
         position: string,
@@ -51,7 +44,7 @@ export class PermissionsManager {
 
         if (this.hasPosition(user, Positions.Banned, guildId)) return false
 
-        const positionRoles = this.getPositionRoles(position, guildId).map((v) => v.id)
+        const positionRoles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
         const member = this.getGuild(guildId)?.members.resolve(user)
         if (!positionRoles.length || !member) return undefined
 
@@ -59,7 +52,7 @@ export class PermissionsManager {
     }
 
     hasPositionLevel(user: User | GuildMember, positionLevel: string, guildId = this.bot.hostGuildId) {
-        const positionRoles = this.getPositionRoles(positionLevel, guildId)
+        const positionRoles = PositionRole.getRoles(positionLevel, guildId)
         const positionRoleIds = new Set(positionRoles.map((r) => r.id))
         const highest = positionRoles.sort((a, b) => b.comparePositionTo(a))[0]
         if (highest)

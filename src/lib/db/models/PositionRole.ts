@@ -9,6 +9,7 @@ import {
     modelSchemaWithCache,
 } from "../util"
 
+const mapped = new Map<string, Map<string, Set<PositionRole>>>()
 const declaredPositions = new Set<string>()
 
 @Document("PositionRole", "positionroles")
@@ -29,14 +30,17 @@ class PositionRoleSchema {
     }
 
     static getRoles(position: string, guildId: string) {
-        return PositionRole.cache
-            .filter((v) => v.position === position && v.guildId === guildId)
+        return this.getPositionRoles(position, guildId)
             .map((v) => v.role())
-            .filter((v): v is Role => !!v)
+            .filter((v): v is Role => v !== undefined)
+    }
+
+    static getPositionRoles(position: string, guildId: string) {
+        return [...(mapped.get(guildId)?.get(position) ?? [])]
     }
 
     static getPermittedRoles(position: string, guildId: string) {
-        return this.getRoles(position, guildId).filter((v) => ScrimsBot.INSTANCE!.hasRolePermissions(v))
+        return this.resolvePermittedRoles(this.getPositionRoles(position, guildId))
     }
 
     static resolvePermittedRoles(positionRoles: PositionRole[]) {
@@ -66,3 +70,19 @@ class PositionRoleSchema {
 const schema = getSchemaFromClass(PositionRoleSchema)
 export const PositionRole = modelSchemaWithCache(schema, PositionRoleSchema)
 export type PositionRole = SchemaDocument<typeof schema>
+
+PositionRole.cache.on("set", (posRole) => {
+    let guildMap = mapped.get(posRole.guildId)
+    if (!guildMap) {
+        guildMap = new Map()
+        mapped.set(posRole.guildId, guildMap)
+    }
+
+    if (!guildMap.get(posRole.position)?.add(posRole)) {
+        guildMap.set(posRole.position, new Set([posRole]))
+    }
+})
+
+PositionRole.cache.on("delete", (posRole) => {
+    mapped.get(posRole.guildId)?.get(posRole.position)?.delete(posRole)
+})

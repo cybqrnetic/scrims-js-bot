@@ -11,6 +11,7 @@ import {
     getSchemaFromClass,
     modelSchema,
 } from "../util"
+import { Config } from "./Config"
 
 @Document("Vouch", "vouches")
 class VouchSchema {
@@ -68,12 +69,25 @@ class VouchSchema {
 
     static getExpiration(rank: string, worth = 1) {
         const name = worth < 0 ? "Devouch" : "Vouch"
-        const def = worth < 0 ? "2 weeks" : "4 months"
-        const duration = ScrimsBot.INSTANCE?.getConfigValue(`${rank} ${name} Expiration`, ROLE_APP_HUB) ?? def
-        return TimeUtil.parseDuration(duration) * 1000
+        const def = worth < 0 ? 2 * 7 * 24 * 60 * 60 : 4 * 30 * 24 * 60 * 60
+        return (durations.get(`${rank} ${name} Expiration`) ?? def) * 1000
     }
 }
 
 const schema = getSchemaFromClass(VouchSchema)
 export const Vouch = modelSchema(schema, VouchSchema)
 export type Vouch = SchemaDocument<typeof schema>
+
+const REGEX = /(.+) (Vouch|Devouch) Expiration/g
+const durations = new Map<string, number>()
+Config.cache.on("set", (config) => {
+    if (config.type.match(REGEX) && config.guildId === ROLE_APP_HUB) {
+        durations.set(config.type, TimeUtil.parseDuration(config.value))
+    }
+})
+
+Config.cache.on("delete", (config) => {
+    if (config.guildId === ROLE_APP_HUB) {
+        durations.delete(config.type)
+    }
+})

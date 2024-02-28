@@ -8,10 +8,9 @@ import {
     LocalizedError,
     MessageOptionsBuilder,
     PositionRole,
-    ScrimsBot,
     TextUtil,
     TimeUtil,
-    Vouch,
+    Vouch
 } from "lib"
 
 import { Positions } from "@Constants"
@@ -119,7 +118,7 @@ class RankAppCreateHandler extends TicketCreateHandler {
     }
 
     minVouches(guildId: string) {
-        return parseInt(ScrimsBot.INSTANCE!.getConfigValue(this.GuildConfig.MinVouches, guildId)) || 2
+        return parseInt(Config.getConfigValue(this.GuildConfig.MinVouches, guildId, "2")) || 2
     }
 
     /** @override */

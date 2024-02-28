@@ -28,6 +28,8 @@ export class DocumentCache<T extends Document> extends Map<string, T> {
     }
 
     set(key: string, value: T): this {
+        const old = this.get(key)
+        if (old && old !== value) this.events.emit("delete", old)
         this.events.emit("set", value)
         return super.set(key, value)
     }

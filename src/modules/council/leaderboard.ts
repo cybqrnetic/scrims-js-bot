@@ -48,8 +48,8 @@ export class LeaderboardFeature extends BotModule {
     async buildMessage(guild: Guild, role: string) {
         const embed = new EmbedBuilder().setTitle(`${role} Council Leaderboard`)
 
-        const council = ScrimsBot.INSTANCE?.host?.members?.cache.filter((m) =>
-            ScrimsBot.INSTANCE?.permissions.hasPosition(m, `${role} Council`),
+        const council = ScrimsBot.INSTANCE?.host?.members?.cache.filter(
+            (m) => ScrimsBot.INSTANCE?.permissions.hasPosition(m, `${role} Council`),
         )
 
         const councilRole = PositionRole.getRoles(`${role} Council`, guild.id)[0]
@@ -57,27 +57,39 @@ export class LeaderboardFeature extends BotModule {
 
         const vouches = await Vouch.find({ position: role })
         const councilVouches: Record<string, Vouch[]> = {}
+        const councilVouchesPositive: Record<string, Vouch[]> = {}
+        const councilVouchesNegative: Record<string, Vouch[]> = {}
         for (const vouch of vouches) {
             const key = vouch.executorId
             if (councilVouches[key]?.push(vouch) === undefined) {
                 councilVouches[key] = [vouch]
             }
+
+            if (vouch.isPositive()) {
+                if (councilVouchesPositive[key]?.push(vouch) === undefined) {
+                    councilVouchesPositive[key] = [vouch]
+                }
+            } else {
+                if (councilVouchesNegative[key]?.push(vouch) === undefined) {
+                    councilVouchesNegative[key] = [vouch]
+                }
+            }
         }
 
-        const getVouches = (id: string) => councilVouches[id] ?? []
+        const getLength = (id: string, map: Record<string, unknown[]>) => map[id]?.length ?? 0
 
         embed.setDescription(
             council
-                ?.sort((a, b) => getVouches(b.id).length - getVouches(a.id).length)
+                ?.sort((a, b) => getLength(b.id, councilVouches) - getLength(a.id, councilVouches))
                 .map((council) => {
                     return (
                         inlineCode("•") +
                         " " +
                         userMention(council.id) +
                         " | " +
-                        `✅ ${getVouches(council.id).filter((v) => v.isPositive()).length}` +
+                        `✅ ${getLength(council.id, councilVouchesPositive)}` +
                         " | " +
-                        `⛔ ${getVouches(council.id).filter((v) => !v.isPositive()).length}`
+                        `⛔ ${getLength(council.id, councilVouchesNegative)}`
                     )
                 })
                 .join("\n") || "None",

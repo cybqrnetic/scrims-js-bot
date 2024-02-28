@@ -106,7 +106,7 @@ export class ScrimsBot extends Client {
             mongoose.disconnect().catch(console.debugError),
             redis.disconnect().catch(console.debugError),
             subscriber.disconnect().catch(console.debugError),
-            sleep(3e3),
+            sleep(3000),
         ])
     }
 
@@ -114,12 +114,12 @@ export class ScrimsBot extends Client {
         return this.guilds.cache.get(this.hostGuildId)
     }
 
-    getConfigValue<D = null>(key: string, guildId: string, def?: D) {
-        return this.getConfig(key).find((v) => v.guildId === guildId)?.value ?? ((def ?? null) as D)
+    getConfigValue(key: string, guildId: string, def?: string) {
+        return Config.getConfigValue(key, guildId, def)
     }
 
-    getConfig(name: string) {
-        return Config.cache.filter((v) => v.type === name && (!v.clientId || v.clientId === this.user?.id))
+    getConfig(type: string) {
+        return Config.getConfig(type)
     }
 
     async login() {

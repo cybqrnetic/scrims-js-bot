@@ -29,12 +29,7 @@ export class DynamicallyConfiguredCollection<T> {
     }
 
     protected isCorrectHandler(entry: Config) {
-        if (entry.type !== this.type) return false
-        const configuredForClient = Config.cache.find(
-            (v) => v.type === entry.type && v.guildId === entry.guildId && v.clientId === this.clientId,
-        )
-        if (configuredForClient) return configuredForClient === entry
-        return !entry.clientId || entry.clientId === this.clientId
+        return entry.type === this.type
     }
 
     protected async onCacheSet(entry: Config) {
