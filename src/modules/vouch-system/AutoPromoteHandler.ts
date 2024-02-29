@@ -14,6 +14,12 @@ for (const rank of Object.values(RANKS)) {
     Config.declareType(`${rank} Devouch Expiration`)
 }
 
+const PROMOTION_PREFIX: Record<string, string> = {
+    Prime: "### ",
+    Private: "## ",
+    Premium: "# "
+}
+
 export class AutoPromoteHandler {
     static onVouched(vouch: Vouch) {
         const user = vouch.user()
@@ -59,7 +65,7 @@ export class AutoPromoteHandler {
         ScrimsBot.INSTANCE?.buildSendMessages(
             PROMOTIONS_CHANNEL,
             null,
-            new MessageOptionsBuilder().setContent(`**${user} has been promoted to ${rank}!**`),
+            new MessageOptionsBuilder().setContent(`${PROMOTION_PREFIX[rank] ?? ""}${user} has been promoted to ${rank}!`),
         )
     }
 }
