@@ -46,7 +46,6 @@ export class CommandInstaller {
     async initialize() {
         if (!this.bot.application) throw new TypeError("ClientApplication does not exist...")
         this.installCommands()
-        this.bot.off(Events.InteractionCreate, this.handler.handler)
         this.bot.on(Events.InteractionCreate, this.handler.handler)
         this.appCommands = await this.bot.application.commands.fetch({ withLocalizations: true })
         await this.update()
@@ -238,8 +237,8 @@ export interface Command<
         interaction: T extends string
             ? ComponentInteraction
             : T extends ContextMenuCommandBuilder
-            ? ContextMenuInteraction
-            : SlashCommandInteraction,
+              ? ContextMenuInteraction
+              : SlashCommandInteraction,
     ) => Promise<unknown>
     handleComponent?: (interaction: ComponentInteraction) => Promise<unknown>
     handleAutocomplete?: (interaction: AutocompleteInteraction) => Promise<unknown>

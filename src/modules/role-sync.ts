@@ -7,6 +7,7 @@ import {
     SlashCommandBuilder,
     User,
 } from "discord.js"
+
 import {
     AuditedGuildBan,
     AuditedRoleUpdate,
@@ -16,11 +17,23 @@ import {
     DiscordUtil,
     MessageOptionsBuilder,
     PositionRole,
+    UserError,
 } from "lib"
 
-import { Positions, RANKS } from "@Constants"
+import { HOST_GUILD_ID, Positions, RANKS } from "@Constants"
 
 const LOG_CHANNEL = Config.declareType("Positions Log Channel")
+const CONFIGURED_POSITIONS = new Set<string>()
+
+PositionRole.cache.on("add", (posRole) => {
+    CONFIGURED_POSITIONS.add(posRole.position)
+})
+
+PositionRole.cache.on("delete", (posRole) => {
+    if (!PositionRole.cache.find((v) => v.position === posRole.position)) {
+        CONFIGURED_POSITIONS.delete(posRole.position)
+    }
+})
 
 export class RoleSyncModule extends BotModule {
     addListeners() {
@@ -29,8 +42,6 @@ export class RoleSyncModule extends BotModule {
         this.bot.auditedEvents.on(AuditLogEvent.MemberBanAdd, (action) => this.onBanChange(action))
         this.bot.auditedEvents.on(AuditLogEvent.MemberBanRemove, (action) => this.onBanChange(action))
         this.bot.auditedEvents.on(AuditLogEvent.MemberRoleUpdate, (action) => this.onRolesChange(action))
-
-        this.bot.on("initialized", () => this.onInitialized())
     }
 
     async onReady() {
@@ -48,69 +59,91 @@ export class RoleSyncModule extends BotModule {
     }
 
     async onInitialized() {
-        if (this.bot.host) {
-            await Promise.all(this.bot.users.cache.map((user) => this.syncUserRoles(user).catch(() => null)))
-        }
+        this.syncRoles().catch(console.error)
+        setInterval(() => this.syncRoles(), 20 * 60 * 1000)
     }
 
-    get hostGuildId() {
-        return this.bot.hostGuildId
+    async syncRoles() {
+        const host = this.bot.host
+        if (!host) {
+            console.warn(`[Role Sync] Host guild (${HOST_GUILD_ID}) not in cache!`)
+            return
+        }
+
+        const expected = host.memberCount
+        const before = host.members.cache.size
+        const fetched = (await host.members.fetch()).size
+        if (fetched !== before) {
+            console.warn(
+                `[Role Sync] Host members needed to be refreshed (${before} -> ${fetched}/${expected})!`,
+            )
+        }
+
+        await Promise.all(this.bot.users.cache.map((user) => this.syncUserRoles(user).catch(console.error)))
     }
 
     async onMemberAdd(member: GuildMember | PartialGuildMember) {
-        if (member.guild.id !== this.hostGuildId) await this.syncMemberRoles(member)
+        if (member.guild.id !== HOST_GUILD_ID) await this.syncMemberRoles(member)
     }
 
     async onMemberRemove(member: GuildMember | PartialGuildMember) {
-        if (member.guild.id === this.hostGuildId) await this.syncUserRoles(member.user, null)
+        if (member.guild.id === HOST_GUILD_ID) await this.syncUserRoles(member.user, null)
     }
 
     async onBanChange({ guild, user, executor }: AuditedGuildBan) {
-        if (guild.id === this.hostGuildId) await this.syncUserRoles(user, executor)
+        if (guild.id === HOST_GUILD_ID) await this.syncUserRoles(user, executor)
     }
 
     async onRolesChange({ guild, memberId, executor, added, removed }: AuditedRoleUpdate) {
-        if (guild.id !== this.hostGuildId && executor.id === this.bot.user?.id) return
+        if (guild.id !== HOST_GUILD_ID && executor.id === this.bot.user?.id) return
 
-        const positionRoles = PositionRole.cache.filter((v) => v.guildId === guild.id)
-        if (!positionRoles.find((v) => added.includes(v.roleId) || removed.includes(v.roleId))) return
+        const positionRoles = new Set(PositionRole.getGuildRoles(guild.id).map((v) => v.roleId))
+        if (!added.concat(removed).find((v) => positionRoles.has(v))) return
 
         const member = await guild.members.fetch(memberId)
-        if (member.guild.id === this.hostGuildId) await this.syncUserRoles(member.user, executor)
+        if (member.guild.id === HOST_GUILD_ID) await this.syncUserRoles(member.user, executor)
         else await this.syncMemberRoles(member)
     }
 
     async syncUserRoles(user: User, executor?: User | null) {
         await Promise.all(
             Array.from(this.bot.guilds.cache.values()).map(async (guild) => {
-                if (guild.id !== this.hostGuildId && guild.members.resolve(user))
+                if (guild.id !== HOST_GUILD_ID && guild.members.resolve(user))
                     await this.syncMemberRoles(guild.members.resolve(user)!, executor)
             }),
         )
     }
 
     async syncMemberRoles(member: GuildMember | PartialGuildMember, executor?: User | null) {
-        if (member.guild.id === this.hostGuildId) return
+        if (member.guild.id === HOST_GUILD_ID) return
 
-        const posRoles = PositionRole.cache.filter((v) => v.guildId === member.guild.id)
-        const positions = this.bot.permissions.getUsersPositions(member.user)
-        const forbidden = this.bot.permissions.getUsersForbiddenPositions(member.user)
+        const forbidden = new Set<string>()
+        const allowed = new Set<string>()
+
+        for (const position of CONFIGURED_POSITIONS) {
+            const permission = this.bot.permissions.hasPosition(member.user, position)
+            if (permission === false) forbidden.add(position)
+            else if (permission) allowed.add(position)
+        }
 
         for (const rank of Object.values(RANKS).reverse()) {
-            if (positions.has(rank)) {
+            if (allowed.has(rank)) {
                 Object.values(RANKS)
                     .filter((v) => v !== rank)
                     .forEach((v) => {
-                        positions.delete(v)
+                        allowed.delete(v)
                         forbidden.add(v)
                     })
                 break
             }
         }
 
-        const add = PositionRole.resolvePermittedRoles(posRoles.filter((p) => positions.has(p.position)))
+        const add = PositionRole.resolvePermittedRoles(
+            Array.from(allowed).flatMap((pos) => PositionRole.getPositionRoles(pos, member.guild.id)),
+        )
+
         const remove = PositionRole.resolvePermittedRoles(
-            posRoles.filter((p) => forbidden.has(p.position)),
+            Array.from(forbidden).flatMap((pos) => PositionRole.getPositionRoles(pos, member.guild.id)),
         ).filter((v) => !add.includes(v))
 
         const removeResults = await Promise.all(
@@ -173,9 +206,19 @@ Command({
     config: { permissions: { positionLevel: Positions.Staff } },
 
     async handler(interaction) {
-        await interaction.deferReply({ ephemeral: true })
-        await RoleSyncModule.getInstance().onInitialized()
-        await interaction.editReply({ content: "Role sync finished." })
+        const host = interaction.client.host
+        if (!host) throw new UserError(`Host guild (${HOST_GUILD_ID}) not in cache!`)
+
+        const guilds = Array.from(interaction.client.guilds.cache.filter((v) => v !== host).values())
+        const members = guilds.reduce((pv, cv) => pv + cv.members.cache.size, 0)
+        await interaction.reply({
+            content: `Syncing ${members} member(s) over ${guilds.length} guild(s)...`,
+            ephemeral: true,
+        })
+
+        const start = Date.now()
+        await RoleSyncModule.getInstance().syncRoles()
+        await interaction.followUp({ content: `Finished after ${Date.now() - start}ms`, ephemeral: true })
     },
 })
 

@@ -17,6 +17,7 @@ export class BotModule {
     private setBot(bot: ScrimsBot) {
         Object.defineProperty(this, "bot", { value: bot })
         this.bot.on("ready", () => this.onReady())
+        this.bot.on("initialized", () => this.onInitialized())
         this.addListeners()
     }
 
@@ -25,4 +26,7 @@ export class BotModule {
 
     // eslint-disable-next-line @typescript-eslint/no-empty-function
     protected async onReady() {}
+
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    protected async onInitialized() {}
 }

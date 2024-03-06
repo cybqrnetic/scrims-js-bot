@@ -80,7 +80,7 @@ export type Vouch = SchemaDocument<typeof schema>
 
 const REGEX = /(.+) (Vouch|Devouch) Expiration/g
 const durations = new Map<string, number>()
-Config.cache.on("set", (config) => {
+Config.cache.on("add", (config) => {
     if (config.type.match(REGEX) && config.guildId === ROLE_APP_HUB) {
         durations.set(config.type, TimeUtil.parseDuration(config.value))
     }

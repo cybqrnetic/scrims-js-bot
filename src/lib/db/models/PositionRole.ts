@@ -35,6 +35,11 @@ class PositionRoleSchema {
             .filter((v): v is Role => v !== undefined)
     }
 
+    static getGuildRoles(guildId: string) {
+        if (!mapped.has(guildId)) return []
+        return Array.from(mapped.get(guildId)!.values()).flatMap((v) => Array.from(v))
+    }
+
     static getPositionRoles(position: string, guildId: string) {
         return [...(mapped.get(guildId)?.get(position) ?? [])]
     }
@@ -71,7 +76,7 @@ const schema = getSchemaFromClass(PositionRoleSchema)
 export const PositionRole = modelSchemaWithCache(schema, PositionRoleSchema)
 export type PositionRole = SchemaDocument<typeof schema>
 
-PositionRole.cache.on("set", (posRole) => {
+PositionRole.cache.on("add", (posRole) => {
     let guildMap = mapped.get(posRole.guildId)
     if (!guildMap) {
         guildMap = new Map()

@@ -29,17 +29,24 @@ export class DocumentCache<T extends Document> extends Map<string, T> {
 
     set(key: string, value: T): this {
         const old = this.get(key)
-        if (old && old !== value) this.events.emit("delete", old)
-        this.events.emit("set", value)
-        return super.set(key, value)
+        super.set(key, value)
+        if (old !== value) {
+            if (old !== undefined) this.events.emit("delete", old)
+            this.events.emit("add", value)
+        }
+        return this
     }
 
     delete(key: string): boolean {
-        if (this.has(key)) this.events.emit("delete", this.get(key)!)
-        return super.delete(key)
+        const value = this.get(key)
+        if (super.delete(key)) {
+            this.events.emit("delete", value)
+            return true
+        }
+        return false
     }
 
-    on(event: "set" | "delete", listener: (doc: T) => unknown): this {
+    on(event: "add" | "delete", listener: (doc: T) => unknown): this {
         this.events.on(event, listener)
         return this
     }

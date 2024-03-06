@@ -82,7 +82,7 @@ const schema = getSchemaFromClass(ConfigSchema)
 export const Config = modelSchemaWithCache(schema, ConfigSchema)
 export type Config = SchemaDocument<typeof schema>
 
-Config.cache.on("set", (value) => {
+Config.cache.on("add", (value) => {
     if (!mapped.get(value.type)?.set(value.guildId, value))
         mapped.set(value.type, new Map([[value.guildId, value]]))
 })

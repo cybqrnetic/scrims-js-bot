@@ -8,7 +8,7 @@ export class DynamicallyConfiguredCollection<T> {
         protected readonly removeCall: (obj: T) => unknown,
         protected readonly created: Record<string, T> = {},
     ) {
-        Config.cache.on("set", (v) => this.onCacheSet(v).catch(console.error))
+        Config.cache.on("add", (v) => this.onCacheAdd(v).catch(console.error))
         Config.cache.on("delete", (v) => this.onCacheDelete(v).catch(console.error))
     }
 
@@ -32,7 +32,7 @@ export class DynamicallyConfiguredCollection<T> {
         return entry.type === this.type
     }
 
-    protected async onCacheSet(entry: Config) {
+    protected async onCacheAdd(entry: Config) {
         if (this.isCorrectHandler(entry)) {
             this.remove(entry.guildId)
             this.created[entry.guildId] = await this.createCall(entry)
