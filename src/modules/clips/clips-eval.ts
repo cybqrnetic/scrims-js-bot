@@ -15,6 +15,7 @@ import {
 import { BotModule, Config, LikedClips } from "lib"
 import { DateTime } from "luxon"
 import MedalApi from "./MedalApi"
+import axios from "axios";
 
 const GuildConfig = Config.declareTypes({
     ClipsChannel: "Clips Channel",
@@ -119,7 +120,7 @@ export class ClipsEvalFeature extends BotModule {
 
         await likedChannel.send({ content: content.join(""), allowedMentions: { parse: [] } }).then((sent) =>
             LikedClips.create({ _id: message.id })
-                .then(() => this.sendMedalVideoLink(message, sent.channel).catch(console.error))
+                .then(() => this.sendDownloadLink(message, sent.channel).catch(console.error))
                 .catch((err) =>
                     sent
                         .delete()
@@ -129,28 +130,70 @@ export class ClipsEvalFeature extends BotModule {
         )
     }
 
-    async sendMedalVideoLink(message: PartialMessage | Message, likedChannel: GuildTextBasedChannel) {
-        const medalUrlRegex = /https:\/\/medal\.tv[\w-./?=%#&~]*\b/g
-        const medalUrl = message.content?.match(medalUrlRegex)?.[0]
-        if (medalUrl) {
-            const medalApi = new MedalApi()
-            await medalApi.guestAuthenticate()
-            const clipId = await medalApi.loadClipIdFromUrl(medalUrl)
-            if (clipId === undefined) return
+   async sendDownloadLink(
+    message: PartialMessage | Message,
+    likedChannel: GuildTextBasedChannel
+  ) {
+    const medalUrlRegex = /https:\/\/medal\.tv[\w-./?=%#&~]*\b/g;
+    const streamableUrlRegex = /https?:\/\/streamable\.com\/[\w-]+/gi;
 
-            const clip = await medalApi.getContent(clipId)
-            await likedChannel.send({
-                embeds: [
-                    new EmbedBuilder()
-                        .setColor("Green")
-                        .setTitle(`${clip.contentTitle ?? "Untitled"} - Medal Clip`)
-                        .setDescription(
-                            `Found a Medal Clip URL! [Click here](${clip.contentUrlBestQuality}) to download the video directly.`,
-                        ),
-                ],
-            })
-        }
+    const medalUrlMatch = message.content?.match(medalUrlRegex);
+    const streamableUrlMatch = message.content?.match(streamableUrlRegex);
+
+    if (medalUrlMatch) {
+      const medalUrl = medalUrlMatch[0];
+      const medalApi = new MedalApi();
+      await medalApi.guestAuthenticate();
+      const clipId = await medalApi.loadClipIdFromUrl(medalUrl);
+      if (clipId === undefined) return;
+
+      const clip = await medalApi.getContent(clipId);
+      await likedChannel.send({
+        embeds: [
+          new EmbedBuilder()
+            .setColor("Green")
+            .setTitle(`${clip.contentTitle ?? "Untitled"} - Medal Clip`)
+            .setDescription(
+              `Found a Medal Clip URL! [Click here](${clip.contentUrlBestQuality}) to download the video directly.`
+            ),
+        ],
+      });
+    } else if (streamableUrlMatch) {
+      const streamableUrl = streamableUrlMatch[0];
+      const downloadUrl = await this.fetchStreamableDownloadUrl(streamableUrl);
+      if (downloadUrl) {
+        await likedChannel.send({
+          embeds: [
+            new EmbedBuilder()
+              .setColor("Green")
+              .setTitle("Streamable Clip")
+              .setDescription(
+                `Found a Streamable Clip URL! [Click here](${downloadUrl}) to download the video directly.`
+              ),
+          ],
+        });
+      }
     }
+  }
+
+  async fetchStreamableDownloadUrl(
+    streamableUrl: string
+  ): Promise<string | undefined> {
+    const videoId = streamableUrl.split(".com/")[1];
+    const apiUrl = `https://api.streamable.com/videos/${videoId}`;
+
+    try {
+      const response = await axios.get(apiUrl);
+      if (response.status === 200 && response.data?.files) {
+        const files = response.data.files;
+        const mp4Url = files.mp4.url;
+        return mp4Url;
+      }
+    } catch (error) {
+      console.error("Error fetching Streamable data:", error);
+    }
+    return undefined;
+  }
 }
 
 export default ClipsEvalFeature.getInstance()
