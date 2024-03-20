@@ -22,9 +22,9 @@ class StickyRolesModule extends BotModule {
     async onMemberAdd(member: GuildMember) {
         if (member.guild.id === this.bot.hostGuildId) {
             const rejoinRoles = await UserRejoinRoles.findByIdAndDelete(member.id)
-            if (rejoinRoles.value) {
+            if (rejoinRoles) {
                 await Promise.all(
-                    rejoinRoles.value.roles
+                    rejoinRoles.roles
                         .map((r) => member.guild.roles.cache.get(r.toString()))
                         .filter((r): r is Role => r !== undefined)
                         .filter((r) => this.bot.hasRolePermissions(r))
