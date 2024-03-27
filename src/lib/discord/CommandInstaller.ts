@@ -100,6 +100,17 @@ export class CommandInstaller {
             builder.options?.filter((option) => !option.type).forEach((option) => (option.type = 1))
 
             if (builder.dm_permission === undefined) builder.setDMPermission(!config?.forceGuild)
+            const before = builder.default_member_permissions
+            if (builder.default_member_permissions === undefined && config?.permissions)
+                builder.setDefaultMemberPermissions("0")
+
+            console.log(
+                "Command: %s; before: %s; after: %s; perms: %s",
+                builder.name,
+                before,
+                builder.default_member_permissions,
+                config?.permissions,
+            )
 
             this.commandBuilders.push(builder)
         }
@@ -148,9 +159,21 @@ export class CommandInstaller {
 
     getGuilds({ guilds }: CommandConfig = {}) {
         if (guilds) return guilds
-        const allGuilds = Array.from(this.bot.guilds.cache.map((guild) => guild.id))
-        return allGuilds
-        // return allGuilds.filter((id) => id !== this.bot.hostGuildId || !common || this.bot.servesHost)
+        return Array.from(this.bot.guilds.cache.map((guild) => guild.id))
+    }
+
+    protected shouldInstall(guildId: string | undefined, guilds: string[]) {
+        if (process.env.NODE_ENV !== "production") return guildId !== undefined
+        return (
+            ((!guildId && this.isAllGuilds(guilds)) || (guildId && guilds.includes(guildId))) &&
+            !(this.isAllGuilds(guilds) && guildId)
+        )
+    }
+
+    getCommandJson(builder: CommandBuilder) {
+        const json = builder.toJSON()
+        if (json.default_member_permissions === undefined) json.default_member_permissions = null
+        return json
     }
 
     async updateAppCommand(appCmd: ApplicationCommand, guildId?: string) {
@@ -164,18 +187,15 @@ export class CommandInstaller {
         if (appCmd.dmPermission === null) appCmd.dmPermission = builder?.dm_permission ?? null
 
         if (appCmd) {
-            if (
-                builder &&
-                ((!guildId && this.isAllGuilds(guilds)) || (guildId && guilds.includes(guildId))) &&
-                !(this.isAllGuilds(guilds) && guildId)
-            ) {
+            if (builder && this.shouldInstall(guildId, guilds)) {
                 if (!appCmd.equals(builder as ApplicationCommandData)) {
                     console.log(
                         `[CommandInstaller] Updating '${builder.name}' command ` +
                             (guildId ? `in ${guildId}.` : "globaly."),
                     )
+
                     await this.bot
-                        .application!.commands.edit(appCmd.id, builder, guildId as any)
+                        .application!.commands.edit(appCmd.id, this.getCommandJson(builder), guildId as any)
                         .catch((error) =>
                             console.error(`Unable to edit app command with id ${appCmd.id}!`, error),
                         )
@@ -202,9 +222,8 @@ export class CommandInstaller {
         const config = this.getCommandConfig(builder.name)
         const guilds = this.getGuilds(config)
 
-        if (this.isAllGuilds(guilds) && guildId) return false
-        if (!((this.isAllGuilds(guilds) && !guildId) || (guildId && guilds.includes(guildId)))) return false
         if (commands.find((cmd) => cmd.name === builder.name)) return false
+        if (!this.shouldInstall(guildId, guilds)) return false
 
         console.log(
             `[CommandInstaller] Creating '${builder.name}' command ` +
@@ -212,7 +231,7 @@ export class CommandInstaller {
         )
 
         await this.bot
-            .application!.commands.create(builder, guildId)
+            .application!.commands.create(this.getCommandJson(builder), guildId)
             .catch((error) => console.error("Unable to create app command!", builder, error))
     }
 }
