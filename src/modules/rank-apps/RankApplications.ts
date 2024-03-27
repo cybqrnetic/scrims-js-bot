@@ -10,7 +10,7 @@ import {
     PositionRole,
     TextUtil,
     TimeUtil,
-    Vouch
+    Vouch,
 } from "lib"
 
 import { Positions } from "@Constants"
@@ -19,6 +19,10 @@ import { ExchangeInputField, RecallExchangeInteraction } from "../exchange"
 import { TicketCreateHandler, TicketManager } from "../tickets"
 import { VouchCollection } from "../vouch-system/VouchCollection"
 import { CouncilVoteManager } from "./CouncilVoteManager"
+
+export interface RankAppExtras {
+    votes: Record<string, number>
+}
 
 function CreateRankApplications(rank: string, cooldown: number) {
     const tickets = new RankAppTicketManager(rank, cooldown)

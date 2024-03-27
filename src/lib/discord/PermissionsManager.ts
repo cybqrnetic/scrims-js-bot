@@ -45,7 +45,7 @@ export class PermissionsManager {
         if (this.hasPosition(user, Positions.Banned, guildId)) return false
 
         const positionRoles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
-        const member = this.getGuild(guildId)?.members.resolve(user)
+        const member = this.getGuild(guildId)?.members.resolve(user.id)
         if (!positionRoles.length || !member) return undefined
 
         return member.roles.cache.hasAny(...positionRoles) && { expiration }

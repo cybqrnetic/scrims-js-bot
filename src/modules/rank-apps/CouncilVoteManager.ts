@@ -1,39 +1,48 @@
-import { ButtonBuilder, ButtonStyle, Guild, Message, User } from "discord.js"
+import {
+    ButtonBuilder,
+    ButtonStyle,
+    Guild,
+    Message,
+    SlashCommandBuilder,
+    User,
+    userMention,
+} from "discord.js"
 import {
     ColorUtil,
     Command,
+    ComponentInteraction,
     LocalizedError,
     MessageOptionsBuilder,
     PositionRole,
     ScrimsBot,
+    SlashCommandInteraction,
     UserError,
 } from "lib"
 
-import { RankAppTicketManager } from "./RankApplications"
+import { EmbedBuilder } from "discord.js"
+import { RankAppExtras, RankAppTicketManager } from "./RankApplications"
+import { COUNCIL_HEAD_PERMISSIONS, handleAccept, handleDeny } from "./app-commands"
 
-const VOTE_VALUE: Record<string, number> = {
-    Abstain: 0,
-    Yes: 1,
-    No: -1,
-    Pending: 0,
-}
-
-export type Votes = Record<string, string>
+export type Votes = Record<string, number>
 function getVotesValue(votes: Votes) {
     if (Object.keys(votes).length === 0) return 0
     return (
         Object.values(votes)
-            .map((v) => VOTE_VALUE[v] ?? 0)
+            .map((v) => (isNaN(v) ? 0 : v))
             .reduce((pv, cv) => pv + cv, 0) / Object.keys(votes).length
     )
 }
 
-const VOTE_SYMBOL: Record<string, string> = {
-    Abstain: ":raised_back_of_hand:",
-    Yes: ":white_check_mark:",
-    No: ":no_entry:",
-    Pending: ":zzz:",
+const VOTE_VALUES: Record<string, number> = {
+    ":raised_back_of_hand:": 0,
+    ":white_check_mark:": 1,
+    ":no_entry:": -1,
+    ":zzz:": NaN,
 }
+
+const VOTE_EMOJIS: Record<number, string> = Object.fromEntries(
+    Object.entries(VOTE_VALUES).map((v) => v.reverse()),
+)
 
 export class CouncilVoteManager {
     constructor(readonly rank: string) {}
@@ -42,7 +51,7 @@ export class CouncilVoteManager {
         return Object.fromEntries(
             guild.members.cache
                 .filter((v) => ScrimsBot.INSTANCE?.permissions.hasPosition(v, `${this.rank} Council`))
-                .map((v) => [v.id, "Pending"]),
+                .map((v) => [v.id, NaN]),
         )
     }
 
@@ -52,26 +61,31 @@ export class CouncilVoteManager {
         return Object.fromEntries(
             Array.from(votes.matchAll(/(:.+?:).+?<@(\d+)>/gm))
                 .map(([_, emoji, userId]) => {
-                    const vote = Object.entries(VOTE_SYMBOL).find(([_, v]) => v === emoji)?.[0]
+                    const vote = VOTE_VALUES[emoji]
                     return !vote ? false : [userId, vote]
                 })
-                .filter((v): v is [string, string] => v !== false),
+                .filter((v): v is [string, number] => v !== false),
         )
     }
 
-    buildVoteMessage(user: User, guild: Guild, votes: Votes = {}) {
-        votes = { ...this.getPendingVotes(guild), ...votes }
+    buildVoteMessageBase(user: User | null | undefined) {
+        const embed = new EmbedBuilder()
+        if (user) {
+            embed.setAuthor({ name: user.tag, iconURL: user.displayAvatarURL() })
+        }
+        return embed
+    }
+
+    buildVoteMessage(user: User | null | undefined, guild: Guild, savedVotes: Votes = {}) {
+        const votes = { ...this.getPendingVotes(guild), ...savedVotes }
         return new MessageOptionsBuilder()
             .setContent(PositionRole.getRoles(`${this.rank} Council`, guild.id).join(" "))
-            .addEmbeds((embed) =>
-                embed
-                    .setAuthor({ name: user.tag, iconURL: user.displayAvatarURL() })
+            .addEmbeds(
+                this.buildVoteMessageBase(user)
                     .setTitle(`${this.rank} Council Vote`)
-                    .setColor(ColorUtil.hsvToRgb(getVotesValue(votes) * 60 + 60, 1, 1))
+                    .setColor(PositionRole.getRoles(`${this.rank} Council`, guild.id)?.[0]?.color ?? 0)
                     .setDescription(
-                        Object.entries(votes)
-                            .map(([userId, v]) => `${VOTE_SYMBOL[v]} **-** <@${userId}>`)
-                            .join("\n") || "No Council",
+                        `${Object.keys(savedVotes).length}/${Object.keys(votes).length} have voted.`,
                     ),
             )
             .addActions(
@@ -79,43 +93,104 @@ export class CouncilVoteManager {
                 this.buildVoteAction(0, "Abs", ButtonStyle.Secondary),
                 this.buildVoteAction(-1, "No", ButtonStyle.Danger),
             )
+            .addActions(
+                new ButtonBuilder()
+                    .setCustomId("COUNCIL_EVALUATE")
+                    .setLabel("Evaluate Outcome")
+                    .setStyle(ButtonStyle.Secondary),
+            )
     }
 
-    parseVote(val: string) {
-        const parsed = parseFloat(val)
-        if (!isNaN(parsed)) {
-            const vote = Object.entries(VOTE_VALUE).find(([_, v]) => v === parsed)?.[0]
-            if (!vote) console.error(`RankApplications: Unknown Vote '${parsed}'!`, VOTE_VALUE)
-            return vote
-        }
+    buildVoteEvalMessage(user: User | null | undefined, guild: Guild, savedVotes: Votes = {}) {
+        const votes = { ...this.getPendingVotes(guild), ...savedVotes }
+        return new MessageOptionsBuilder()
+            .addEmbeds(
+                this.buildVoteMessageBase(user)
+                    .setTitle(`${this.rank} Council Vote Eval`)
+                    .setColor(ColorUtil.hsvToRgb(getVotesValue(votes) * 60 + 60, 1, 1))
+                    .setDescription(
+                        Object.entries(votes)
+                            .map(([userId, v]) => `${VOTE_EMOJIS[v]} **-** ${userMention(userId)}`)
+                            .join("\n") || "No Council",
+                    ),
+            )
+            .addActions(
+                this.buildEvalAction("Accept", ButtonStyle.Success),
+                this.buildEvalAction("Deny", ButtonStyle.Danger),
+            )
     }
 
     buildVoteAction(value: number, action: string, style: ButtonStyle) {
         return new ButtonBuilder().setCustomId(`COUNCIL_VOTE/${value}`).setLabel(action).setStyle(style)
     }
+
+    buildEvalAction(action: string, style: ButtonStyle) {
+        return new ButtonBuilder().setCustomId(`COUNCIL_EVALUATE/${action}`).setLabel(action).setStyle(style)
+    }
 }
 
 Command({
     builder: "COUNCIL_VOTE",
-    config: { forceGuild: true },
-
     async handler(interaction) {
-        const { ticketManager, ticket } = await RankAppTicketManager.findTicket(interaction)
+        const { ticketManager, ticket } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction)
         if (!(ticketManager instanceof RankAppTicketManager))
             throw new Error(`${interaction.customId} in non RankAppTicketManager channel!`)
 
         if (!interaction.userHasPosition(`${ticketManager.rank} Council`))
             throw new LocalizedError("command_handler.missing_permissions")
 
-        const votes = ticketManager.vote.parseMessageVotes(interaction.message)
-        const vote = ticketManager.vote.parseVote(interaction.args.shift()!)
+        if (!ticket.extras?.votes) {
+            ticket.extras = { votes: ticketManager.vote.parseMessageVotes(interaction.message) }
+            await ticket.save()
+        }
 
-        if (!vote) throw new Error(`Got invalid vote value of ${vote} from ${interaction.customId}!`)
-        if (!ticket.user()) throw new UserError("The applicant left the server.")
+        const vote = parseFloat(interaction.args.shift()!)
+        if (isNaN(vote)) throw new Error(`Got invalid vote value of ${vote} from ${interaction.customId}!`)
 
-        votes[interaction.user.id] = vote
+        await ticket.updateOne({ $set: { [`extras.votes.${interaction.user.id}`]: vote } })
+        ticket.extras.votes[interaction.user.id] = vote
+
         await interaction.update(
-            ticketManager.vote.buildVoteMessage(ticket.user()!, interaction.guild!, votes),
+            ticketManager.vote.buildVoteMessage(ticket.user(), interaction.guild!, ticket.extras.votes),
         )
     },
 })
+
+Command({
+    builder: new SlashCommandBuilder()
+        .setName("evaluate")
+        .setDescription("Use to evaluate the council vote")
+        .setDMPermission(false),
+
+    config: { permissions: COUNCIL_HEAD_PERMISSIONS },
+    handler: handleEvaluate,
+})
+
+Command({
+    builder: "COUNCIL_EVALUATE",
+    config: { permissions: COUNCIL_HEAD_PERMISSIONS },
+    handler: handleEvaluate,
+})
+
+async function handleEvaluate(interaction: ComponentInteraction | SlashCommandInteraction) {
+    const action = interaction.args.shift()
+    switch (action) {
+        case "Accept":
+            return handleAccept(interaction)
+        case "Deny":
+            return handleDeny(interaction)
+    }
+
+    const { ticket, ticketManager } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction)
+    if (!(ticketManager instanceof RankAppTicketManager))
+        throw new UserError("This command can only be used in rank application channels!")
+
+    if (!interaction.userHasPosition(`${ticketManager.rank} Head`))
+        throw new LocalizedError("command_handler.missing_permissions")
+
+    await interaction.reply(
+        ticketManager.vote
+            .buildVoteEvalMessage(ticket.user(), interaction.guild!, ticket.extras?.votes)
+            .setEphemeral(true),
+    )
+}

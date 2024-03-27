@@ -84,7 +84,7 @@ export class TicketManager {
         return this.ticketManagers[ticketType]
     }
 
-    static async findTicket(interaction: CommandHandlerInteraction) {
+    static async findTicket<Extras extends object>(interaction: CommandHandlerInteraction) {
         const ticket = await Ticket.findOne({ channelId: interaction.channelId })
         if (!ticket) throw new LocalizedError("tickets.none")
         const ticketManager = TicketManager.getManager(ticket.type)
@@ -92,7 +92,7 @@ export class TicketManager {
             throw new UserError(
                 "I am not responsible for these types of tickets. Maybe try a different integration.",
             )
-        return { ticket, ticketManager }
+        return { ticket: ticket as Ticket<Extras>, ticketManager }
     }
 
     protected readonly bot!: ScrimsBot

@@ -63,8 +63,13 @@ export class CommandHandler {
             if (
                 interaction.type === InteractionType.MessageComponent ||
                 interaction.type === InteractionType.ModalSubmit
-            )
-                this.expandComponentInteraction(interaction)
+            ) {
+                interaction.args = interaction.customId.split("/") ?? []
+                interaction.commandName = interaction.args.shift() ?? null
+                interaction.subCommandName = interaction.args[0] ?? null
+            } else {
+                interaction.args = []
+            }
 
             if (interaction.options)
                 interaction.subCommandName = interaction.options.getSubcommand(false) ?? null
@@ -133,12 +138,6 @@ export class CommandHandler {
         if (error instanceof LocalizedError) return error.toMessagePayload(i18n)
         if (error instanceof UserError) return error.toMessage()
         return new LocalizedError("unexpected_error.unknown").toMessagePayload(i18n)
-    }
-
-    public expandComponentInteraction(interaction: any) {
-        interaction.args = interaction.customId.split("/") ?? []
-        interaction.commandName = interaction.args.shift() ?? null
-        interaction.subCommandName = interaction.args[0] ?? null
     }
 
     protected async interactionReturn(interaction: any, payload: unknown) {
