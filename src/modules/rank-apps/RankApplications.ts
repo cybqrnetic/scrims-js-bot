@@ -194,6 +194,6 @@ class RankAppCreateHandler extends TicketCreateHandler {
     }
 }
 
-CreateRankApplications("Prime", 21 * 24 * 60 * 60)
+CreateRankApplications("Prime", 0)
 CreateRankApplications("Private", 30 * 24 * 60 * 60)
 CreateRankApplications("Premium", 30 * 24 * 60 * 60)

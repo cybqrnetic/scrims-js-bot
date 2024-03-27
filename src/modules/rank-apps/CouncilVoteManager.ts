@@ -139,19 +139,14 @@ Command({
         if (!interaction.userHasPosition(`${ticketManager.rank} Council`))
             throw new LocalizedError("command_handler.missing_permissions")
 
-        if (!ticket.extras?.votes) {
-            ticket.extras = { votes: ticketManager.vote.parseMessageVotes(interaction.message) }
-            await ticket.save()
-        }
-
         const vote = parseFloat(interaction.args.shift()!)
         if (isNaN(vote)) throw new Error(`Got invalid vote value of ${vote} from ${interaction.customId}!`)
 
         await ticket.updateOne({ $set: { [`extras.votes.${interaction.user.id}`]: vote } })
-        ticket.extras.votes[interaction.user.id] = vote
+        ticket.extras!.votes[interaction.user.id] = vote
 
         await interaction.update(
-            ticketManager.vote.buildVoteMessage(ticket.user(), interaction.guild!, ticket.extras.votes),
+            ticketManager.vote.buildVoteMessage(ticket.user(), interaction.guild!, ticket.extras!.votes),
         )
     },
 })

@@ -104,14 +104,6 @@ export class CommandInstaller {
             if (builder.default_member_permissions === undefined && config?.permissions)
                 builder.setDefaultMemberPermissions("0")
 
-            console.log(
-                "Command: %s; before: %s; after: %s; perms: %s",
-                builder.name,
-                before,
-                builder.default_member_permissions,
-                config?.permissions,
-            )
-
             this.commandBuilders.push(builder)
         }
 
