@@ -56,7 +56,7 @@ Command({
         const clientId = interaction.options.getUser(Options.Client)?.id
 
         const clientSelector = !clientId ? { clientId: { $exists: false } } : { clientId }
-        const selector = { type, guildId: interaction.guildId, ...clientSelector }
+        const selector = { type, guildId: interaction.guildId!, ...clientSelector }
 
         if (type === "Read All") {
             const guildConfig = Config.cache.filter((v) => v.guildId === interaction.guildId)

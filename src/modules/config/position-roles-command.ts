@@ -171,7 +171,7 @@ async function onAddSubcommand(interaction: SlashCommandInteraction) {
     const role = interaction.options.getRole(Options.Role, true)
     const position = interaction.options.getString(Options.Position, true)
 
-    const existing = await PositionRole.find({ roleId: role.id, guildId: interaction.guildId })
+    const existing = await PositionRole.find({ roleId: role.id, guildId: interaction.guildId! })
     if (existing.map((v) => v.position).includes(position))
         return interaction.editReply(
             getFinishPayload(interaction, interaction.i18n.get("position_roles.exists", role, position)),

@@ -7,8 +7,10 @@ import {
     User,
 } from "discord.js"
 
-import { ColorUtil, Command, MessageOptionsBuilder, UserError, redis } from "lib"
 import { DateTime } from "luxon"
+
+import { RANKS } from "@Constants"
+import { ColorUtil, Command, Config, MessageOptionsBuilder, UserError, redis } from "lib"
 
 const EXPIRATION = 30 * 24 * 60 * 60
 
@@ -16,6 +18,24 @@ const VOTE_EMOJIS: Record<string, string> = {
     "1": ":white_check_mark:",
     "0": ":raised_back_of_hand:",
     "-1": ":no_entry:",
+}
+
+const voteChannels = new Map<string, string>()
+
+for (const rank in RANKS) {
+    const type = `${rank} Vote Channel`
+    Config.declareType(type)
+    Config.cache.on("add", (config) => {
+        if (config.type === type) {
+            voteChannels.set(config.value, rank)
+        }
+    })
+
+    Config.cache.on("delete", (config) => {
+        if (config.type === type) {
+            voteChannels.delete(config.value)
+        }
+    })
 }
 
 Command({
@@ -33,6 +53,10 @@ Command({
     async handler(interaction) {
         const title = interaction.options.getString("title", true)
         const channel = interaction.channel as GuildTextBasedChannel
+
+        const rank = voteChannels.get(interaction.channelId)
+        if (rank && !interaction.userHasPosition(`${rank} Head`))
+            throw new UserError(`You are not allow to create ${rank} votes.`)
 
         const message = getVoteMessage(title, 0)
         if (!channel.permissionsFor(interaction.member, true).has(PermissionFlagsBits.MentionEveryone))
@@ -62,6 +86,12 @@ Command({
         const key = `vote:${interaction.message.id}`
         const val = interaction.args.shift()!
 
+        if (!(await redis.exists(key))) throw new UserError("This vote expired.")
+
+        const rank = voteChannels.get(interaction.channelId)
+        if (rank && !interaction.userHasPosition(`${rank} Council`))
+            throw new UserError(`You are not allow to participate in ${rank} votes.`)
+
         const res = await Promise.all([
             redis.hGetAll(key),
             redis.hSet(key, interaction.member.id, val),
@@ -83,8 +113,15 @@ Command({
         const res = await Promise.all([redis.hGetAll(key), redis.expire(key, EXPIRATION)])
 
         const vote = res[0]
-        if (vote.creator !== interaction.member.id)
+        if (Object.keys(vote).length == 0) throw new UserError("This vote expired.")
+
+        const rank = voteChannels.get(interaction.channelId)
+        if (rank) {
+            if (!interaction.userHasPosition(`${rank} Head`))
+                throw new UserError(`You are not allow to view ${rank} vote outcomes.`)
+        } else if (vote.creator !== interaction.member.id) {
             throw new UserError("Only the person who created this vote can view the outcome!")
+        }
 
         const votes: [User, string][] = []
         const voteValues: number[] = []

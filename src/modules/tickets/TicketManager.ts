@@ -85,7 +85,7 @@ export class TicketManager {
     }
 
     static async findTicket<Extras extends object>(interaction: CommandHandlerInteraction) {
-        const ticket = await Ticket.findOne({ channelId: interaction.channelId })
+        const ticket = await Ticket.findOne({ channelId: interaction.channelId! })
         if (!ticket) throw new LocalizedError("tickets.none")
         const ticketManager = TicketManager.getManager(ticket.type)
         if (!ticketManager)

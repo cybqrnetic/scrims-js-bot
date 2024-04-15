@@ -61,7 +61,7 @@ class SuggestionsCreateHandler extends ExchangeHandler {
     /** @overload */
     async getFinishResponse(interaction: RecallExchangeInteraction) {
         const suggestion = getSuggestion(interaction)
-        suggestion.sequence = await Suggestion.find({ channelId: interaction.channelId })
+        suggestion.sequence = await Suggestion.find({ channelId: interaction.channelId! })
             .sort({ sequence: -1 })
             .limit(1)
             .exec()

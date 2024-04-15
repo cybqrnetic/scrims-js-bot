@@ -26,9 +26,10 @@ for (const rank of Object.values(RANKS)) {
 export class CouncilListFeature extends BotModule {
     protected async onReady() {
         // Run every :00, :20, :40
+        const closest = [20, 40, 60].map((n) => n - new Date().getUTCMinutes()).filter((v) => v > 0)
         setTimeout(
             () => setInterval(() => this.update().catch(console.error), 20 * 60 * 1000),
-            Math.min(...[60, 40, 20].map((n) => Math.abs(n - new Date().getUTCMinutes()))) * 60 * 1000,
+            Math.min(...closest) * 60 * 1000,
         )
 
         this.bot.on("initialized", () => this.update().catch(console.error))
