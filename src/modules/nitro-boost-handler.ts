@@ -15,7 +15,7 @@ BotListener(Events.GuildMemberUpdate, async (bot, oldMember, newMember) => {
     const boostMessage = await boostChannel.send({
         embeds: [
             new EmbedBuilder()
-                .setTitle(`${newMember.user.username} has boosted the nitro!`)
+                .setTitle(`${newMember.user.username} has boosted the server!`)
                 .setDescription(`Thank you for boosting the server ${newMember}`)
                 .setThumbnail(newMember.user.displayAvatarURL()),
         ],
