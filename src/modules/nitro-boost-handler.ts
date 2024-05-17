@@ -16,7 +16,7 @@ BotListener(Events.GuildMemberUpdate, async (bot, oldMember, newMember) => {
         embeds: [
             new EmbedBuilder()
                 .setTitle(`${newMember.user.username} has boosted the nitro!`)
-                .setDescription(`Thank you for boosting the nitro ${newMember}`)
+                .setDescription(`Thank you for boosting the server ${newMember}`)
                 .setThumbnail(newMember.user.displayAvatarURL()),
         ],
     })
