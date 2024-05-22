@@ -4,7 +4,9 @@ import { BotListener, Config } from "lib"
 const BOOST_CHANNEL = Config.declareType("Server Boost Channel")
 
 BotListener(Events.GuildMemberUpdate, async (bot, oldMember, newMember) => {
-    if (oldMember.premiumSince || !newMember.premiumSince) return
+    const oldBoost = oldMember.premiumSinceTimestamp || 0
+    const newBoost = newMember.premiumSinceTimestamp || 0
+    if (oldBoost >= newBoost) return
 
     const boostChannelId = bot.getConfigValue(BOOST_CHANNEL, newMember.guild.id)
     if (!boostChannelId) return
