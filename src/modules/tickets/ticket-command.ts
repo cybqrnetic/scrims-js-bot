@@ -16,11 +16,11 @@ import {
 
 import {
     AutocompleteInteraction,
-    Command,
     CommandHandlerInteraction,
     ComponentInteraction,
     LocalizedError,
     MessageOptionsBuilder,
+    SlashCommand,
     SlashCommandInteraction,
     Ticket,
     TimeUtil,
@@ -365,7 +365,7 @@ function buildTicketDeleteSubcommand() {
         .addStringOption(buildCloseReasonOption())
 }
 
-Command({
+SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("ticket")
         .setDescription("All commands related to tickets.")

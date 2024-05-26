@@ -1,5 +1,5 @@
 import { EmbedBuilder, userMention } from "discord.js"
-import { Command, Config, LocalizedSlashCommandBuilder, MessageOptionsBuilder } from "lib"
+import { Config, LocalizedSlashCommandBuilder, MessageOptionsBuilder, SlashCommand } from "lib"
 
 import { Positions } from "@Constants"
 
@@ -9,7 +9,7 @@ const Options = {
     Client: "client",
 }
 
-Command({
+SlashCommand({
     builder: new LocalizedSlashCommandBuilder()
         .setNameAndDescription("commands.config")
         .addStringOption((option) =>

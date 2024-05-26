@@ -9,12 +9,13 @@ import {
 } from "discord.js"
 import {
     ColorUtil,
-    Command,
+    Component,
     ComponentInteraction,
     LocalizedError,
     MessageOptionsBuilder,
     PositionRole,
     ScrimsBot,
+    SlashCommand,
     SlashCommandInteraction,
     UserError,
 } from "lib"
@@ -129,7 +130,7 @@ export class CouncilVoteManager {
     }
 }
 
-Command({
+Component({
     builder: "COUNCIL_VOTE",
     async handler(interaction) {
         const { ticketManager, ticket } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction)
@@ -151,7 +152,7 @@ Command({
     },
 })
 
-Command({
+SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("evaluate")
         .setDescription("Use to evaluate the council vote")
@@ -161,7 +162,7 @@ Command({
     handler: handleEvaluate,
 })
 
-Command({
+Component({
     builder: "COUNCIL_EVALUATE",
     config: { permissions: COUNCIL_HEAD_PERMISSIONS },
     handler: handleEvaluate,

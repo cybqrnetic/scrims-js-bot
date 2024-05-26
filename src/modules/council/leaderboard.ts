@@ -8,7 +8,8 @@ for (const rank of Object.values(RANKS)) {
         name: `${rank} Council Leaderboard`,
         permissions: { positionLevel: Positions.Staff },
         async builder(builder, member) {
-            return LeaderboardFeature.getInstance().buildMessage(member.guild!, rank)
+            const vouches = await Vouch.find({ position: rank })
+            return LeaderboardFeature.getInstance().buildMessage(member.guild!, vouches, rank)
         },
     })
 
@@ -22,40 +23,34 @@ export class LeaderboardFeature extends BotModule {
     }
 
     async update() {
-        await Promise.all(
-            Object.values(RANKS).map((rank) =>
-                Promise.all(
-                    this.bot.getConfig(`${rank} Council Leaderboard Message`).map(async (entry) => {
-                        const [channelId, messageId] = entry.value.split("-")
-                        if (!channelId || !messageId) return
-                        const channel = await this.bot.channels.fetch(channelId)
-                        if (!channel?.isTextBased()) return
-                        const message = await channel.messages.fetch(messageId).catch(() => null)
-                        if (!message) return
-                        const updated = await this.buildMessage(message.guild!, rank)
-                        if (message.embeds?.[0]?.description !== (updated.embeds[0] as any).description)
-                            await message
-                                .edit(updated)
-                                .catch((err: unknown) =>
-                                    console.error(`Council Leaderboard Update Failed: ${err}`),
-                                )
-                    }),
-                ).catch(console.error),
-            ),
-        )
+        for (const rank of Object.values(RANKS)) {
+            const config = this.bot.getConfig(`${rank} Council Leaderboard Message`)
+            if (!config.length) continue
+
+            const vouches = await Vouch.find({ position: rank })
+            for (const entry of config) {
+                const [channelId, messageId] = entry.value.split("-")
+                if (!channelId || !messageId) return
+                const channel = await this.bot.channels.fetch(channelId).catch(() => null)
+                if (!channel?.isTextBased()) return
+                const message = await channel.messages.fetch(messageId).catch(() => null)
+                if (!message) return
+                const updated = await this.buildMessage(message.guild!, vouches, rank)
+                if (message.embeds?.[0]?.description !== (updated.embeds[0] as any).description)
+                    await message
+                        .edit(updated)
+                        .catch((err) => console.error(`Council Leaderboard Update Failed: ${err}`))
+            }
+        }
     }
 
-    async buildMessage(guild: Guild, role: string) {
+    async buildMessage(guild: Guild, vouches: Vouch[], role: string) {
         const embed = new EmbedBuilder().setTitle(`${role} Council Leaderboard`)
 
-        const council = ScrimsBot.INSTANCE?.host?.members?.cache.filter(
-            (m) => ScrimsBot.INSTANCE?.permissions.hasPosition(m, `${role} Council`),
-        )
-
+        const council = ScrimsBot.INSTANCE!.permissions.getUsersWithPosition(`${role} Council`)
         const councilRole = PositionRole.getRoles(`${role} Council`, guild.id)[0]
         if (councilRole) embed.setColor(councilRole.color)
 
-        const vouches = await Vouch.find({ position: role })
         const councilVouches: Record<string, Vouch[]> = {}
         const councilVouchesPositive: Record<string, Vouch[]> = {}
         const councilVouchesNegative: Record<string, Vouch[]> = {}
@@ -80,7 +75,7 @@ export class LeaderboardFeature extends BotModule {
 
         embed.setDescription(
             council
-                ?.sort((a, b) => getLength(b.id, councilVouches) - getLength(a.id, councilVouches))
+                .sort((a, b) => getLength(b.id, councilVouches) - getLength(a.id, councilVouches))
                 .map((council) => {
                     return (
                         inlineCode("•") +
@@ -95,7 +90,7 @@ export class LeaderboardFeature extends BotModule {
                 .join("\n") || "None",
         )
 
-        if (council?.size) embed.setFooter({ text: "Discord | Vouches | Devouches" })
+        if (council.size) embed.setFooter({ text: "Discord | Vouches | Devouches" })
 
         return new MessageOptionsBuilder().addEmbeds(embed)
     }

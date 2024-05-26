@@ -1,10 +1,11 @@
 import { ApplicationCommandType, ButtonBuilder, ButtonStyle, PermissionFlagsBits, time } from "discord.js"
 
 import {
-    Command,
     CommandConfig,
     CommandHandlerInteractionData,
+    Component,
     ComponentInteraction,
+    ContextMenu,
     ContextMenuInteraction,
     LocalizedContextMenuCommandBuilder,
     MessageOptionsBuilder,
@@ -136,7 +137,7 @@ const CM_CONFIG: CommandConfig = {
 
 const COMPONENT_CONFIG: CommandConfig = { forceGuild: true }
 
-Command({
+ContextMenu({
     builder: new LocalizedContextMenuCommandBuilder()
         .setType(ApplicationCommandType.Message)
         .setName("commands.suggestions.detach.cm")
@@ -146,7 +147,7 @@ Command({
     handler: onDetachCommand,
 })
 
-Command({
+ContextMenu({
     builder: new LocalizedContextMenuCommandBuilder()
         .setType(ApplicationCommandType.Message)
         .setName("commands.suggestions.delete.cm")
@@ -156,7 +157,7 @@ Command({
     handler: onDeleteCommand,
 })
 
-Command({
+Component({
     builder: "SuggestionDelete",
     handler: onDeleteComponent,
     config: COMPONENT_CONFIG,

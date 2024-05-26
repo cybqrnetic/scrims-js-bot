@@ -1,13 +1,20 @@
 import { Positions } from "@Constants"
 import { AlignmentEnum, AsciiTable3 } from "ascii-table3"
 import { PermissionFlagsBits, SlashCommandBuilder } from "discord.js"
-import { Command, MessageOptionsBuilder, SlashCommandInteraction, Ticket, TimeUtil, UserError } from "lib"
+import {
+    MessageOptionsBuilder,
+    SlashCommand,
+    SlashCommandInteraction,
+    Ticket,
+    TimeUtil,
+    UserError,
+} from "lib"
 
 const Options = {
     Expiration: "time-period",
 }
 
-Command({
+SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("support-eval")
         .setDescription("Generate a support validation.")

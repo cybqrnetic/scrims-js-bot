@@ -3,14 +3,11 @@ import {
     APIEmbed,
     APIMessageActionRowComponent,
     ActionRowBuilder,
-    ActionRowData,
     AllowedMentionsTypes,
     BaseMessageOptions,
     ButtonBuilder,
     EmbedBuilder,
-    JSONEncodable,
     MessageActionRowComponentBuilder,
-    MessageActionRowComponentData,
     MessageMentionOptions,
 } from "discord.js"
 
@@ -25,18 +22,14 @@ const NULL = null as unknown as undefined
 export class MessageOptionsBuilder {
     public content?: string
     public embeds: APIEmbed[]
-    public components: (
-        | JSONEncodable<APIActionRowComponent<APIMessageActionRowComponent>>
-        | ActionRowData<MessageActionRowComponentData | MessageActionRowComponentBuilder>
-        | APIActionRowComponent<APIMessageActionRowComponent>
-    )[]
+    public components: APIActionRowComponent<APIMessageActionRowComponent>[]
     public allowedMentions: MessageMentionOptions
     public ephemeral?: boolean
 
     constructor({ content, embeds, components, allowedMentions }: BaseMessageOptions = {}) {
         this.content = content ?? NULL
         this.embeds = (embeds as APIEmbed[]) ?? []
-        this.components = components ?? []
+        this.components = (components as APIActionRowComponent<APIMessageActionRowComponent>[]) ?? []
         this.allowedMentions = allowedMentions ?? {
             parse: [AllowedMentionsTypes.User, AllowedMentionsTypes.Role],
         }

@@ -1,8 +1,8 @@
 import { EmbedBuilder, GuildChannelCreateOptions, GuildMember, TextInputStyle } from "discord.js"
 import {
     BotMessage,
-    Command,
     CommandHandlerInteraction,
+    Component,
     Config,
     I18n,
     LocalizedError,
@@ -28,7 +28,7 @@ function CreateRankApplications(rank: string, cooldown: number) {
     const tickets = new RankAppTicketManager(rank, cooldown)
     const handler = new RankAppCreateHandler(rank, tickets)
 
-    Command(handler.asCommand())
+    Component(handler.asComponent())
     BotMessage({
         name: `${rank} Applications`,
         builder(builder, member) {

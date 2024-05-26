@@ -2,12 +2,12 @@ import { Positions } from "@Constants"
 import { ButtonStyle, Events, SlashCommandRoleOption, SlashCommandStringOption } from "discord.js"
 import {
     BotListener,
-    Command,
     ComponentInteraction,
     LocalizedError,
     LocalizedSlashCommandBuilder,
     MessageOptionsBuilder,
     PositionRole,
+    SlashCommand,
     SlashCommandInteraction,
     TextUtil,
 } from "lib"
@@ -33,7 +33,7 @@ BotListener(Events.GuildRoleDelete, async (bot, role) => {
     await PositionRole.deleteMany({ guildId: role.guild.id, roleId: role.id })
 })
 
-Command({
+SlashCommand({
     builder: new LocalizedSlashCommandBuilder()
         .setNameAndDescription("commands.position_roles")
         .addSubcommand((sub) => sub.setNameAndDescription("commands.position_roles.status"))

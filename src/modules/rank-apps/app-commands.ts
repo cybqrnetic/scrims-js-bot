@@ -12,7 +12,6 @@ import {
 import { DateTime } from "luxon"
 
 import {
-    Command,
     CommandHandlerInteraction,
     ComponentInteraction,
     LocalizedError,
@@ -21,6 +20,7 @@ import {
     Permissions,
     PositionRole,
     ScrimsBot,
+    SlashCommand,
     SlashCommandInteraction,
     UserError,
     Vouch,
@@ -53,7 +53,7 @@ function fetchHostMember(resolvable: string) {
     return member
 }
 
-Command({
+SlashCommand({
     builder: new LocalizedSlashCommandBuilder("commands.accept_app").setDMPermission(false),
     config: { permissions: COUNCIL_HEAD_PERMISSIONS, defer: "ephemeral_reply" },
     handler: handleAccept,
@@ -104,7 +104,7 @@ export async function handleAccept(interaction: ComponentInteraction | SlashComm
     await ticketManager.closeTicket(ticket, interaction.user, "App Accepted")
 }
 
-Command({
+SlashCommand({
     builder: new LocalizedSlashCommandBuilder("commands.deny_app").setDMPermission(false),
     config: { permissions: COUNCIL_HEAD_PERMISSIONS, defer: "ephemeral_reply" },
     handler: handleDeny,
@@ -156,7 +156,7 @@ export async function handleDeny(interaction: SlashCommandInteraction | Componen
     await ticketManager.closeTicket(ticket, interaction.user, "App Denied")
 }
 
-Command({
+SlashCommand({
     builder: new LocalizedSlashCommandBuilder("commands.purge").setDMPermission(false),
     config: { permissions: COUNCIL_HEAD_PERMISSIONS },
     async handler(interaction) {

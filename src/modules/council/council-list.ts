@@ -36,41 +36,32 @@ export class CouncilListFeature extends BotModule {
     }
 
     async update() {
-        await Promise.all(
-            Object.values(RANKS).map((rank) =>
-                Promise.all(
-                    this.bot.getConfig(`${rank} Council List Message`).map(async (entry) => {
-                        const [channelId, messageId] = entry.value.split("-")
-                        if (!channelId || !messageId) return
-                        const channel = await this.bot.channels.fetch(channelId)
-                        if (!channel?.isTextBased()) return
-                        const message = await channel.messages.fetch(messageId).catch(() => null)
-                        if (!message) return
-                        const updated = await this.buildMessage(message.guild!, rank)
-                        if (message.embeds?.[0]?.description !== (updated.embeds[0] as any).description)
-                            await message
-                                .edit(updated)
-                                .catch((err) => console.error(`Council List Update Failed: ${err}`))
-                    }),
-                ).catch(console.error),
-            ),
-        )
+        for (const rank of Object.values(RANKS)) {
+            const config = this.bot.getConfig(`${rank} Council List Message`)
+            if (!config.length) continue
+
+            for (const entry of config) {
+                const [channelId, messageId] = entry.value.split("-")
+                if (!channelId || !messageId) return
+                const channel = await this.bot.channels.fetch(channelId).catch(() => null)
+                if (!channel?.isTextBased()) return
+                const message = await channel.messages.fetch(messageId).catch(() => null)
+                if (!message) return
+                const updated = await this.buildMessage(message.guild!, rank)
+                if (message.embeds?.[0]?.description !== (updated.embeds[0] as any).description)
+                    await message
+                        .edit(updated)
+                        .catch((err) => console.error(`Council List Update Failed: ${err}`))
+            }
+        }
     }
 
     async buildMessage(guild: Guild, role: string) {
         const embed = new EmbedBuilder().setTitle(`${role} Council List`)
 
-        const councilHead =
-            ScrimsBot.INSTANCE?.host?.members?.cache.filter((m) =>
-                ScrimsBot.INSTANCE?.permissions.hasPosition(m, `${role} Head`),
-            ) ?? new Collection()
-
-        const council =
-            ScrimsBot.INSTANCE?.host?.members?.cache.filter(
-                (m) =>
-                    !councilHead?.has(m.id) &&
-                    ScrimsBot.INSTANCE?.permissions.hasPosition(m, `${role} Council`),
-            ) ?? new Collection()
+        const permissions = ScrimsBot.INSTANCE!.permissions
+        const councilHead = permissions.getUsersWithPosition(`${role} Head`)
+        const council = permissions.getUsersWithPosition(`${role} Council`).subtract(councilHead)
 
         const councilRole = PositionRole.getRoles(`${role} Council`, guild.id)[0]
         if (councilRole) embed.setColor(councilRole.color)

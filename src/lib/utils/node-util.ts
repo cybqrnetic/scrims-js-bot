@@ -18,7 +18,7 @@ Date.prototype.toSeconds = function () {
     return Math.floor(this.valueOf() / 1000)
 }
 
-global.sleep = (seconds: number) => new Promise((r) => setTimeout(r, seconds * 1000))
+global.sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 console.debug = function (...args: unknown[]) {
     if (process.env.NODE_ENV !== "production") console.log(...args)

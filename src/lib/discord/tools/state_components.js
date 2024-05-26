@@ -208,8 +208,8 @@ export class StateComponentHandler {
         }
     }
 
-    /** @returns {import("../CommandInstaller").Command} */
-    asCommand() {
+    /** @returns {import("../CommandInstaller").Component} */
+    asComponent() {
         return {
             builder: this.customId,
             mixedHandler: async (interaction) => this.handle(interaction),

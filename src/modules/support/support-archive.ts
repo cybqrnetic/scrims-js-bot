@@ -2,7 +2,7 @@ import { Positions } from "@Constants"
 import { ExportReturnType, createTranscript } from "discord-html-transcripts"
 import { SlashCommandBuilder, channelMention } from "discord.js"
 import { writeFile } from "fs/promises"
-import { Command, SlashCommandInteraction, UserError } from "lib"
+import { SlashCommand, SlashCommandInteraction, UserError } from "lib"
 import { DateTime } from "luxon"
 import path from "path"
 
@@ -13,7 +13,7 @@ const Options = {
 
 const DEFAULT_LIMIT = 200
 
-Command({
+SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("support-archive")
         .setDescription("Save messages from a specific channel.")

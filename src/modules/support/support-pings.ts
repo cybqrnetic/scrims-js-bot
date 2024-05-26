@@ -1,13 +1,13 @@
 import { Positions } from "@Constants"
 import { PermissionFlagsBits, SlashCommandBuilder, roleMention } from "discord.js"
-import { Command, SlashCommandInteraction, UserError } from "lib"
+import { SlashCommand, SlashCommandInteraction, UserError } from "lib"
 
 const Options = {
     Role: "role",
     Text: "text",
 }
 
-Command({
+SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("support-ping")
         .setDescription("Can be used by support to ping certain roles.")

@@ -8,19 +8,18 @@ import {
     User,
 } from "discord.js"
 
+import { HOST_GUILD_ID, Positions, RANKS } from "@Constants"
 import {
     AuditedGuildBan,
     AuditedRoleUpdate,
     BotModule,
-    Command,
     Config,
     DiscordUtil,
     MessageOptionsBuilder,
     PositionRole,
+    SlashCommand,
     UserError,
 } from "lib"
-
-import { HOST_GUILD_ID, Positions, RANKS } from "@Constants"
 
 const LOG_CHANNEL = Config.declareType("Positions Log Channel")
 const CONFIGURED_POSITIONS = new Set<string>()
@@ -196,7 +195,7 @@ export class RoleSyncModule extends BotModule {
     }
 }
 
-Command({
+SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("sync-roles")
         .setDescription("Sync Bridge Scrims roles with partner servers")

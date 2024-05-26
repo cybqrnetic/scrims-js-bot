@@ -6,6 +6,8 @@ import {
     Events,
     InteractionType,
     SlashCommandBuilder,
+    SlashCommandOptionsOnlyBuilder,
+    SlashCommandSubcommandsOnlyBuilder,
 } from "discord.js"
 
 import {
@@ -23,9 +25,23 @@ import { Permissions } from "./PermissionsManager"
 import type { ScrimsBot } from "./ScrimsBot"
 
 const commands = new Set()
-export function Command<T extends string | ContextMenuCommandBuilder | SlashCommandBuilder>(
-    command: Command<T>,
+
+export function SlashCommand(
+    command: CommandBase<
+        SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder,
+        SlashCommandInteraction
+    >,
 ) {
+    commands.add(command)
+    return command
+}
+
+export function ContextMenu(command: ContextMenu) {
+    commands.add(command)
+    return command
+}
+
+export function Component(command: Component) {
     commands.add(command)
     return command
 }
@@ -72,35 +88,38 @@ export class CommandInstaller {
         handleModalSubmit,
         mixedHandler,
     }: Command): CommandHandlerFunction {
+        const component = typeof builder === "string"
         return async (i) => {
-            if (i.type === InteractionType.ApplicationCommandAutocomplete && handleAutocomplete)
-                await handleAutocomplete(i)
-            if (i.type === InteractionType.ModalSubmit && handleModalSubmit) await handleModalSubmit(i)
-            if (i.type === InteractionType.MessageComponent && handleComponent) await handleComponent(i)
+            if (i.type === InteractionType.ApplicationCommandAutocomplete) {
+                if (handleAutocomplete) await handleAutocomplete(i)
+            } else if (i.type === InteractionType.ModalSubmit) {
+                if (handleModalSubmit) await handleModalSubmit(i)
+            } else if (i.type === InteractionType.MessageComponent) {
+                if (handleComponent) await handleComponent(i)
+            }
+
             if (
-                ((i.type === InteractionType.ApplicationCommand &&
-                    (builder instanceof SlashCommandBuilder ||
-                        builder instanceof ContextMenuCommandBuilder)) ||
-                    (i.type === InteractionType.MessageComponent && typeof builder === "string")) &&
-                handler
-            )
-                await handler(i)
+                component
+                    ? i.type === InteractionType.MessageComponent
+                    : i.type === InteractionType.ApplicationCommand
+            ) {
+                // @ts-expect-error trust me
+                if (handler) await handler(i)
+            }
+
             if (mixedHandler) await mixedHandler(i)
         }
     }
 
     protected installCommand(command: Command) {
-        if (command.command) command.builder = command.command
         const { builder, config } = command
         if (typeof builder !== "string") {
-            // Important so that we can tell if the command changed or not
-            // @ts-ignore
+            // @ts-expect-error important so that we can tell if the command changed or not
             builder.nsfw = false
-            // @ts-ignore
+            // @ts-expect-error important so that we can tell if the command changed or not
             builder.options?.filter((option) => !option.type).forEach((option) => (option.type = 1))
 
             if (builder.dm_permission === undefined) builder.setDMPermission(!config?.forceGuild)
-            const before = builder.default_member_permissions
             if (builder.default_member_permissions === undefined && config?.permissions)
                 builder.setDefaultMemberPermissions("0")
 
@@ -173,8 +192,7 @@ export class CommandInstaller {
         const guilds = this.getGuilds(config)
         const builder = this.getCommandBuilder(appCmd.name)
 
-        // Important to correctly determine if a command changed or not
-        // @ts-ignore
+        // @ts-expect-error important to correctly determine if a command changed or not
         appCmd.options.filter((o) => o.type === 1 && !o.options).map((o) => (o.options = []))
         if (appCmd.dmPermission === null) appCmd.dmPermission = builder?.dm_permission ?? null
 
@@ -183,7 +201,7 @@ export class CommandInstaller {
                 if (!appCmd.equals(builder as ApplicationCommandData)) {
                     console.log(
                         `[CommandInstaller] Updating '${builder.name}' command ` +
-                            (guildId ? `in ${guildId}.` : "globaly."),
+                            (guildId ? `in ${guildId}.` : "globally."),
                     )
 
                     await this.bot
@@ -195,7 +213,7 @@ export class CommandInstaller {
             } else {
                 console.log(
                     `[CommandInstaller] Deleting '${appCmd.name}' command ` +
-                        (guildId ? `in ${guildId}.` : "globaly."),
+                        (guildId ? `in ${guildId}.` : "globally."),
                 )
                 await this.bot
                     .application!.commands.delete(appCmd.id, guildId)
@@ -235,25 +253,19 @@ export interface CommandConfig {
     defer?: "update" | "reply" | "ephemeral_reply"
 }
 
-export type CommandBuilder = ContextMenuCommandBuilder | SlashCommandBuilder
-export interface Command<
-    T extends string | ContextMenuCommandBuilder | SlashCommandBuilder =
-        | string
-        | ContextMenuCommandBuilder
-        | SlashCommandBuilder,
-> {
-    command?: T
-    builder: T
-    handler?: (
-        interaction: T extends string
-            ? ComponentInteraction
-            : T extends ContextMenuCommandBuilder
-              ? ContextMenuInteraction
-              : SlashCommandInteraction,
-    ) => Promise<unknown>
+export interface CommandBase<B, I> {
+    builder: B
+    handler?: (interaction: I) => Promise<unknown>
     handleComponent?: (interaction: ComponentInteraction) => Promise<unknown>
     handleAutocomplete?: (interaction: AutocompleteInteraction) => Promise<unknown>
     handleModalSubmit?: (interaction: ModalSubmitInteraction) => Promise<unknown>
     mixedHandler?: (interaction: CommandHandlerInteraction) => Promise<unknown>
     config?: CommandConfig
 }
+
+export type ContextMenu = CommandBase<ContextMenuCommandBuilder, ContextMenuInteraction>
+export type SlashCommand = CommandBase<SlashCommandBuilder, SlashCommandInteraction>
+export type Component = CommandBase<string, ComponentInteraction>
+
+export type CommandBuilder = ContextMenuCommandBuilder | SlashCommandBuilder
+export type Command = ContextMenu | SlashCommand | Component

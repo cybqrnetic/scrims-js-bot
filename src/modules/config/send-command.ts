@@ -1,11 +1,11 @@
 import { Positions } from "@Constants"
-import { Command, LocalizedError, LocalizedSlashCommandBuilder } from "lib"
+import { LocalizedError, LocalizedSlashCommandBuilder, SlashCommand } from "lib"
 
 const Options = {
     Message: "message",
 }
 
-Command({
+SlashCommand({
     builder: new LocalizedSlashCommandBuilder()
         .addStringOption((o) =>
             o

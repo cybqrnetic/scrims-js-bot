@@ -1,5 +1,5 @@
 import { ButtonBuilder, ButtonStyle, EmbedBuilder, Guild, Role, TextInputStyle } from "discord.js"
-import { Base, BotMessage, Command, MessageOptionsBuilder, PositionRole, redis } from "lib"
+import { Base, BotMessage, Component, MessageOptionsBuilder, PositionRole, redis } from "lib"
 
 import { ExchangeHandlerState, ExchangeInputField, RecallExchangeInteraction } from "../exchange"
 import { TicketCreateHandler, TicketManager, TicketManagerConfig } from "../tickets"
@@ -179,8 +179,8 @@ function isTestTicket(state: ExchangeHandlerState) {
     )
 }
 
-Command(new SupportTicketCreateHandler().asCommand())
-Command(new ReportTicketCreateHandler().asCommand())
+Component(new SupportTicketCreateHandler().asComponent())
+Component(new ReportTicketCreateHandler().asComponent())
 
 BotMessage({
     name: "Support Message",

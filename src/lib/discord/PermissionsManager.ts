@@ -1,5 +1,5 @@
 import { Positions } from "@Constants"
-import { GuildMember, Role, User } from "discord.js"
+import { Collection, GuildMember, Role, User } from "discord.js"
 import { PositionRole } from "../db"
 import type { ScrimsBot } from "./ScrimsBot"
 
@@ -32,11 +32,26 @@ export class PermissionsManager {
         )
     }
 
-    hasPosition(
+    getUsersWithPosition(position: string, guildId = this.bot.hostGuildId): Collection<string, GuildMember> {
+        const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
+        return (
+            this.getGuild(guildId)?.members.cache.filter((m) =>
+                this._hasPosition(m, position, roles, guildId),
+            ) ?? new Collection()
+        )
+    }
+
+    hasPosition(user: User | GuildMember, position: string, guildId = this.bot.hostGuildId): PositionResult {
+        const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
+        return this._hasPosition(user, position, roles, guildId)
+    }
+
+    private _hasPosition(
         user: User | GuildMember,
         position: string,
-        guildId = this.bot.hostGuildId,
-    ): false | undefined | { expiration: () => Promise<Date | undefined> } {
+        roles: string[],
+        guildId: string,
+    ): PositionResult {
         const expiration = async () => undefined
 
         if (position === Positions.Banned)
@@ -44,11 +59,11 @@ export class PermissionsManager {
 
         if (this.hasPosition(user, Positions.Banned, guildId)) return false
 
-        const positionRoles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
         const member = this.getGuild(guildId)?.members.resolve(user.id)
-        if (!positionRoles.length || !member) return undefined
+        if (!roles.length || !member) return undefined
 
-        return member.roles.cache.hasAny(...positionRoles) && { expiration }
+        // @ts-expect-error the getter on member.roles.cache is very inefficient
+        return roles.some((v) => member._roles.includes(v)) && { expiration }
     }
 
     hasPositionLevel(user: User | GuildMember, positionLevel: string, guildId = this.bot.hostGuildId) {
@@ -85,3 +100,5 @@ export interface Permissions {
     positions?: string[]
     positionLevel?: string
 }
+
+export type PositionResult = false | undefined | { expiration: () => Promise<Date | undefined> }

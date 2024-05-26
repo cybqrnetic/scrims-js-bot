@@ -10,7 +10,7 @@ import {
 import { DateTime } from "luxon"
 
 import { RANKS } from "@Constants"
-import { ColorUtil, Command, Config, MessageOptionsBuilder, UserError, redis } from "lib"
+import { ColorUtil, Component, Config, MessageOptionsBuilder, SlashCommand, UserError, redis } from "lib"
 
 const EXPIRATION = 30 * 24 * 60 * 60
 
@@ -38,7 +38,7 @@ for (const rank in RANKS) {
     })
 }
 
-Command({
+SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("vote")
         .setDescription("Create an anonymous vote")
@@ -80,7 +80,7 @@ Command({
     },
 })
 
-Command({
+Component({
     builder: "VOTE",
     async handler(interaction) {
         const key = `vote:${interaction.message.id}`
@@ -106,14 +106,14 @@ Command({
     },
 })
 
-Command({
+Component({
     builder: "VOTE_EVALUATE",
     async handler(interaction) {
         const key = `vote:${interaction.message.id}`
         const res = await Promise.all([redis.hGetAll(key), redis.expire(key, EXPIRATION)])
 
         const vote = res[0]
-        if (Object.keys(vote).length == 0) throw new UserError("This vote expired.")
+        if (Object.keys(vote).length === 0) throw new UserError("This vote expired.")
 
         const rank = voteChannels.get(interaction.channelId)
         if (rank) {

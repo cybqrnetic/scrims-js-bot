@@ -1,14 +1,16 @@
 import { SlashCommandBuilder, SlashCommandStringOption, StringSelectMenuInteraction, User } from "discord.js"
 
 import {
-    Command,
     CommandHandlerInteractionData,
+    Component,
+    ContextMenu,
     ContextMenuInteraction,
     HTTPError,
     LocalizedContextMenuCommandBuilder,
     LocalizedError,
     LocalizedSlashCommandBuilder,
     Permissions,
+    SlashCommand,
     SlashCommandInteraction,
     TimeoutError,
     UserContextMenuInteraction,
@@ -44,7 +46,7 @@ function buildRankOption(command: string) {
         .setChoices(...Object.values(RANKS).map((v) => ({ name: v, value: v })))
 }
 
-Command({
+SlashCommand({
     builder: new LocalizedSlashCommandBuilder("commands.remove_vouch")
         .addUserOption((option) =>
             option
@@ -70,7 +72,7 @@ Command({
     },
 })
 
-Command({
+Component({
     builder: "REMOVE_VOUCH",
     config: { permissions: COUNCIL_PERMISSIONS, defer: "update" },
     async handler(i) {
@@ -90,7 +92,7 @@ Command({
     },
 })
 
-Command({
+SlashCommand({
     builder: new LocalizedSlashCommandBuilder("commands.vouches")
         .addUserOption((option) =>
             option
@@ -117,7 +119,7 @@ Command({
     },
 })
 
-Command({
+ContextMenu({
     builder: new LocalizedContextMenuCommandBuilder("commands.vouches.cm").setType(2).setDMPermission(false),
     config: { defer: "ephemeral_reply" },
     async handler(interaction) {
@@ -127,7 +129,7 @@ Command({
     },
 })
 
-Command({
+SlashCommand({
     builder: new LocalizedSlashCommandBuilder("commands.vouch")
         .addUserOption((option) =>
             option
@@ -150,7 +152,7 @@ Command({
     },
 })
 
-Command({
+SlashCommand({
     builder: new LocalizedSlashCommandBuilder()
         .setNameAndDescription("commands.devouch")
         .addUserOption((option) =>
@@ -236,7 +238,7 @@ async function finishVouchesInteraction(
     }
 }
 
-Command({
+SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("player-vouches")
         .setDescription("Lookup player vouches by ign.")

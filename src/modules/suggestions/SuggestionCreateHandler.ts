@@ -1,5 +1,5 @@
 import { EmbedBuilder, TextInputStyle } from "discord.js"
-import { Command, CommandHandlerInteraction, MessageOptionsBuilder, Suggestion, TextUtil } from "lib"
+import { CommandHandlerInteraction, Component, MessageOptionsBuilder, Suggestion, TextUtil } from "lib"
 
 import { ExchangeHandler, ExchangeInputField, RecallExchangeInteraction } from "../exchange"
 import suggestionsModule from "./module"
@@ -105,4 +105,4 @@ function getSuggestion(interaction: RecallExchangeInteraction) {
     })
 }
 
-Command(new SuggestionsCreateHandler().asCommand())
+Component(new SuggestionsCreateHandler().asComponent())

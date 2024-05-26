@@ -1,8 +1,8 @@
 import { ButtonBuilder, ButtonStyle, EmbedBuilder, TextInputStyle, User } from "discord.js"
 import {
     BotMessage,
-    Command,
     CommandHandlerInteraction,
+    Component,
     MessageOptionsBuilder,
     MojangClient,
     MojangResolvedUser,
@@ -79,7 +79,7 @@ class RegistrationHandler extends ExchangeHandler {
     }
 }
 
-Command(new RegistrationHandler().asCommand())
+Component(new RegistrationHandler().asComponent())
 
 BotMessage({
     name: "Registration Message",
