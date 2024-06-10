@@ -192,7 +192,7 @@ export class SuggestionsModule extends BotModule {
                     .setTitle("Share Your Ideas")
                     .setColor(Colors.Discord)
                     .setDescription(
-                        `This is the place where you can submit your great ideas for the ${guild.name} discord. ` +
+                        `This is the place where you can submit your great ideas for the ${guild.name} Discord. ` +
                             "Just press the button below to get started!",
                     ),
             )
