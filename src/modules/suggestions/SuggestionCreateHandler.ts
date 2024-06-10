@@ -53,7 +53,7 @@ class SuggestionsCreateHandler extends ExchangeHandler {
             .setContent(
                 "***Joke Suggestions that do not include legitimate ideas to improve the server " +
                     "or include anything against our rules will be removed and could result in punishments!***" +
-                    "*\n*This suggestion is for the Bridge Scrims Discord server.**" + 
+                    "\n**This suggestion is for the Bridge Scrims Discord server.**" + 
                     "\nFor suggestions related to the Minecraft server, " + 
                     "please join the [Scrims Network](https://discord.gg/rE3qHxvMNq) Discord server." +
                     "\nWith this in mind, please confirm your suggestion below.",
