@@ -1,4 +1,13 @@
-import { SlashCommandBuilder, SlashCommandStringOption, StringSelectMenuInteraction, User } from "discord.js"
+import {
+    ButtonBuilder,
+    ButtonStyle,
+    SlashCommandBuilder,
+    SlashCommandStringOption,
+    StringSelectMenuInteraction,
+    User,
+    bold,
+    userMention,
+} from "discord.js"
 
 import {
     CommandHandlerInteractionData,
@@ -9,6 +18,7 @@ import {
     LocalizedContextMenuCommandBuilder,
     LocalizedError,
     LocalizedSlashCommandBuilder,
+    MessageOptionsBuilder,
     Permissions,
     SlashCommand,
     SlashCommandInteraction,
@@ -19,7 +29,7 @@ import {
     request,
 } from "lib"
 
-import { RANKS } from "@Constants"
+import { Positions, RANKS } from "@Constants"
 import { URLSearchParams } from "url"
 import { AutoPromoteHandler } from "./AutoPromoteHandler"
 import LogUtil from "./LogUtil"
@@ -34,6 +44,7 @@ const Options = {
     Username: "ign",
 }
 
+const STAFF_PERMISSIONS = { positionLevel: Positions.Staff }
 export const COUNCIL_PERMISSIONS: Permissions = {
     positions: Object.values(RANKS).map((rank) => `${rank} Council`),
 }
@@ -69,6 +80,55 @@ SlashCommand({
 
         const vouches = await VouchCollection.fetch(user.id, rank)
         await interaction.editReply(vouches.toRemoveMessage(interaction.i18n, interaction.guildId!))
+    },
+})
+
+SlashCommand({
+    builder: new SlashCommandBuilder()
+        .setName("purge-vouches")
+        .setDescription("Remove all of a councils' vouches.")
+        .addUserOption((option) =>
+            option
+                .setRequired(true)
+                .setName(Options.User)
+                .setDescription("The council member to remove the vouches from."),
+        )
+        .setDefaultMemberPermissions("0")
+        .setDMPermission(false),
+
+    config: { permissions: STAFF_PERMISSIONS, defer: "ephemeral_reply" },
+
+    async handler(interaction) {
+        const user = interaction.options.getUser(Options.User, true)
+        const count = await Vouch.countDocuments({ executorId: user.id })
+        await interaction.editReply(
+            new MessageOptionsBuilder()
+                .setContent(bold(`Are you sure you want to remove all ${count} of ${user}'s vouches?`))
+                .addButtons(
+                    new ButtonBuilder()
+                        .setLabel("Confirm")
+                        .setStyle(ButtonStyle.Danger)
+                        .setCustomId(`PURGE_VOUCHES/${user.id}`),
+                    new ButtonBuilder()
+                        .setLabel("Cancel")
+                        .setStyle(ButtonStyle.Secondary)
+                        .setCustomId("CANCEL"),
+                ),
+        )
+    },
+})
+
+Component({
+    builder: "PURGE_VOUCHES",
+    config: { permissions: STAFF_PERMISSIONS, defer: "ephemeral_reply" },
+    async handler(interaction) {
+        const userId = interaction.args.shift()!
+        const result = await Vouch.deleteMany({ executorId: userId })
+        await interaction.editReply(
+            new MessageOptionsBuilder().setContent(
+                `Removed all ${result.deletedCount} vouches from ${userMention(userId)}.`,
+            ),
+        )
     },
 })
 
