@@ -49,8 +49,7 @@ SlashCommand({
                 .setRequired(false)
                 .setName(Options.ShowExpired)
                 .setNameAndDescription("commands.vouches.expired_option"),
-        )
-        .setDMPermission(false),
+        ),
 
     config: { defer: "reply" },
 
@@ -63,7 +62,7 @@ SlashCommand({
 })
 
 ContextMenu({
-    builder: new LocalizedContextMenuCommandBuilder("commands.vouches.cm").setType(2).setDMPermission(false),
+    builder: new LocalizedContextMenuCommandBuilder("commands.vouches.cm").setType(2),
     config: { defer: "ephemeral_reply" },
     async handler(interaction) {
         interaction = interaction as UserContextMenuInteraction
