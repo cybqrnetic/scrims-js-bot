@@ -5,7 +5,7 @@ import { BotModule, PositionRole, UserRejoinRoles } from "lib"
 class StickyRolesModule extends BotModule {
     protected addListeners() {
         this.bot.on(Events.GuildMemberRemove, (m) => this.onMemberRemove(m))
-        this.bot.on(Events.GuildMemberAdd, (m) => this.onMemberAdd(m))
+        // this.bot.on(Events.GuildMemberAdd, (m) => this.onMemberAdd(m))
     }
 
     async onMemberRemove(member: GuildMember | PartialGuildMember) {

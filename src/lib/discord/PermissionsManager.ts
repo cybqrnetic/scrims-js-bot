@@ -79,10 +79,7 @@ export class PermissionsManager {
         if (!roles.length) return undefined
 
         const member = this.getGuild(guildId)?.members.resolve(user.id)
-        if (!member) {
-            const saved = UserRejoinRoles.cache.get(user.id)
-            return saved ? roles.some((v) => saved.roles.includes(v)) : undefined
-        }
+        if (!member) return undefined
 
         // @ts-expect-error the getter on member.roles.cache is very inefficient
         return roles.some((v) => member._roles.includes(v))
