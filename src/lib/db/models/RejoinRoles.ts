@@ -4,7 +4,7 @@ import {
     Document,
     SchemaDocument,
     getSchemaFromClass,
-    modelSchema,
+    modelSchemaWithCache
 } from "../util"
 
 @Document("UserRejoinRoles", "rejoinroles")
@@ -17,5 +17,5 @@ class RejoinRolesSchema {
 }
 
 const schema = getSchemaFromClass(RejoinRolesSchema)
-export const UserRejoinRoles = modelSchema(schema, RejoinRolesSchema)
+export const UserRejoinRoles = modelSchemaWithCache(schema, RejoinRolesSchema)
 export type UserRejoinRoles = SchemaDocument<typeof schema>

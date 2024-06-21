@@ -13,7 +13,7 @@ import {
 
 import { VouchUtil } from "./VouchUtil"
 
-type VouchMessageOptions = {
+interface VouchMessageOptions {
     includeHidden?: boolean
     includeExpired?: boolean
     onlyHidden?: boolean

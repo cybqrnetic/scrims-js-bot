@@ -66,7 +66,7 @@ export class VouchUtil {
         return rank
     }
 
-    static determineDemoteRank(user: User, council: User) {
+    static determineDemoteRank(user: User | UserProfile, council: User) {
         for (const rank of Object.values(RANKS).reverse()) {
             if (ScrimsBot.INSTANCE?.permissions.hasPosition(user, rank)) {
                 if (!ScrimsBot.INSTANCE?.permissions.hasPosition(council, `${rank} Head`))

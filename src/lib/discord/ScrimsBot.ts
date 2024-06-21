@@ -50,6 +50,7 @@ export class ScrimsBot extends Client {
         else useCalls.add(cb)
     }
 
+    readonly intents: GatewayIntentBits[]
     readonly hostGuildId: string
     readonly servesHost: boolean
 
@@ -72,22 +73,8 @@ export class ScrimsBot extends Client {
             Partials.GuildScheduledEvent,
         ]
 
-        /**
-         * Guilds, GuildMembers & GuildPresences is required to
-         * keep the host (Bridge Scrims) guild members cached for the permissions system.
-         * DirectMessages e.g. for !restart command you can DM the bot
-         */
-        const intents = Array.from(
-            new Set([
-                GatewayIntentBits.Guilds,
-                GatewayIntentBits.GuildMembers,
-                GatewayIntentBits.GuildPresences,
-                GatewayIntentBits.DirectMessages,
-                ...config.intents,
-            ]),
-        )
-
-        super({ partials, intents, presence: config.presence })
+        super({ partials, intents: config.intents, presence: config.presence })
+        this.intents = config.intents
         this.hostGuildId = config.hostGuildId
         this.servesHost = config.servesHost ?? false
 
@@ -126,16 +113,18 @@ export class ScrimsBot extends Client {
         const res = await super.login(process.env.BOT_TOKEN)
 
         if (!this.host) console.warn("Host Guild Not Available!")
-        else {
-            await this.host.channels.fetch()
+        else if (this.intents.includes(GatewayIntentBits.GuildMembers)) {
             await this.host.members.fetch()
+            await this.host.channels.fetch()
+            await this.host.emojis.fetch()
         }
 
         console.log(`Connected to Discord as ${this.user?.tag}.`, {
             Guilds: this.guilds.cache.size,
             HostGuild: this.host?.id,
-            HostMembers: this.host?.members.cache.size,
-            HostChannels: this.host?.channels.cache.size,
+            HostMembers: this.host?.members?.cache.size,
+            HostChannels: this.host?.channels?.cache.size,
+            HostEmojis: this.host?.emojis?.cache.size,
         })
 
         await mongoose

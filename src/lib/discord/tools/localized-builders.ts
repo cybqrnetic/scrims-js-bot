@@ -12,13 +12,13 @@ import {
     SlashCommandStringOption,
     SlashCommandSubcommandBuilder,
     SlashCommandSubcommandGroupBuilder,
-    SlashCommandUserOption
+    SlashCommandUserOption,
 } from "discord.js"
 
 import { I18n } from "../../utils/I18n"
 
 declare module "discord.js" {
-    class SharedNameAndDescription {
+    interface SharedNameAndDescription {
         setNameAndDescription(resourceId: string, ...params: unknown[]): this
     }
 }
@@ -90,7 +90,7 @@ const overwritePrototype = (prototype: typeof SharedNameAndDescriptionPrototype)
     SlashCommandNumberOption.prototype,
     SlashCommandStringOption.prototype,
     SlashCommandUserOption.prototype,
-    SlashCommandMentionableOption.prototype
+    SlashCommandMentionableOption.prototype,
 ].forEach((val) => overwritePrototype(val as unknown as typeof SharedNameAndDescriptionPrototype))
 
 export class LocalizedSlashCommandBuilder extends SlashCommandBuilder {

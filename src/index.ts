@@ -11,33 +11,47 @@ moduleAlias.addAlias("@Constants", __dirname + "/Constants.js")
 import { ASSETS, HOST_GUILD_ID } from "@Constants"
 import { I18n, ScrimsBot } from "lib"
 
+const PUBLIC = process.env.PUBLIC_BOT
+const TEST = process.argv[2] === "test"
+
 function requireAll(pattern: string) {
-    return globSync(pattern, { cwd: __dirname }).map(
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        (path) => Object.values(require(`./${path}`))[0],
-    ) as Function[]
+    for (const path of globSync(pattern, { cwd: __dirname })) {
+        if (path.includes("internal") && PUBLIC) continue
+        if (TEST) console.log(path)
+        require(`./${path}`)
+    }
 }
 
 async function main() {
     I18n.loadLocales(ASSETS + "lang")
-    requireAll("modules/**/*.js")
 
-    const intents = [
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildModeration,
-        GatewayIntentBits.GuildMessageReactions,
-        GatewayIntentBits.GuildVoiceStates,
-        GatewayIntentBits.GuildPresences,
-    ]
+    let intents: GatewayIntentBits[]
+
+    if (PUBLIC) {
+        requireAll("modules/exchange/**/*.js")
+        requireAll("modules/vouch-system/**/*.js")
+        intents = []
+    } else {
+        requireAll("modules/**/*.js")
+        intents = [
+            GatewayIntentBits.Guilds,
+            GatewayIntentBits.DirectMessages,
+            GatewayIntentBits.GuildMembers,
+            GatewayIntentBits.GuildMessages,
+            GatewayIntentBits.MessageContent,
+            GatewayIntentBits.GuildModeration,
+            GatewayIntentBits.GuildMessageReactions,
+            GatewayIntentBits.GuildVoiceStates,
+            GatewayIntentBits.GuildPresences,
+        ]
+    }
 
     const presence: PresenceData = {
-        activities: [{ type: ActivityType.Custom, name: "Managing Bridge Scrims" }],
+        activities: [{ type: ActivityType.Custom, name: process.env.PRESENCE! }],
     }
 
     const bot = new ScrimsBot({ hostGuildId: HOST_GUILD_ID, servesHost: true, intents, presence })
-    if (process.argv[2] === "test") {
+    if (TEST) {
         console.log(String.raw`Appears to be in order ¯\_(ツ)_/¯`)
         process.exit(0)
     } else {

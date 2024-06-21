@@ -1,8 +1,17 @@
 import { User, userMention } from "discord.js"
-import { Config, DiscordUtil, I18n, MessageOptionsBuilder, PositionRole, ScrimsBot, Vouch } from "lib"
+import {
+    Config,
+    DiscordUtil,
+    I18n,
+    MessageOptionsBuilder,
+    PositionRole,
+    ScrimsBot,
+    UserProfile,
+    Vouch,
+} from "lib"
 
 import { Colors, RANKS } from "@Constants"
-import { VouchUtil } from "./VouchUtil"
+import { VouchUtil } from "../VouchUtil"
 
 Object.values(RANKS).forEach((rank) => {
     Config.declareType(`${rank} Vouch Log Channel`)
@@ -53,12 +62,12 @@ export default class LogUtil {
         const msg = vouch.isPurge()
             ? `${Emojis.Purge} ${executor} purged ${user}${reason}.`
             : vouch.isVoteOutcome()
-            ? vouch.isPositive()
-                ? `${Emojis.Accepted} ${executor} accepted ${user} application.`
-                : `${Emojis.Denied} ${executor} denied ${user} application.`
-            : !vouch.isPositive()
-            ? `${Emojis.Devouch} ${executor} devouched ${user}${reason}.`
-            : `${Emojis.Vouch} ${executor} vouched ${user}${reason}.`
+              ? vouch.isPositive()
+                  ? `${Emojis.Accepted} ${executor} accepted ${user} application.`
+                  : `${Emojis.Denied} ${executor} denied ${user} application.`
+              : !vouch.isPositive()
+                ? `${Emojis.Devouch} ${executor} devouched ${user}${reason}.`
+                : `${Emojis.Vouch} ${executor} vouched ${user}${reason}.`
 
         return ScrimsBot.INSTANCE?.buildSendLogMessages(`${vouch.position} Vouch Log Channel`, null, () => {
             return new MessageOptionsBuilder().setContent(msg)
@@ -73,7 +82,7 @@ export default class LogUtil {
         })
     }
 
-    static async logDemotion(user: User, rank: string, executor: User) {
+    static async logDemotion(user: User | UserProfile, rank: string, executor: User) {
         return ScrimsBot.INSTANCE?.buildSendLogMessages("Positions Log Channel", null, () => {
             return new MessageOptionsBuilder().setContent(
                 `:flag_white:  ${user} was demoted from ${rank} by ${executor}.`,

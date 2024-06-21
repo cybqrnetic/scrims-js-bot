@@ -1,8 +1,7 @@
 import { EventEmitter } from "events"
-import { Document } from "mongoose"
 import { ObservableState } from "../utils/ObservableState"
 
-export class DocumentCache<T extends Document> extends Map<string, T> {
+export class DocumentCache<T> extends Map<string, T> {
     protected events = new EventEmitter({ captureRejections: true })
     readonly initialized = new ObservableState<boolean>()
 

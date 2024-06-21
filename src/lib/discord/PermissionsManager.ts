@@ -1,6 +1,6 @@
 import { Positions } from "@Constants"
 import { Collection, GuildMember, Role, User } from "discord.js"
-import { PositionRole } from "../db"
+import { PositionRole, UserProfile, UserRejoinRoles } from "../db"
 import type { ScrimsBot } from "./ScrimsBot"
 
 export class PermissionsManager {
@@ -18,13 +18,13 @@ export class PermissionsManager {
         return this.bot.guilds.cache.get(guildId)
     }
 
-    getUsersPositions(user: User) {
+    getUsersPositions(user: UserResolvable) {
         return new Set(
             PositionRole.cache.filter((v) => this.hasPosition(user, v.position)).map((v) => v.position),
         )
     }
 
-    getUsersForbiddenPositions(user: User) {
+    getUsersForbiddenPositions(user: UserResolvable) {
         return new Set(
             PositionRole.cache
                 .filter((v) => this.hasPosition(user, v.position) === false)
@@ -41,13 +41,13 @@ export class PermissionsManager {
         )
     }
 
-    hasPosition(user: User | GuildMember, position: string, guildId = this.bot.hostGuildId): PositionResult {
+    hasPosition(user: UserResolvable, position: string, guildId = this.bot.hostGuildId): PositionResult {
         const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
         return this._hasPosition(user, position, roles, guildId)
     }
 
     private _hasPosition(
-        user: User | GuildMember,
+        user: UserResolvable,
         position: string,
         roles: string[],
         guildId: string,
@@ -58,30 +58,37 @@ export class PermissionsManager {
             return this.getGuild(guildId)?.bans.cache.get(user.id) && { expiration }
 
         if (this.hasPosition(user, Positions.Banned, guildId)) return false
-
-        const member = this.getGuild(guildId)?.members.resolve(user.id)
-        if (!roles.length || !member) return undefined
-
-        // @ts-expect-error the getter on member.roles.cache is very inefficient
-        return roles.some((v) => member._roles.includes(v)) && { expiration }
+        return this.hasRoles(user, guildId, roles) && { expiration }
     }
 
-    hasPositionLevel(user: User | GuildMember, positionLevel: string, guildId = this.bot.hostGuildId) {
+    hasPositionLevel(user: UserResolvable, positionLevel: string, guildId = this.bot.hostGuildId) {
         const positionRoles = PositionRole.getRoles(positionLevel, guildId)
-        const positionRoleIds = new Set(positionRoles.map((r) => r.id))
+        const positionRoleIds = positionRoles.map((r) => r.id)
         const highest = positionRoles.sort((a, b) => b.comparePositionTo(a))[0]
         if (highest)
             PositionRole.cache
                 .filter((v) => v.guildId === highest.guild.id)
                 .map((v) => v.role())
                 .filter((r): r is Role => !!r && r.comparePositionTo(highest) > 0)
-                .forEach((r) => positionRoleIds.add(r.id))
+                .forEach((r) => positionRoleIds.push(r.id))
 
-        const member = this.getGuild(guildId)?.members.resolve(user)
-        return member?.roles.cache.hasAny(...positionRoleIds)
+        return this.hasRoles(user, guildId, positionRoleIds)
     }
 
-    hasPermissions(user: User | GuildMember, permissions: Permissions) {
+    protected hasRoles(user: UserResolvable, guildId: string, roles: string[]) {
+        if (!roles.length) return undefined
+
+        const member = this.getGuild(guildId)?.members.resolve(user.id)
+        if (!member) {
+            const saved = UserRejoinRoles.cache.get(user.id)
+            return saved ? roles.some((v) => saved.roles.includes(v)) : undefined
+        }
+
+        // @ts-expect-error the getter on member.roles.cache is very inefficient
+        return roles.some((v) => member._roles.includes(v))
+    }
+
+    hasPermissions(user: UserResolvable, permissions: Permissions) {
         const member = this.getHostMember(user.id)
         const hasPositions = permissions.positions?.some((p) => this.hasPosition(user, p))
         const hasPositionLevel = permissions.positionLevel
@@ -94,6 +101,30 @@ export class PermissionsManager {
             member?.permissions.has("Administrator") || required.some((v) => v === true)
         )
     }
+
+    async addPosition(user: UserResolvable, position: string, reason: string) {
+        return this.updatePositions(user, position, reason, false)
+    }
+
+    async removePosition(user: UserResolvable, position: string, reason: string) {
+        return this.updatePositions(user, position, reason, true)
+    }
+
+    protected async updatePositions(user: UserResolvable, position: string, reason: string, remove: boolean) {
+        const roles = PositionRole.getPermittedRoles(position, this.bot.hostGuildId)
+        const member = this.host?.members.resolve(user.id)
+        if (member) {
+            await Promise.all(
+                roles.map((v) => (remove ? member.roles.remove(v, reason) : member.roles.add(v, reason))),
+            )
+        } else {
+            const cmd = remove ? "$pull" : "$push"
+            await UserRejoinRoles.updateOne(
+                { _id: user.id },
+                { [cmd]: { roles: { $in: roles.map((v) => v.id) } } },
+            )
+        }
+    }
 }
 
 export interface Permissions {
@@ -102,3 +133,4 @@ export interface Permissions {
 }
 
 export type PositionResult = false | undefined | { expiration: () => Promise<Date | undefined> }
+type UserResolvable = User | GuildMember | UserProfile

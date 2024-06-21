@@ -5,7 +5,7 @@ import { BotModule, PositionRole, UserRejoinRoles } from "lib"
 class StickyRolesModule extends BotModule {
     protected addListeners() {
         this.bot.on(Events.GuildMemberRemove, (m) => this.onMemberRemove(m))
-        // this.bot.on(Events.GuildMemberAdd, (m) => this.onMemberAdd(m))
+        this.bot.on(Events.GuildMemberAdd, (m) => this.onMemberAdd(m))
     }
 
     async onMemberRemove(member: GuildMember | PartialGuildMember) {
@@ -15,7 +15,9 @@ class StickyRolesModule extends BotModule {
                 .filter((r) => !this.alwaysIgnoredRoles().includes(r.id))
                 .map((r) => r.id)
 
-            if (roles.length) await UserRejoinRoles.updateOne({ _id: member.id }, { roles }, { upsert: true })
+            if (roles.length) {
+                await UserRejoinRoles.updateOne({ _id: member.id }, { roles }, { upsert: true })
+            }
         }
     }
 
@@ -41,7 +43,7 @@ class StickyRolesModule extends BotModule {
     }
 
     alwaysIgnoredRoles() {
-        return PositionRole.cache.filter((v) => [Positions.Member].includes(v.position)).map((v) => v.roleId)
+        return PositionRole.getPositionRoles(Positions.Member, this.bot.hostGuildId).map((v) => v.roleId)
     }
 }
 

@@ -4,7 +4,6 @@ import {
     TextInputBuilder,
     TextInputStyle,
     TimestampStyles,
-    User,
     inlineCode,
     userMention,
 } from "discord.js"
@@ -23,14 +22,15 @@ import {
     SlashCommand,
     SlashCommandInteraction,
     UserError,
+    UserProfile,
     Vouch,
 } from "lib"
 
 import { HOST_GUILD_ID, RANKS } from "@Constants"
 
 import { TicketManager } from "../tickets"
-import { AutoPromoteHandler } from "../vouch-system/AutoPromoteHandler"
-import LogUtil from "../vouch-system/LogUtil"
+import { AutoPromoteHandler } from "../vouch-system/internal/AutoPromoteHandler"
+import LogUtil from "../vouch-system/internal/LogUtil"
 import { VouchUtil } from "../vouch-system/VouchUtil"
 import { RankAppTicketManager } from "./RankApplications"
 
@@ -172,7 +172,7 @@ SlashCommand({
             .setCustomId("users")
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true)
-            .setPlaceholder("Usernames joined by line breaks e.g.\nwhatcats\ntphere\n...")
+            .setPlaceholder("Discord ID's joined by line breaks e.g.\n789213718231291\n912360826345382\n...")
 
         await interaction.showModal(
             new ModalBuilder()
@@ -192,46 +192,61 @@ SlashCommand({
         const reason = components.find((v) => v.customId === "reason")!.value
         const users = components.find((v) => v.customId === "users")!.value.split("\n")
 
-        const resolved = new Set<User>()
+        const resolved = new Set<UserProfile>()
         const problems: string[] = []
+        const warnings: string[] = []
+
         await Promise.all(
             users.map((user) => {
-                purge(interaction, resolved, user, reason).catch((error) => {
-                    if (error instanceof UserError) problems.push(error.message)
-                    else {
-                        console.error(error)
-                        problems.push(`Failed to purge ${inlineCode(user)} due to an unexpected error.`)
-                    }
-                })
+                purge(interaction, resolved, user, reason)
+                    .then((warning) => {
+                        if (warning) warnings.push(warning)
+                    })
+                    .catch((error) => {
+                        if (error instanceof UserError) problems.push(error.message)
+                        else {
+                            console.error(error)
+                            problems.push(`Failed to purge ${inlineCode(user)} due to an unexpected error.`)
+                        }
+                    })
             }),
         )
 
-        await interaction.editReply(
-            `## Purged ${users.length - problems.length}/${users.length} User(s)` +
-                (problems.length
-                    ? `\n### Problems:\n${problems.map((v) => `${inlineCode("•")} ${v}`).join("\n")}`
-                    : ""),
-        )
+        let content = `## Purged ${users.length - problems.length}/${users.length} User(s)`
+
+        if (problems.length) content += `\n### Problems:`
+        for (const problem of problems) {
+            const append = `\n- ${problem}`
+            if (append.length + content.length > 2000) break
+            content += append
+        }
+
+        if (warnings.length) content += `\n### Warnings:`
+        for (const warning of warnings) {
+            const append = `\n- ${warning}`
+            if (append.length + content.length > 2000) break
+            content += append
+        }
+
+        await interaction.editReply(content)
     },
 })
 
 async function purge(
     interaction: CommandHandlerInteraction,
-    resolved: Set<User>,
+    resolved: Set<UserProfile>,
     resolvable: string,
     reason: string,
-) {
-    const member = fetchHostMember(resolvable)
-    const user = member.user
+): Promise<string | void> {
+    const user = UserProfile.resolve(resolvable)
+    if (!user) throw new UserError(`User couldn't be resolved from '${resolvable}'.`)
 
-    if (resolved.has(user)) throw new UserError(`Duplicate entry detected for ${user}!`)
+    if (resolved.has(user)) return `Duplicate entry detected for ${user}!`
     resolved.add(user)
 
-    const rank = VouchUtil.determineDemoteRank(member.user, interaction.user)
-    const roles = PositionRole.getPermittedRoles(rank, HOST_GUILD_ID)
-    await Promise.all(
-        roles.map((r) => member.roles.remove(r, `Demoted from ${rank} by ${interaction.user.tag}.`)),
-    )
+    const rank = VouchUtil.determineDemoteRank(user, interaction.user)
+    const removeReason = `Demoted from ${rank} by ${interaction.user.tag}.`
+    await interaction.client.permissions.removePosition(user, rank, removeReason)
 
     const vouch = await Vouch.create({
         comment: reason,
@@ -248,7 +263,8 @@ async function purge(
     }
 
     LogUtil.logDemotion(user, rank, interaction.user).catch(console.error)
-    user.send(`**You lost your ${rank} rank in Bridge Scrims for ${reason}.**`).catch(() => null)
+    const dm = await interaction.client.users.createDM(user.id).catch(() => null)
+    if (dm != null) dm.send(`**You lost your ${rank} rank in Bridge Scrims for ${reason}.**`)
 
     const announcement = new MessageOptionsBuilder().setContent(`**${user} was removed from ${rank}.**`)
     interaction.client

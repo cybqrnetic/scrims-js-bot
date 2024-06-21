@@ -2,7 +2,7 @@ import { User } from "discord.js"
 
 import { HOST_GUILD_ID, RANKS, ROLE_APP_HUB } from "@Constants"
 import { Config, I18n, MessageOptionsBuilder, PositionRole, ScrimsBot, Vouch } from "lib"
-import { VouchCollection } from "./VouchCollection"
+import { VouchCollection } from "../VouchCollection"
 
 const PROMOTIONS_CHANNEL = Config.declareType("Promotions Channel")
 
@@ -17,7 +17,7 @@ for (const rank of Object.values(RANKS)) {
 const PROMOTION_PREFIX: Record<string, string> = {
     Prime: "### ",
     Private: "## ",
-    Premium: "# "
+    Premium: "# ",
 }
 
 export class AutoPromoteHandler {
@@ -65,7 +65,9 @@ export class AutoPromoteHandler {
         ScrimsBot.INSTANCE?.buildSendMessages(
             PROMOTIONS_CHANNEL,
             null,
-            new MessageOptionsBuilder().setContent(`${PROMOTION_PREFIX[rank] ?? ""}${user} has been promoted to ${rank}!`),
+            new MessageOptionsBuilder().setContent(
+                `${PROMOTION_PREFIX[rank] ?? ""}${user} has been promoted to ${rank}!`,
+            ),
         )
     }
 }

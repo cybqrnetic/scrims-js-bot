@@ -3,6 +3,7 @@ import mongooseLong from "mongoose-long"
 
 mongooseLong(mongoose)
 
+export * from "./DocumentCache"
 export * from "./models/Config"
 export * from "./models/LikedClips"
 export * from "./models/PositionRole"

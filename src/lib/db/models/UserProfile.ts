@@ -2,6 +2,7 @@ import { DateTime } from "luxon"
 import { MojangClient } from "../../apis/Mojang"
 import { TimeUtil } from "../../utils/TimeUtil"
 
+import { userMention } from "discord.js"
 import {
     DiscordIdProp,
     Document,
@@ -16,6 +17,10 @@ import {
 class UserProfileSchema {
     static getUsername(id: string) {
         return UserProfile.cache.get(id)?.username
+    }
+
+    static resolve(resolvable: string) {
+        return UserProfile.cache.get(resolvable) ?? nameCache.get(resolvable.toLowerCase())
     }
 
     @DiscordIdProp({ required: true })
@@ -47,8 +52,17 @@ class UserProfileSchema {
         if (!this.mcUUID) return undefined
         return MojangClient.uuidToName(this.mcUUID)
     }
+
+    toString() {
+        return userMention(this._id)
+    }
 }
 
 const schema = getSchemaFromClass(UserProfileSchema)
 export const UserProfile = modelSchemaWithCache(schema, UserProfileSchema)
 export type UserProfile = SchemaDocument<typeof schema>
+
+const nameCache = new Map<string, UserProfile>()
+UserProfile.cache
+    .on("add", (profile) => nameCache.set(profile.username.toLowerCase(), profile))
+    .on("delete", (profile) => nameCache.delete(profile.username.toLowerCase()))
