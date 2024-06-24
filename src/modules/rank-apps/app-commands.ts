@@ -172,7 +172,16 @@ SlashCommand({
             .setCustomId("users")
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true)
-            .setPlaceholder("Discord ID's joined by line breaks e.g.\n789213718231291\n912360826345382\n...")
+            .setPlaceholder(
+                "Discord names or IDs joined by line breaks e.g.\nwhatcats\n977686340412006450\n...",
+            )
+
+        const rank = new TextInputBuilder()
+            .setLabel("Rank")
+            .setCustomId("rank")
+            .setStyle(TextInputStyle.Short)
+            .setRequired(false)
+            .setPlaceholder("Pristine, Prime, Private or Premium")
 
         await interaction.showModal(
             new ModalBuilder()
@@ -181,6 +190,7 @@ SlashCommand({
                 .addComponents(
                     new ActionRowBuilder<TextInputBuilder>().addComponents(reason),
                     new ActionRowBuilder<TextInputBuilder>().addComponents(users),
+                    new ActionRowBuilder<TextInputBuilder>().addComponents(rank),
                 ),
         )
     },
@@ -191,6 +201,7 @@ SlashCommand({
         const components = interaction.components.map((v) => v.components).flat()
         const reason = components.find((v) => v.customId === "reason")!.value
         const users = components.find((v) => v.customId === "users")!.value.split("\n")
+        const rank = components.find((v) => v.customId === "rank")?.value.toLowerCase()
 
         const resolved = new Set<UserProfile>()
         const problems: string[] = []
@@ -198,7 +209,7 @@ SlashCommand({
 
         await Promise.all(
             users.map((user) => {
-                purge(interaction, resolved, user, reason)
+                purge(interaction, resolved, user, reason, rank)
                     .then((warning) => {
                         if (warning) warnings.push(warning)
                     })
@@ -221,11 +232,13 @@ SlashCommand({
             content += append
         }
 
-        if (warnings.length) content += `\n### Warnings:`
-        for (const warning of warnings) {
-            const append = `\n- ${warning}`
-            if (append.length + content.length > 2000) break
-            content += append
+        if (content.length < 2000) {
+            if (warnings.length) content += `\n### Warnings:`
+            for (const warning of warnings) {
+                const append = `\n- ${warning}`
+                if (append.length + content.length > 2000) break
+                content += append
+            }
         }
 
         await interaction.editReply(content)
@@ -237,6 +250,7 @@ async function purge(
     resolved: Set<UserProfile>,
     resolvable: string,
     reason: string,
+    rankInput: string | undefined,
 ): Promise<string | void> {
     const user = UserProfile.resolve(resolvable)
     if (!user) throw new UserError(`User couldn't be resolved from '${resolvable}'.`)
@@ -245,6 +259,10 @@ async function purge(
     resolved.add(user)
 
     const rank = VouchUtil.determineDemoteRank(user, interaction.user)
+    if (rankInput && rank.toLowerCase() !== rankInput) {
+        return `${user} is wrong rank for purge (${rank}).`
+    }
+
     const removeReason = `Demoted from ${rank} by ${interaction.user.tag}.`
     await interaction.client.permissions.removePosition(user, rank, removeReason)
 

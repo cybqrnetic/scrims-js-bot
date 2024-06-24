@@ -26,11 +26,11 @@ declare module "discord.js" {
 interface SharedNameAndDescriptionOverwrites {
     readonly name: string
     readonly description: string
-    setNameLocalizations: (resourceId: string, ...params: unknown[]) => this
-    setDescriptionLocalizations: (resourceId: string, ...params: unknown[]) => this
-    setName: (resourceId: string, ...params: unknown[]) => this
-    setDescription: (resourceId: string, ...params: unknown[]) => this
-    setNameAndDescription: (resourceId: string, ...params: unknown[]) => this
+    setNameLocalizations(resourceId: string, ...params: unknown[]): this
+    setDescriptionLocalizations(resourceId: string, ...params: unknown[]): this
+    setName(resourceId: string, ...params: unknown[]): this
+    setDescription(resourceId: string, ...params: unknown[]): this
+    setNameAndDescription(resourceId: string, ...params: unknown[]): this
 }
 
 const SharedNameAndDescriptionPrototype =

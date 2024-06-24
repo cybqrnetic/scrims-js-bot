@@ -32,7 +32,6 @@ export interface BotConfig {
     presence?: PresenceData
     profiling?: boolean
     hostGuildId: string
-    servesHost?: boolean
 }
 
 export function BotListener<E extends keyof ClientEvents>(
@@ -52,7 +51,6 @@ export class ScrimsBot extends Client {
 
     readonly intents: GatewayIntentBits[]
     readonly hostGuildId: string
-    readonly servesHost: boolean
 
     readonly auditedEvents = new AuditedEventEmitter(this)
     readonly partialsHandledEvents = new PartialsHandledEventEmitter(this)
@@ -76,7 +74,6 @@ export class ScrimsBot extends Client {
         super({ partials, intents: config.intents, presence: config.presence })
         this.intents = config.intents
         this.hostGuildId = config.hostGuildId
-        this.servesHost = config.servesHost ?? false
 
         this.on("error", console.error)
         this.on("shardError", console.error)

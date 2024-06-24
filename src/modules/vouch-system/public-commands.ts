@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, SlashCommandStringOption, User } from "discord.js"
+import { ApplicationCommandOptionChoiceData, SlashCommandStringOption, User } from "discord.js"
 
 import {
     ContextMenu,
@@ -12,6 +12,7 @@ import {
     TimeoutError,
     UserContextMenuInteraction,
     UserError,
+    UserProfile,
     request,
 } from "lib"
 
@@ -22,9 +23,10 @@ import { VouchUtil } from "./VouchUtil"
 
 const Options = {
     User: "user",
+    Username: "username",
+    Ign: "ign",
     ShowExpired: "show_expired",
     Rank: "rank",
-    Username: "ign",
 }
 
 function buildRankOption(command: string) {
@@ -41,7 +43,22 @@ SlashCommand({
             option
                 .setRequired(false)
                 .setName(Options.User)
-                .setNameAndDescription("commands.vouches.user_option"),
+                .setDescription("The Discord mention of the person to check."),
+        )
+        .addStringOption((option) =>
+            option
+                .setRequired(false)
+                .setName(Options.Username)
+                .setDescription("The Discord username of the person to check.")
+                .setAutocomplete(true),
+        )
+        .addStringOption((option) =>
+            option
+                .setRequired(false)
+                .setName(Options.Ign)
+                .setDescription("The Minecraft username of the person to check.")
+                .setMinLength(3)
+                .setMaxLength(16),
         )
         .addStringOption(buildRankOption("vouches"))
         .addBooleanOption((option) =>
@@ -54,10 +71,40 @@ SlashCommand({
     config: { defer: "reply" },
 
     async handler(interaction) {
-        const user = interaction.options.getUser(Options.User) ?? interaction.user
+        let user: User
+
+        const userInput = interaction.options.getUser(Options.User)
+        const nameInput = interaction.options.getString(Options.Username)
+        const ignInput = interaction.options.getString(Options.Ign)
+
+        if (userInput) {
+            user = userInput
+        } else if (nameInput) {
+            const userId = UserProfile.resolve(nameInput)?._id
+            if (!userId) throw new UserError(`User can't be resolved from ${userId}`)
+            user = await interaction.client.users.fetch(userId)
+        } else if (ignInput) {
+            const userId = await fetchUserId(ignInput)
+            user = await interaction.client.users.fetch(userId)
+        } else {
+            user = interaction.user
+        }
+
+        await interaction.client.host?.members.fetch({ user, force: true }).catch(() => null)
+
         const showExpired = interaction.options.getBoolean(Options.ShowExpired) ?? undefined
         const rank = VouchUtil.determineVouchRank(user, interaction.options.getString(Options.Rank))
         await finishVouchesInteraction(interaction, user, rank, showExpired)
+    },
+
+    async handleAutocomplete(interaction) {
+        const focused = interaction.options.getFocused().toLowerCase()
+        const matches: ApplicationCommandOptionChoiceData[] = []
+        for (const name of UserProfile.getNames()) {
+            if (name.startsWith(focused)) matches.push({ name, value: name })
+            if (matches.length === 25) break
+        }
+        await interaction.respond(matches)
     },
 })
 
@@ -87,6 +134,12 @@ async function finishVouchesInteraction(
         vouches.toMessage(interaction.i18n, { includeExpired }, interaction.guildId!).setAllowedMentions(),
     )
 
+    if (interaction.guild !== interaction.client.host) {
+        await interaction.client.host?.members
+            .fetch({ user: interaction.user, force: true })
+            .catch(() => null)
+    }
+
     if (interaction.userHasPosition(`${rank} Council`)) {
         if (vouches.getCovered().length)
             await interaction
@@ -100,49 +153,18 @@ async function finishVouchesInteraction(
     }
 }
 
-SlashCommand({
-    builder: new SlashCommandBuilder()
-        .setName("player-vouches")
-        .setDescription("Lookup player vouches by ign.")
-        .addStringOption((o) =>
-            o
-                .setName(Options.Username)
-                .setDescription("Username of the player")
-                .setMinLength(3)
-                .setMaxLength(16)
-                .setRequired(true),
-        )
-        .addStringOption(buildRankOption("vouches"))
-        .setDMPermission(true),
+async function fetchUserId(ign: string) {
+    const url = `https://api.scrims.network/v1/user?${new URLSearchParams({ username: ign })}`
+    const resp = await request(url).catch((error) => {
+        if (error instanceof HTTPError) throw new LocalizedError(`api.request_failed`, "Scrims Network API")
+        if (error instanceof TimeoutError) throw new LocalizedError("api.timeout", "Scrims Network API")
+        throw error
+    })
 
-    async handler(interaction) {
-        await interaction.deferReply()
+    const body = await resp.json()
+    const data = body["user_data"]
+    if (!data) throw new UserError(`Player by the name of '${ign}' couldn't be found!`)
+    if (!data.discordId) throw new UserError(`${data.username} doesn't have their Discord account linked.`)
 
-        const ign = interaction.options.getString(Options.Username, true)
-        const url = `https://api.scrims.network/v1/user?${new URLSearchParams({ username: ign })}`
-        const resp = await request(url).catch((error) => {
-            if (error instanceof HTTPError)
-                throw new LocalizedError(`api.request_failed`, "Scrims Network API")
-
-            if (error instanceof TimeoutError) throw new LocalizedError("api.timeout", "Scrims Network API")
-
-            throw error
-        })
-
-        const body = await resp.json()
-        const data = body["user_data"]
-        if (!data) throw new UserError(`Player by the name of '${ign}' couldn't be found!`)
-        if (!data.discordId)
-            throw new UserError(`${data.username} doesn't have their Discord account linked.`)
-
-        const user = await interaction.client.users.fetch(data.discordId)
-        const rank = VouchUtil.determineVouchRank(user, interaction.options.getString(Options.Rank))
-
-        const vouches = await VouchCollection.fetch(user.id, rank)
-        const message = vouches.toMessage(interaction.i18n, {}, interaction.guildId ?? undefined)
-        if (message.embeds[0]?.fields?.length)
-            message.embeds[0].thumbnail = { url: `https://mc-heads.net/head/${data._id}/left` }
-
-        await interaction.editReply(message)
-    },
-})
+    return data.discordId
+}

@@ -1,19 +1,16 @@
-import { Positions } from "@Constants"
 import { Events, GuildMember, PartialGuildMember, Role } from "discord.js"
-import { BotModule, PositionRole, UserRejoinRoles } from "lib"
+import { BotModule, UserRejoinRoles } from "lib"
+import { TransientRole } from "../lib/db/models/TransientRole"
 
 class StickyRolesModule extends BotModule {
     protected addListeners() {
         this.bot.on(Events.GuildMemberRemove, (m) => this.onMemberRemove(m))
-        // this.bot.on(Events.GuildMemberAdd, (m) => this.onMemberAdd(m))
+        this.bot.on(Events.GuildMemberAdd, (m) => this.onMemberAdd(m))
     }
 
     async onMemberRemove(member: GuildMember | PartialGuildMember) {
         if (member.guild.id === this.bot.hostGuildId) {
-            const roles = member.roles.cache
-                .filter((r) => !r.managed && r.id !== r.guild.id)
-                .filter((r) => !this.alwaysIgnoredRoles().includes(r.id))
-                .map((r) => r.id)
+            const roles = member.roles.cache.filter((r) => !r.managed && r.id !== r.guild.id).map((r) => r.id)
 
             if (roles.length) {
                 await UserRejoinRoles.updateOne({ _id: member.id }, { roles }, { upsert: true })
@@ -31,19 +28,11 @@ class StickyRolesModule extends BotModule {
                         .filter((r): r is Role => r !== undefined)
                         .filter((r) => this.bot.hasRolePermissions(r))
                         .filter((r) => !r.permissions.has("Administrator"))
-                        .filter((r) => !this.currentIgnoredRoles().includes(r.id))
+                        .filter((r) => !TransientRole.isTransient(r.id))
                         .map((r) => member.roles.add(r)),
                 )
             }
         }
-    }
-
-    currentIgnoredRoles() {
-        return this.alwaysIgnoredRoles()
-    }
-
-    alwaysIgnoredRoles() {
-        return PositionRole.getPositionRoles(Positions.Member, this.bot.hostGuildId).map((v) => v.roleId)
     }
 }
 

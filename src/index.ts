@@ -25,32 +25,29 @@ function requireAll(pattern: string) {
 async function main() {
     I18n.loadLocales(ASSETS + "lang")
 
-    let intents: GatewayIntentBits[]
+    const intents: GatewayIntentBits[] = []
 
     if (PUBLIC) {
         requireAll("modules/exchange/**/*.js")
         requireAll("modules/vouch-system/**/*.js")
-        intents = []
     } else {
         requireAll("modules/**/*.js")
-        intents = [
+        intents.push(
             GatewayIntentBits.Guilds,
             GatewayIntentBits.DirectMessages,
             GatewayIntentBits.GuildMembers,
             GatewayIntentBits.GuildMessages,
             GatewayIntentBits.MessageContent,
-            GatewayIntentBits.GuildModeration,
             GatewayIntentBits.GuildMessageReactions,
             GatewayIntentBits.GuildVoiceStates,
-            GatewayIntentBits.GuildPresences,
-        ]
+        )
     }
 
     const presence: PresenceData = {
         activities: [{ type: ActivityType.Custom, name: process.env.PRESENCE! }],
     }
 
-    const bot = new ScrimsBot({ hostGuildId: HOST_GUILD_ID, servesHost: true, intents, presence })
+    const bot = new ScrimsBot({ hostGuildId: HOST_GUILD_ID, intents, presence })
     if (TEST) {
         console.log(String.raw`Appears to be in order ¯\_(ツ)_/¯`)
         process.exit(0)

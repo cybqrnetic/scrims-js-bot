@@ -23,6 +23,10 @@ class UserProfileSchema {
         return UserProfile.cache.get(resolvable) ?? nameCache.get(resolvable.toLowerCase())
     }
 
+    static getNames() {
+        return Array.from(nameCache.keys())
+    }
+
     @DiscordIdProp({ required: true })
     _id!: string
 

@@ -1,6 +1,6 @@
 import { Positions } from "@Constants"
 import { Collection, GuildMember, Role, User } from "discord.js"
-import { PositionRole, UserProfile, UserRejoinRoles } from "../db"
+import { PositionRole, TransientRole, UserProfile, UserRejoinRoles } from "../db"
 import type { ScrimsBot } from "./ScrimsBot"
 
 export class PermissionsManager {
@@ -79,7 +79,12 @@ export class PermissionsManager {
         if (!roles.length) return undefined
 
         const member = this.getGuild(guildId)?.members.resolve(user.id)
-        if (!member) return undefined
+        if (!member) {
+            const saved = UserRejoinRoles.cache.get(user.id)
+            return saved
+                ? roles.some((v) => !TransientRole.isTransient(v) && saved.roles.includes(v))
+                : undefined
+        }
 
         // @ts-expect-error the getter on member.roles.cache is very inefficient
         return roles.some((v) => member._roles.includes(v))
