@@ -1,10 +1,18 @@
 import { Events, GuildMember, PartialGuildMember, Role } from "discord.js"
-import { BotModule, Config, MessageOptionsBuilder, TransientRole, UserRejoinRoles } from "lib"
+import { BotModule, Config, MessageOptionsBuilder, PositionRole, TransientRole, UserRejoinRoles } from "lib"
 
 const LOG_CHANNEL = Config.declareType("Rejoin Roles Log Channel")
 
 class StickyRolesModule extends BotModule {
+    protected positionRoles: Set<string> = new Set()
+
     protected addListeners() {
+        PositionRole.cache.on("add", (v) => this.positionRoles.add(v.roleId))
+        PositionRole.cache.on("delete", (v) => {
+            if (!PositionRole.cache.documents().find((d) => d.roleId === v.roleId))
+                this.positionRoles.delete(v.roleId)
+        })
+
         this.bot.on(Events.GuildMemberRemove, (m) => this.onMemberRemove(m))
         this.bot.on(Events.GuildMemberAdd, (m) => this.onMemberAdd(m))
     }
@@ -23,7 +31,7 @@ class StickyRolesModule extends BotModule {
         if (member.guild.id === this.bot.hostGuildId) {
             const rejoinRoles = await UserRejoinRoles.findByIdAndDelete(member.id)
             if (rejoinRoles) {
-                const added: Role[] = []
+                const log: Role[] = []
                 await Promise.all(
                     rejoinRoles.roles
                         .map((r) => member.guild.roles.cache.get(r))
@@ -34,17 +42,17 @@ class StickyRolesModule extends BotModule {
                         .map((r) =>
                             member.roles
                                 .add(r)
-                                .then(() => added.push(r))
+                                .then(() => (this.positionRoles.has(r.id) ? log.push(r) : null))
                                 .catch(console.error),
                         ),
                 )
 
-                if (added.length) {
+                if (log.length) {
                     this.bot.buildSendLogMessages(
                         LOG_CHANNEL,
                         [member.guild.id],
                         new MessageOptionsBuilder().setContent(
-                            `:wave:  Got ${added.join(" ")} back after rejoining.`,
+                            `:wave:  ${member} Got ${log.join(" ")} back after rejoining.`,
                         ),
                     )
                 }
