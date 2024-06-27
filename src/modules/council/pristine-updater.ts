@@ -10,8 +10,10 @@ BotListener(Events.ClientReady, (bot) => {
 })
 
 BotListener(Events.GuildMemberUpdate, (bot, oldMember, newMember) => {
-    if (!oldMember.roles.cache.equals(newMember.roles.cache)) {
-        givePristineIfPrime(newMember).catch(console.error)
+    if (oldMember.guild.id === HOST_GUILD_ID) {
+        if (!oldMember.roles.cache.equals(newMember.roles.cache)) {
+            givePristineIfPrime(newMember).catch(console.error)
+        }
     }
 })
 

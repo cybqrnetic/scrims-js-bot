@@ -1,6 +1,7 @@
 import { Events, GuildMember, PartialGuildMember, Role } from "discord.js"
-import { BotModule, UserRejoinRoles } from "lib"
-import { TransientRole } from "../lib/db/models/TransientRole"
+import { BotModule, Config, MessageOptionsBuilder, TransientRole, UserRejoinRoles } from "lib"
+
+const LOG_CHANNEL = Config.declareType("Rejoin Roles Log Channel")
 
 class StickyRolesModule extends BotModule {
     protected addListeners() {
@@ -22,15 +23,31 @@ class StickyRolesModule extends BotModule {
         if (member.guild.id === this.bot.hostGuildId) {
             const rejoinRoles = await UserRejoinRoles.findByIdAndDelete(member.id)
             if (rejoinRoles) {
+                const added: Role[] = []
                 await Promise.all(
                     rejoinRoles.roles
-                        .map((r) => member.guild.roles.cache.get(r.toString()))
+                        .map((r) => member.guild.roles.cache.get(r))
                         .filter((r): r is Role => r !== undefined)
                         .filter((r) => this.bot.hasRolePermissions(r))
                         .filter((r) => !r.permissions.has("Administrator"))
                         .filter((r) => !TransientRole.isTransient(r.id))
-                        .map((r) => member.roles.add(r)),
+                        .map((r) =>
+                            member.roles
+                                .add(r)
+                                .then(() => added.push(r))
+                                .catch(console.error),
+                        ),
                 )
+
+                if (added.length) {
+                    this.bot.buildSendLogMessages(
+                        LOG_CHANNEL,
+                        [member.guild.id],
+                        new MessageOptionsBuilder().setContent(
+                            `:wave:  Got ${added.join(" ")} back after rejoining.`,
+                        ),
+                    )
+                }
             }
         }
     }
