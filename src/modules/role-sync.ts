@@ -120,7 +120,7 @@ export class RoleSyncModule extends BotModule {
         const allowed = new Set<string>()
 
         for (const position of CONFIGURED_POSITIONS) {
-            const permission = this.bot.permissions.hasPosition(member.user, position)
+            const permission = this.bot.permissions.hasOnlinePosition(member.user, position)
             if (permission === false) forbidden.add(position)
             else if (permission) allowed.add(position)
         }

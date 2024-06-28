@@ -39,7 +39,7 @@ export class PermissionsManager {
         const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
         return (
             this.getGuild(guildId)?.members.cache.filter((m) =>
-                this._hasPosition(m, position, roles, guildId),
+                this._hasPosition(m, position, guildId, roles, false),
             ) ?? new Collection()
         )
     }
@@ -49,27 +49,39 @@ export class PermissionsManager {
         const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
         return UserProfile.cache
             .documents()
-            .filter((user) => this._hasPosition(user, position, roles, guildId))
+            .filter((user) => this._hasPosition(user, position, guildId, roles, false))
     }
 
     hasPosition(user: UserResolvable, position: string, guildId = this.bot.hostGuildId): PositionResult {
         const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
-        return this._hasPosition(user, position, roles, guildId)
+        return this._hasPosition(user, position, guildId, roles, false)
+    }
+
+    hasOnlinePosition(
+        user: UserResolvable,
+        position: string,
+        guildId = this.bot.hostGuildId,
+    ): PositionResult {
+        const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
+        return this._hasPosition(user, position, guildId, roles, true)
     }
 
     private _hasPosition(
         user: UserResolvable,
         position: string,
-        roles: string[],
         guildId: string,
+        roles: string[],
+        online: boolean,
     ): PositionResult {
         const expiration = async () => undefined
 
-        if (position === Positions.Banned)
-            return this.getGuild(guildId)?.bans.cache.get(user.id) && { expiration }
+        if (position === Positions.Banned) {
+            const guild = this.getGuild(guildId)
+            return guild ? (guild.bans.cache.get(user.id) ? { expiration } : false) : undefined
+        }
 
         if (this.hasPosition(user, Positions.Banned, guildId)) return false
-        return this.hasRoles(user, guildId, roles) && { expiration }
+        return this.hasRoles(user, guildId, roles, online) && { expiration }
     }
 
     hasPositionLevel(user: UserResolvable, positionLevel: string, guildId = this.bot.hostGuildId) {
@@ -83,18 +95,19 @@ export class PermissionsManager {
                 .filter((r): r is Role => !!r && r.comparePositionTo(highest) > 0)
                 .forEach((r) => positionRoleIds.push(r.id))
 
-        return this.hasRoles(user, guildId, positionRoleIds)
+        return this.hasRoles(user, guildId, positionRoleIds, false)
     }
 
-    protected hasRoles(user: UserResolvable, guildId: string, roles: string[]) {
+    private hasRoles(user: UserResolvable, guildId: string, roles: string[], online: boolean) {
         if (!roles.length) return undefined
 
-        const member = this.getGuild(guildId)?.members.resolve(user.id)
+        const guild = this.getGuild(guildId)
+        if (!guild) return undefined
+
+        const member = guild.members.resolve(user.id)
         if (!member) {
-            const saved = UserRejoinRoles.cache.get(user.id)
-            return saved
-                ? roles.some((v) => !TransientRole.isTransient(v) && saved.roles.includes(v))
-                : undefined
+            const saved = !online ? UserRejoinRoles.cache.get(user.id) : null
+            return saved ? roles.some((v) => !TransientRole.isTransient(v) && saved.roles.includes(v)) : false
         }
 
         // @ts-expect-error the getter on member.roles.cache is very inefficient
@@ -103,7 +116,7 @@ export class PermissionsManager {
 
     hasPermissions(user: UserResolvable, permissions: Permissions) {
         const member = this.getHostMember(user.id)
-        const hasPositions = permissions.positions?.some((p) => this.hasPosition(user, p))
+        const hasPositions = permissions.positions?.some((p) => this.hasOnlinePosition(user, p))
         const hasPositionLevel = permissions.positionLevel
             ? !!this.hasPositionLevel(user, permissions.positionLevel)
             : undefined
