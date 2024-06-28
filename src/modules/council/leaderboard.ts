@@ -47,7 +47,7 @@ export class LeaderboardFeature extends BotModule {
     async buildMessage(guild: Guild, vouches: Vouch[], role: string) {
         const embed = new EmbedBuilder().setTitle(`${role} Council Leaderboard`)
 
-        const council = ScrimsBot.INSTANCE!.permissions.getUsersWithPosition(`${role} Council`)
+        const council = ScrimsBot.INSTANCE!.permissions.getMembersWithPosition(`${role} Council`)
         const councilRole = PositionRole.getRoles(`${role} Council`, guild.id)[0]
         if (councilRole) embed.setColor(councilRole.color)
 

@@ -32,13 +32,24 @@ export class PermissionsManager {
         )
     }
 
-    getUsersWithPosition(position: string, guildId = this.bot.hostGuildId): Collection<string, GuildMember> {
+    getMembersWithPosition(
+        position: string,
+        guildId = this.bot.hostGuildId,
+    ): Collection<string, GuildMember> {
         const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
         return (
             this.getGuild(guildId)?.members.cache.filter((m) =>
                 this._hasPosition(m, position, roles, guildId),
             ) ?? new Collection()
         )
+    }
+
+    getUsersWithPosition(position: string): UserProfile[] {
+        const guildId = this.bot.hostGuildId
+        const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
+        return UserProfile.cache
+            .documents()
+            .filter((user) => this._hasPosition(user, position, roles, guildId))
     }
 
     hasPosition(user: UserResolvable, position: string, guildId = this.bot.hostGuildId): PositionResult {

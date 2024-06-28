@@ -60,8 +60,8 @@ export class CouncilListFeature extends BotModule {
         const embed = new EmbedBuilder().setTitle(`${role} Council List`)
 
         const permissions = ScrimsBot.INSTANCE!.permissions
-        const councilHead = permissions.getUsersWithPosition(`${role} Head`)
-        const council = permissions.getUsersWithPosition(`${role} Council`).subtract(councilHead)
+        const councilHead = permissions.getMembersWithPosition(`${role} Head`)
+        const council = permissions.getMembersWithPosition(`${role} Council`).subtract(councilHead)
 
         const councilRole = PositionRole.getRoles(`${role} Council`, guild.id)[0]
         if (councilRole) embed.setColor(councilRole.color)
