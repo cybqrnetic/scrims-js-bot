@@ -10,7 +10,6 @@ import {
     PositionRole,
     TextUtil,
     TimeUtil,
-    Vouch,
 } from "lib"
 
 import { Positions } from "@Constants"
@@ -128,9 +127,9 @@ class RankAppCreateHandler extends TicketCreateHandler {
     /** @override */
     async verify(interaction: CommandHandlerInteraction) {
         await super.verify(interaction)
-        const vouches = await Vouch.find({ userId: interaction.user.id, position: this.rank })
+        const vouches = await VouchCollection.fetch(interaction.user.id, this.rank)
         const minVouches = this.minVouches(interaction.guildId!)
-        if (vouches.filter((v) => v.isPositive()).length < minVouches)
+        if (vouches.getPositive().length < minVouches)
             throw new LocalizedError("app_not_enough_vouches", {
                 title: [minVouches, this.rank],
                 description: [
