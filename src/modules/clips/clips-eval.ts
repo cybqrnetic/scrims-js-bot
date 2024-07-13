@@ -46,22 +46,24 @@ export class ClipsEvalFeature extends BotModule {
             const dividerMessage = await (likedChannel as TextBasedChannel).send(
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${dividerContent ?? `Send the best clips in the thread below!`}`,
             )
-            const dividerThread = await dividerMessage.startThread({
-                name: DateTime.now().toFormat("dd/MM/yyyy"),
+            const startDate = DateTime.utc(2023, 3, 24, 21)
+            const weeksSinceStart = Math.round(DateTime.utc().diff(startDate, "weeks").weeks)
+            await dividerMessage.startThread({
+                name: `COTW #${weeksSinceStart}`,
                 autoArchiveDuration: 10080,
             })
         }
     }
 
     scheduleWeekDividerMessage() {
-        const msUntilSaturday = (6 - new Date().getDay() || 7) * 24 * 60 * 60 * 1000
-        const nextSaturday = new Date(Date.now() + msUntilSaturday)
-        nextSaturday.setHours(0, 0, 0, 0)
+        const now = DateTime.utc()
+        let nextFriday = now.set({ weekday: 5, hour: 21, minute: 0, second: 0, millisecond: 0 })
+        if (now > nextFriday) nextFriday = nextFriday.plus({ weeks: 1 })
         setTimeout(() => {
             for (const guild of this.bot.guilds.cache.values())
                 this.sendWeekDividerMessage(guild).catch(() => null)
             this.scheduleWeekDividerMessage()
-        }, nextSaturday.getTime() - Date.now())
+        }, nextFriday.diff(now).toMillis())
     }
 
     async filterLinks(message: Message | PartialMessage) {
