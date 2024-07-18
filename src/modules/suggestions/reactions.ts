@@ -37,6 +37,8 @@ class SuggestionsReactionHandler {
 
         if (!suggestion.epic && message.guild) {
             await Suggestion.updateOne({ _id: suggestion._id }, { epic: Date.now() })
+            suggestion.epic = new Date()     
+
             const channelId = message.client.getConfigValue(
                 SuggestionsModule.ConfigKeys.EpicChannel,
                 message.guildId,
