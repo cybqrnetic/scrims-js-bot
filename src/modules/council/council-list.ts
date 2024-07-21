@@ -25,11 +25,15 @@ for (const rank of Object.values(RANKS)) {
 
 export class CouncilListFeature extends BotModule {
     protected async onReady() {
-        // Run every :00, :20, :40
-        const closest = [20, 40, 60].map((n) => n - new Date().getUTCMinutes()).filter((v) => v > 0)
+        // Run every :00, :10, :20, :30, :40, :50
+        const date = new Date()
+        const next = Math.ceil(date.getUTCMinutes() / 10) * 10
         setTimeout(
-            () => setInterval(() => this.update().catch(console.error), 20 * 60 * 1000),
-            Math.min(...closest) * 60 * 1000,
+            () => {
+                this.update().catch(console.error)
+                setInterval(() => this.update().catch(console.error), 10 * 60 * 1000)
+            },
+            date.setUTCMinutes(next, 0, 0) - Date.now(),
         )
 
         this.bot.on("initialized", () => this.update().catch(console.error))
@@ -92,10 +96,8 @@ export class CouncilListFeature extends BotModule {
                 await profile?.fetchMCUsername(),
                 member.toString(),
                 currentTime &&
-                    currentTime
-                        .set({ minute: Math.floor(currentTime.minute / 10) * 10 })
-                        .plus({ minutes: 10 })
-                        .toFormat("h:mm a") + ` (GMT${profile?.getUTCOffset()})`,
+                    currentTime.set({ minute: Math.round(currentTime.minute / 10) * 10 }).toFormat("h:mm a") +
+                        ` (GMT${profile?.getUTCOffset()})`,
             ]
                 .filter((v) => v)
                 .join(" | ")
