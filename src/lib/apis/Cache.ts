@@ -1,7 +1,7 @@
 export interface APICacheConfig {
     /** time to live in seconds (less than 0 or no value means no expiration)*/
     ttl?: number
-    /** max number of keys after max is reached oldest are removed to make room (less than 0 or no value means no max) */
+    /** max number of keys after max is reached oldest are removed to make room (less than, equal 0, or no value means no max) */
     max?: number
 }
 
@@ -22,12 +22,6 @@ export class APICache<Holds> {
         if (ttl > 0) return Math.floor(Date.now() / 1000) + ttl
     }
 
-    protected refreshExpiration(key: string, ttl?: number) {
-        const newExpiration = this.genExpiration(ttl)
-        const expiration = this.expirations[key]
-        if (expiration && newExpiration && newExpiration > expiration) this.expirations[key] = newExpiration
-    }
-
     protected removeExpired() {
         const expired = this.keys().filter(
             (key) => this.expirations[key] && Date.now() / 1000 >= this.expirations[key]
@@ -36,7 +30,6 @@ export class APICache<Holds> {
     }
 
     protected checkSize() {
-        if (this.config.max === 0) return false
         if (this.config.max && this.config.max > 0) {
             this.removeExpired()
             const difference = this.size() - this.config.max
@@ -61,10 +54,7 @@ export class APICache<Holds> {
     }
 
     filter(predicate: (value: Holds, index: number, array: Holds[]) => boolean): Holds[] {
-        const values = Object.values(this.data)
-        const filtered = Object.entries(this.data).filter(([_, v], idx) => predicate(v, idx, values))
-        filtered.forEach(([key, _]) => this.refreshExpiration(key))
-        return filtered.map(([_, val]) => val)
+        return Object.values(this.data).filter(predicate)
     }
 
     find(predicate: (value: Holds, index: number, array: Holds[]) => boolean): Holds | undefined {
@@ -74,8 +64,6 @@ export class APICache<Holds> {
     get(key: string): Holds | undefined {
         const entry = this.data[key]
         if (entry === undefined) return undefined
-
-        this.refreshExpiration(key)
         return entry
     }
 
