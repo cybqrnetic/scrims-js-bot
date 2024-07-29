@@ -3,10 +3,10 @@ import { ApplicationCommandOptionChoiceData, SlashCommandStringOption, User } fr
 import {
     ContextMenu,
     ContextMenuInteraction,
-    HTTPError,
     LocalizedContextMenuCommandBuilder,
     LocalizedError,
     LocalizedSlashCommandBuilder,
+    RequestError,
     SlashCommand,
     SlashCommandInteraction,
     TimeoutError,
@@ -156,8 +156,9 @@ async function finishVouchesInteraction(
 async function fetchUserId(ign: string) {
     const url = `https://api.scrims.network/v1/user?${new URLSearchParams({ username: ign })}`
     const resp = await request(url).catch((error) => {
-        if (error instanceof HTTPError) throw new LocalizedError(`api.request_failed`, "Scrims Network API")
         if (error instanceof TimeoutError) throw new LocalizedError("api.timeout", "Scrims Network API")
+        if (error instanceof RequestError)
+            throw new LocalizedError(`api.request_failed`, "Scrims Network API")
         throw error
     })
 

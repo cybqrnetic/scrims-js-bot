@@ -8,6 +8,10 @@ export interface RequestOptions extends RequestInit {
 
 export class RequestError extends Error {
     name = "RequestError"
+
+    constructor(msg: string, cause?: Error) {
+        super(msg, { cause })
+    }
 }
 
 export class TimeoutError extends RequestError {
@@ -29,9 +33,12 @@ export async function request(url: string, options: RequestOptions = {}): Promis
     const timeoutId = setTimeout(() => controller.abort(), (options.timeout || 10) * 1000)
     if (options.urlParams) url += `?${new URLSearchParams(options.urlParams)}`
 
-    function requestError(): Response {
+    function requestError(error: Error): Response {
         if (controller.signal.aborted) throw new TimeoutError("Server took too long to respond")
-        throw new RequestError("Network unavailable")
+        if (error instanceof TypeError) {
+            error = error.cause as Error
+        }
+        throw new RequestError("Request Failed", error)
     }
 
     return fetch(url, { ...options, signal: controller.signal, cache: "no-cache" })

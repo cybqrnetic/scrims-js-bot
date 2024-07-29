@@ -17,7 +17,8 @@ SlashCommand({
             option
                 .setName(Options.Rank)
                 .setDescription("The rank to list the members of.")
-                .setChoices(Object.values(RANKS).map((v) => ({ name: v, value: v }))),
+                .setChoices(Object.values(RANKS).map((v) => ({ name: v, value: v })))
+                .setRequired(true),
         ),
 
     config: { permissions: COUNCIL_PERMISSIONS },

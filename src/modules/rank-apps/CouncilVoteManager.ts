@@ -135,7 +135,7 @@ Component({
     async handler(interaction) {
         const { ticketManager, ticket } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction)
         if (!(ticketManager instanceof RankAppTicketManager))
-            throw new Error(`${interaction.customId} in non RankAppTicketManager channel!`)
+            throw new UserError(`This interaction is not available in this channel.`)
 
         if (!interaction.userHasPosition(`${ticketManager.rank} Council`))
             throw new LocalizedError("command_handler.missing_permissions")
@@ -144,10 +144,12 @@ Component({
         if (isNaN(vote)) throw new Error(`Got invalid vote value of ${vote} from ${interaction.customId}!`)
 
         await ticket.updateOne({ $set: { [`extras.votes.${interaction.user.id}`]: vote } })
-        ticket.extras!.votes[interaction.user.id] = vote
+
+        if (!ticket.extras) ticket.extras = { votes: {} }
+        ticket.extras.votes[interaction.user.id] = vote
 
         await interaction.update(
-            ticketManager.vote.buildVoteMessage(ticket.user(), interaction.guild!, ticket.extras!.votes),
+            ticketManager.vote.buildVoteMessage(ticket.user(), interaction.guild!, ticket.extras.votes),
         )
     },
 })

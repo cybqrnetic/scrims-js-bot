@@ -114,7 +114,17 @@ export class CommandHandler {
         if (error instanceof DiscordAPIError && [10062].includes(error.code as number)) return
 
         if (!(error instanceof UserError) && !(error instanceof LocalizedError))
-            console.error("Unexpected error while handling a command!", error)
+            console.error(
+                "Unexpected error while handling a command!",
+                {
+                    command: interaction.path,
+                    type: interaction.type,
+                    user: interaction.user.id,
+                    channel: interaction.channelId,
+                    guild: interaction.guildId,
+                },
+                error,
+            )
 
         // Give the user that error message they were missing in their life
         if (
