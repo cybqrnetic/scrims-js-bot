@@ -1,6 +1,6 @@
 import { Colors as DiscordColors } from "discord.js"
 import ThisColors from "./assets/colors.json"
-import { PositionRole } from "./lib"
+import { Permissions, PositionRole } from "./lib"
 
 export const ASSETS = process.cwd() + "/src/assets/"
 
@@ -36,6 +36,14 @@ export const RANKS = PositionRole.declarePositions({
 for (const rank of Object.values(RANKS)) {
     PositionRole.declarePosition(`${rank} Council`)
     PositionRole.declarePosition(`${rank} Head`)
+}
+
+export const COUNCIL_PERMISSIONS: Permissions = {
+    positions: Object.values(RANKS).map((rank) => `${rank} Council`),
+}
+
+export const COUNCIL_HEAD_PERMISSIONS: Permissions = {
+    positions: Object.values(RANKS).map((rank) => `${rank} Head`),
 }
 
 export { default as Emojis } from "./assets/emojis.json"

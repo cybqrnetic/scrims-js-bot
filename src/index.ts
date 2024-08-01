@@ -6,6 +6,7 @@ Settings.defaultZone = "UTC"
 
 import moduleAlias from "module-alias"
 moduleAlias.addAlias("lib", __dirname + "/lib/index.js")
+moduleAlias.addAlias("@module", __dirname + "/modules")
 moduleAlias.addAlias("@Constants", __dirname + "/Constants.js")
 
 import { ASSETS, HOST_GUILD_ID } from "@Constants"
@@ -16,10 +17,13 @@ const TEST = process.argv[2] === "test"
 
 function requireAll(pattern: string) {
     for (const path of globSync(pattern, { cwd: __dirname })) {
-        if (path.includes("internal") && PUBLIC) continue
-        if (TEST) console.log(path)
-        require(`./${path}`)
+        requirePath(path)
     }
+}
+
+function requirePath(path: string) {
+    if (TEST) console.log(path)
+    require(`./${path}`)
 }
 
 async function main() {
@@ -28,8 +32,9 @@ async function main() {
     const intents: GatewayIntentBits[] = []
 
     if (PUBLIC) {
-        requireAll("modules/exchange/**/*.js")
-        requireAll("modules/vouch-system/**/*.js")
+        requirePath("modules/vouch-system/lookup-commands.js")
+        requirePath("modules/vouch-system/VouchCollection.js")
+        requirePath("modules/vouch-system/VouchUtil.js")
     } else {
         requireAll("modules/**/*.js")
         intents.push(

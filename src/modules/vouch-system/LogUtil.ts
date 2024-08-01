@@ -11,7 +11,7 @@ import {
 } from "lib"
 
 import { Colors, RANKS } from "@Constants"
-import { VouchUtil } from "../VouchUtil"
+import { VouchUtil } from "./VouchUtil"
 
 Object.values(RANKS).forEach((rank) => {
     Config.declareType(`${rank} Vouch Log Channel`)
@@ -25,7 +25,7 @@ const Emojis = {
     Purge: ":flag_white:",
 }
 
-export default class LogUtil {
+export class LogUtil {
     static async logDelete(vouch: Vouch, executor: User) {
         await ScrimsBot.INSTANCE?.buildSendLogMessages(
             `${vouch.position} Vouch Log Channel`,

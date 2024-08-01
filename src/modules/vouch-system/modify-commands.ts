@@ -15,18 +15,17 @@ import {
     ContextMenuInteraction,
     LocalizedSlashCommandBuilder,
     MessageOptionsBuilder,
-    Permissions,
     SlashCommand,
     SlashCommandInteraction,
     UserError,
     Vouch,
 } from "lib"
 
-import { Positions, RANKS } from "@Constants"
-import { VouchCollection } from "../VouchCollection"
-import { VouchUtil } from "../VouchUtil"
+import { COUNCIL_PERMISSIONS, Positions, RANKS } from "@Constants"
 import { AutoPromoteHandler } from "./AutoPromoteHandler"
-import LogUtil from "./LogUtil"
+import { LogUtil } from "./LogUtil"
+import { VouchCollection } from "./VouchCollection"
+import { VouchUtil } from "./VouchUtil"
 
 const Options = {
     User: "user",
@@ -35,9 +34,6 @@ const Options = {
 }
 
 const STAFF_PERMISSIONS = { positionLevel: Positions.Staff }
-export const COUNCIL_PERMISSIONS: Permissions = {
-    positions: Object.values(RANKS).map((rank) => `${rank} Council`),
-}
 
 function buildRankOption(command: string) {
     return new SlashCommandStringOption()
@@ -154,7 +150,8 @@ SlashCommand({
             option
                 .setRequired(false)
                 .setName(Options.Comment)
-                .setNameAndDescription("commands.vouch.comment_option"),
+                .setNameAndDescription("commands.vouch.comment_option")
+                .setMaxLength(500),
         )
         .setDMPermission(false),
 
@@ -178,7 +175,8 @@ SlashCommand({
             option
                 .setRequired(false)
                 .setName(Options.Comment)
-                .setNameAndDescription("commands.devouch.comment_option"),
+                .setNameAndDescription("commands.devouch.comment_option")
+                .setMaxLength(500),
         )
         .setDMPermission(false),
 

@@ -16,6 +16,7 @@
         "outDir": "dist",
         "paths": {
             "lib": ["./src/lib/index.ts"],
+            "@module/*": ["./src/modules/*"],
             "@Constants": ["./src/Constants.ts"]
         }
     },

@@ -7,6 +7,7 @@ import {
     User,
     userMention,
 } from "discord.js"
+
 import {
     ColorUtil,
     Component,
@@ -20,9 +21,10 @@ import {
     UserError,
 } from "lib"
 
+import { COUNCIL_HEAD_PERMISSIONS } from "@Constants"
 import { EmbedBuilder } from "discord.js"
 import { RankAppExtras, RankAppTicketManager } from "./RankApplications"
-import { COUNCIL_HEAD_PERMISSIONS, handleAccept, handleDeny } from "./app-commands"
+import { handleAccept, handleDeny } from "./app-commands"
 
 export type Votes = Record<string, number>
 function getVotesValue(votes: Votes) {

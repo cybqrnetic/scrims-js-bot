@@ -2,9 +2,7 @@ import { AttachmentBuilder, SlashCommandBuilder } from "discord.js"
 import { SlashCommand, UserProfile } from "lib"
 import { DateTime } from "luxon"
 
-import { RANKS } from "@Constants"
-import { COUNCIL_PERMISSIONS } from "../vouch-system/internal/commands"
-
+import { COUNCIL_PERMISSIONS, RANKS } from "@Constants"
 const Options = { Rank: "rank" }
 
 SlashCommand({

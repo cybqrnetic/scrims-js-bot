@@ -1,4 +1,4 @@
-import { EmbedBuilder, GuildChannelCreateOptions, GuildMember, TextInputStyle } from "discord.js"
+import { ButtonStyle, EmbedBuilder, GuildChannelCreateOptions, GuildMember, TextInputStyle } from "discord.js"
 import {
     BotMessage,
     CommandHandlerInteraction,
@@ -14,10 +14,9 @@ import {
 } from "lib"
 
 import { Positions } from "@Constants"
-import { ButtonStyle } from "discord.js"
-import { ExchangeInputField, RecallExchangeInteraction } from "../exchange"
-import { TicketCreateHandler, TicketManager } from "../tickets"
-import { VouchCollection } from "../vouch-system/VouchCollection"
+import { ExchangeInputField, RecallExchangeInteraction } from "@module/exchange"
+import { TicketCreateHandler, TicketManager } from "@module/tickets"
+import { VouchCollection } from "@module/vouch-system/VouchCollection"
 import { CouncilVoteManager } from "./CouncilVoteManager"
 
 export interface RankAppExtras {

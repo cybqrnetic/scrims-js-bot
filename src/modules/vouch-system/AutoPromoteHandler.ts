@@ -2,7 +2,7 @@ import { User } from "discord.js"
 
 import { HOST_GUILD_ID, RANKS, ROLE_APP_HUB } from "@Constants"
 import { Config, I18n, MessageOptionsBuilder, PositionRole, ScrimsBot, Vouch } from "lib"
-import { VouchCollection } from "../VouchCollection"
+import { VouchCollection } from "./VouchCollection"
 
 const PROMOTIONS_CHANNEL = Config.declareType("Promotions Channel")
 
