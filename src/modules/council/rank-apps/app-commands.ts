@@ -75,7 +75,7 @@ export async function handleAccept(interaction: ComponentInteraction | SlashComm
 
     AutoPromoteHandler.announcePromotion(member.user, ticketManager.rank)
 
-    await interaction.editReply(
+    await interaction.return(
         new MessageOptionsBuilder()
             .setContent(`${userMention(ticket.userId)} was promoted.`)
             .setEphemeral(true)
