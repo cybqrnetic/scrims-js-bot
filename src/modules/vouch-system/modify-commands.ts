@@ -72,12 +72,19 @@ SlashCommand({
 SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("purge-vouches")
-        .setDescription("Remove all of a councils' vouches.")
+        .setDescription("Remove all of a council's vouches.")
         .addUserOption((option) =>
             option
                 .setRequired(true)
                 .setName(Options.User)
                 .setDescription("The council member to remove the vouches from."),
+        )
+        .addStringOption((option) =>
+            option
+                .setRequired(false)
+                .setName(Options.Rank)
+                .setDescription("The rank to remove the vouches from. (Default: All)")
+                .addChoices(...Object.values(RANKS).map((v) => ({ name: v, value: v }))),
         )
         .setDefaultMemberPermissions("0")
         .setDMPermission(false),
@@ -86,15 +93,22 @@ SlashCommand({
 
     async handler(interaction) {
         const user = interaction.options.getUser(Options.User, true)
-        const count = await Vouch.countDocuments({ executorId: user.id })
+        const rank = interaction.options.getString("rank")
+
+        const count = await Vouch.countDocuments({ executorId: user.id, ...(rank && { position: rank }) })
         await interaction.editReply(
             new MessageOptionsBuilder()
-                .setContent(bold(`Are you sure you want to remove all ${count} of ${user}'s vouches?`))
+                .setContent(
+                    bold(
+                        `Are you sure you want to remove all ${count} of ${user}'s` +
+                            `${rank ? ` ${rank}` : ""} vouches?`,
+                    ),
+                )
                 .addButtons(
                     new ButtonBuilder()
                         .setLabel("Confirm")
                         .setStyle(ButtonStyle.Danger)
-                        .setCustomId(`PURGE_VOUCHES/${user.id}`),
+                        .setCustomId(`PURGE_VOUCHES/${user.id}/${rank}`),
                     new ButtonBuilder()
                         .setLabel("Cancel")
                         .setStyle(ButtonStyle.Secondary)
@@ -109,10 +123,14 @@ Component({
     config: { permissions: STAFF_PERMISSIONS, defer: "ephemeral_reply" },
     async handler(interaction) {
         const userId = interaction.args.shift()!
-        const result = await Vouch.deleteMany({ executorId: userId })
+        const rank = interaction.args.shift()!
+
+        const result = await Vouch.deleteMany({ executorId: userId, ...(rank && { position: rank }) })
         await interaction.editReply(
             new MessageOptionsBuilder().setContent(
-                `Removed all ${result.deletedCount} vouches from ${userMention(userId)}.`,
+                `Removed all ${result.deletedCount}` +
+                    `${rank ? ` ${rank}` : ""}` +
+                    ` vouches from ${userMention(userId)}.`,
             ),
         )
     },
