@@ -93,7 +93,7 @@ SlashCommand({
 
     async handler(interaction) {
         const user = interaction.options.getUser(Options.User, true)
-        const rank = interaction.options.getString("rank")
+        const rank = interaction.options.getString("rank") ?? ""
 
         const count = await Vouch.countDocuments({ executorId: user.id, ...(rank && { position: rank }) })
         await interaction.editReply(
