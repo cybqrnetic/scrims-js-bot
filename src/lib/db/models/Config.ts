@@ -39,6 +39,15 @@ class ConfigSchema {
         return Array.from(mapped.get(type)?.values() ?? [])
     }
 
+    static onCache(event: "add" | "delete", type: string, listener: (doc: Config) => unknown) {
+        Config.cache.on(event, (doc) => {
+            if (doc.type === type) {
+                listener(doc)
+            }
+        })
+        return this
+    }
+
     @Prop({ type: String, required: true })
     type!: string
 
