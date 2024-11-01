@@ -22,6 +22,7 @@ import {
 } from "lib"
 
 import { COUNCIL_PERMISSIONS, Positions, RANKS } from "@Constants"
+import { VouchDuelSession } from "@module/council/sessions/VouchDuelSession"
 import { AutoPromoteHandler } from "./AutoPromoteHandler"
 import { LogUtil } from "./LogUtil"
 import { VouchCollection } from "./VouchCollection"
@@ -224,6 +225,7 @@ async function addVouch(interaction: SlashCommandInteraction, worth: number) {
 
     LogUtil.logCreate(vouch).catch(console.error)
     await VouchUtil.removeSimilarVouches(vouch).catch(console.error)
+    await VouchDuelSession.addVouch(vouch).catch(() => null)
 
     if (worth > 0) {
         AutoPromoteHandler.onVouched(vouch)

@@ -42,6 +42,9 @@ class UserProfileSchema {
     @Prop({ type: Number, required: false })
     offset?: number
 
+    @Prop({ type: Number, required: false })
+    councilSessionTime?: number
+
     getCurrentTime() {
         if (!this.offset) return undefined
         return DateTime.now().plus({ minutes: this.offset })
