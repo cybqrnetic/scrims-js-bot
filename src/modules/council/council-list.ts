@@ -1,21 +1,16 @@
 import { Collection, EmbedBuilder, Guild, GuildMember, bold } from "discord.js"
-import {
-    BotMessage,
-    BotModule,
-    Config,
-    MessageOptionsBuilder,
-    PositionRole,
-    ScrimsBot,
-    UserProfile,
-} from "lib"
+import { BotModule, MessageOptionsBuilder, UserProfile } from "lib"
 
-import { Positions, RANKS } from "@Constants"
+import { RANKS } from "@Constants"
+import { Config } from "@module/config"
+import { BotMessage } from "@module/messages"
+import { OnlinePositions, PositionRole } from "@module/positions"
 
 for (const rank of Object.values(RANKS)) {
     BotMessage({
         name: `${rank} Council List`,
-        permissions: { positionLevel: Positions.Staff },
-        async builder(builder, member) {
+        permission: `council.${rank.toLowerCase()}.messages`,
+        async builder(_builder, member) {
             return CouncilListFeature.getInstance().buildMessage(member.guild!, rank)
         },
     })
@@ -41,7 +36,7 @@ export class CouncilListFeature extends BotModule {
 
     async update() {
         for (const rank of Object.values(RANKS)) {
-            const config = this.bot.getConfig(`${rank} Council List Message`)
+            const config = Config.getConfig(`${rank} Council List Message`)
             if (!config.length) continue
 
             for (const entry of config) {
@@ -63,9 +58,8 @@ export class CouncilListFeature extends BotModule {
     async buildMessage(guild: Guild, role: string) {
         const embed = new EmbedBuilder().setTitle(`${role} Council List`)
 
-        const permissions = ScrimsBot.INSTANCE!.permissions
-        const councilHead = permissions.getMembersWithPosition(`${role} Head`)
-        const council = permissions.getMembersWithPosition(`${role} Council`).subtract(councilHead)
+        const councilHead = OnlinePositions.getMembersWithPosition(`${role} Head`)
+        const council = OnlinePositions.getMembersWithPosition(`${role} Council`).subtract(councilHead)
 
         const councilRole = PositionRole.getRoles(`${role} Council`, guild.id)[0]
         if (councilRole) embed.setColor(councilRole.color)

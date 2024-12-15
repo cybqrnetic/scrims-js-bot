@@ -24,20 +24,20 @@ export class I18n {
     static instances: Record<string, I18n> = {}
 
     static getInstance(locale: string = DEFAULT_LOCALE) {
-        return this.instances[locale] ?? this.instances[DEFAULT_LOCALE]
+        return this.instances[locale] ?? this.instances[DEFAULT_LOCALE]!
     }
 
     static getLocalizations(identifier: string, ...params: any[]) {
         return Object.fromEntries(
             Object.entries(this.instances)
-                .map(([_, i18n]) => [_, i18n.get(identifier, ...params)])
+                .map(([_, i18n]): [string, string] => [_, i18n.get(identifier, ...params)])
                 .filter(([_, v]) => v !== UNKNOWN_RESOURCE),
         )
     }
 
     static loadLocal(localName: string, path: string) {
         const resources = JSON.parse(fs.readFileSync(path, { encoding: "utf8" }))
-        if (localName in I18n.instances) I18n.instances[localName].mergeResources(resources)
+        if (localName in I18n.instances) I18n.instances[localName]!.mergeResources(resources)
         else I18n.instances[localName] = new I18n(resources)
     }
 
@@ -117,11 +117,11 @@ export class I18n {
         const format = (str: string): { v: string; missing: boolean } => {
             const refReplaces = Array.from(str.matchAll(/\${(.+?)}/g)).map(([m, id]) => [
                 m,
-                this._get(id, params, true),
+                this._get(id!, params, true),
             ])
             const idxReplaces = Array.from(str.matchAll(/§{(\d+?)}/g)).map(([m, i]) => [
                 m,
-                params[parseInt(i)] ?? UNKNOWN_RESOURCE,
+                params[parseInt(i!)] ?? UNKNOWN_RESOURCE,
             ])
             const orderedReplaces = Array.from(str.matchAll(/%s/g)).map(([m], i) => [
                 m,
@@ -133,7 +133,7 @@ export class I18n {
         }
 
         Array.from(string.matchAll(/\?\((.+?)\)/g)).forEach(([m, content]) => {
-            const { missing, v } = format(content)
+            const { missing, v } = format(content!)
             string = string.replace(m, missing ? "" : v)
         })
 

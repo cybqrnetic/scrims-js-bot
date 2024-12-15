@@ -1,5 +1,8 @@
 import { Message } from "discord.js"
-import { Base, MessageReactionData, SequencedAsync, Suggestion } from "lib"
+import { Base, MessageReactionData, SequencedAsync } from "lib"
+
+import { Config } from "@module/config"
+import { Suggestion } from "./Suggestion"
 import { MessageRating, SuggestionsModule } from "./module"
 
 class SuggestionsReactionHandler {
@@ -37,12 +40,9 @@ class SuggestionsReactionHandler {
 
         if (!suggestion.epic && message.guild) {
             await Suggestion.updateOne({ _id: suggestion._id }, { epic: Date.now() })
-            suggestion.epic = new Date()     
+            suggestion.epic = new Date()
 
-            const channelId = message.client.getConfigValue(
-                SuggestionsModule.ConfigKeys.EpicChannel,
-                message.guildId,
-            )
+            const channelId = Config.getConfigValue(SuggestionsModule.ConfigKeys.EpicChannel, message.guildId)
             if (channelId) {
                 const channel = await message.guild.channels.fetch(channelId).catch(() => null)
                 if (channel?.isTextBased()) {

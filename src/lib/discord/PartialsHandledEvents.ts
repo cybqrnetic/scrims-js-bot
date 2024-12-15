@@ -8,7 +8,7 @@ import {
     User,
 } from "discord.js"
 import { EventEmitter } from "events"
-import { Base } from "./ScrimsBot"
+import { Base } from "./DiscordBot"
 
 export class PartialsHandledEventEmitter {
     protected events: EventEmitter = new EventEmitter({ captureRejections: true })

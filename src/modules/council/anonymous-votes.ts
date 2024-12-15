@@ -2,15 +2,16 @@ import {
     ButtonBuilder,
     ButtonStyle,
     GuildTextBasedChannel,
+    InteractionContextType,
     PermissionFlagsBits,
     SlashCommandBuilder,
     User,
 } from "discord.js"
-
+import { ColorUtil, Component, MessageOptionsBuilder, SlashCommand, UserError, redis } from "lib"
 import { DateTime } from "luxon"
 
 import { RANKS } from "@Constants"
-import { ColorUtil, Component, Config, MessageOptionsBuilder, SlashCommand, UserError, redis } from "lib"
+import { Config } from "@module/config"
 
 const EXPIRATION = 30 * 24 * 60 * 60
 
@@ -25,17 +26,8 @@ const voteChannels = new Map<string, string>()
 for (const rank in RANKS) {
     const type = `${rank} Vote Channel`
     Config.declareType(type)
-    Config.cache.on("add", (config) => {
-        if (config.type === type) {
-            voteChannels.set(config.value, rank)
-        }
-    })
-
-    Config.cache.on("delete", (config) => {
-        if (config.type === type) {
-            voteChannels.delete(config.value)
-        }
-    })
+    Config.onCache("add", type, (config) => voteChannels.set(config.value, rank))
+    Config.onCache("delete", type, (config) => voteChannels.delete(config.value))
 }
 
 SlashCommand({
@@ -45,7 +37,7 @@ SlashCommand({
         .addStringOption((option) =>
             option.setName("title").setDescription("Title of the vote").setMaxLength(100).setRequired(true),
         )
-        .setDMPermission(false)
+        .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions("0"),
 
     config: { defer: "ephemeral_reply" },
@@ -55,7 +47,7 @@ SlashCommand({
         const channel = interaction.channel as GuildTextBasedChannel
 
         const rank = voteChannels.get(interaction.channelId)
-        if (rank && !interaction.userHasPosition(`${rank} Head`))
+        if (rank && !interaction.user.hasPermission(`council.${rank.toLowerCase()}.createVote`))
             throw new UserError(`You are not allow to create ${rank} votes.`)
 
         const message = getVoteMessage(title, 0)
@@ -89,7 +81,7 @@ Component({
         if (!(await redis.exists(key))) throw new UserError("This vote expired.")
 
         const rank = voteChannels.get(interaction.channelId)
-        if (rank && !interaction.userHasPosition(`${rank} Council`))
+        if (rank && !interaction.user.hasPermission(`council.${rank.toLowerCase()}.vote`))
             throw new UserError(`You are not allow to participate in ${rank} votes.`)
 
         const res = await Promise.all([
@@ -102,7 +94,7 @@ Component({
         vote[interaction.member.id] = val
 
         const count = Object.keys(vote).filter((id) => interaction.client.users.cache.has(id)).length
-        await interaction.update(getVoteMessage(vote.title, count))
+        await interaction.update(getVoteMessage(vote["title"]!, count))
     },
 })
 
@@ -117,9 +109,9 @@ Component({
 
         const rank = voteChannels.get(interaction.channelId)
         if (rank) {
-            if (!interaction.userHasPosition(`${rank} Head`))
+            if (!interaction.user.hasPermission(`council.${rank.toLowerCase()}.evaluateVote`))
                 throw new UserError(`You are not allow to view ${rank} vote outcomes.`)
-        } else if (vote.creator !== interaction.member.id) {
+        } else if (vote["creator"] !== interaction.member.id) {
             throw new UserError("Only the person who created this vote can view the outcome!")
         }
 
@@ -139,7 +131,7 @@ Component({
                 .addEmbeds((embed) =>
                     embed
                         .setAuthor({ name: "Anonymous Vote Eval" })
-                        .setTitle(vote.title)
+                        .setTitle(vote["title"]!)
                         .setColor(ColorUtil.hsvToRgb(getVotesValue(voteValues) * 60 + 60, 1, 1))
                         .setDescription(
                             votes.map(([user, v]) => `${VOTE_EMOJIS[v]} **-** ${user}`).join("\n") ||

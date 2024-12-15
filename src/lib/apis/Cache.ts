@@ -24,7 +24,7 @@ export class APICache<Holds> {
 
     protected removeExpired() {
         const expired = this.keys().filter(
-            (key) => this.expirations[key] && Date.now() / 1000 >= this.expirations[key]
+            (key) => this.expirations[key] && Date.now() / 1000 >= this.expirations[key]!
         )
         expired.forEach((key) => this.delete(key))
     }

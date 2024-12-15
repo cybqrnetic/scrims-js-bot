@@ -1,12 +1,12 @@
 import { EventEmitter } from "events"
-import { ObservableState } from "../utils/ObservableState"
 
 export class DocumentCache<T> extends Map<string, T> {
     protected events = new EventEmitter({ captureRejections: true })
-    readonly initialized = new ObservableState<boolean>()
+    protected promise = Promise.withResolvers()
 
     constructor() {
         super()
+        this.events.setMaxListeners(100)
         this.events.on("error", console.error)
     }
 
@@ -50,19 +50,11 @@ export class DocumentCache<T> extends Map<string, T> {
         return this
     }
 
-    _triggerReloaded() {
-        this.initialized.set(true)
-        this.events.emit("reloaded")
+    initialized() {
+        return this.promise.promise
     }
 
-    async waitForReload(timeout = 500) {
-        return new Promise<void>((resolve) => {
-            setTimeout(() => {
-                resolve()
-                this.events.off("reloaded", resolve)
-            }, timeout)
-
-            this.events.once("reloaded", resolve)
-        })
+    _setInitialized() {
+        this.promise.resolve()
     }
 }

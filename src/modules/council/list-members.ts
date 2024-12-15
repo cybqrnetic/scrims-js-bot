@@ -1,33 +1,35 @@
-import { AttachmentBuilder, SlashCommandBuilder } from "discord.js"
+import { AttachmentBuilder, InteractionContextType, SlashCommandBuilder } from "discord.js"
 import { SlashCommand, UserProfile } from "lib"
 import { DateTime } from "luxon"
 
-import { COUNCIL_PERMISSIONS, RANKS } from "@Constants"
+import { RANKS } from "@Constants"
+import { OfflinePositions } from "@module/sticky-roles"
+
 const Options = { Rank: "rank" }
 
 SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("list-members")
         .setDescription("List members with a certain rank.")
-        .setDefaultMemberPermissions("0")
-        .setDMPermission(false)
         .addStringOption((option) =>
             option
                 .setName(Options.Rank)
                 .setDescription("The rank to list the members of.")
                 .setChoices(Object.values(RANKS).map((v) => ({ name: v, value: v })))
                 .setRequired(true),
-        ),
+        )
+        .setContexts(InteractionContextType.Guild)
+        .setDefaultMemberPermissions("0"),
 
-    config: { permissions: COUNCIL_PERMISSIONS },
+    config: { permission: "commands.listMembers" },
 
     async handler(interaction) {
         const rank = interaction.options.getString(Options.Rank, true)
         const next = Object.values(RANKS)[Object.values(RANKS).indexOf(rank) + 1]
 
-        const users = interaction.client.permissions
-            .getUsersWithPosition(rank)
-            .filter((user) => !next || !interaction.client.permissions.hasPosition(user, next))
+        const users = OfflinePositions.getUsersWithPosition(rank).filter(
+            (user) => !next || !OfflinePositions.hasPosition(user, next),
+        )
 
         const content = users.map((user) => `- ${user.username} (${user.id})`).join("\n")
         const file = new AttachmentBuilder(Buffer.from(content)).setName(

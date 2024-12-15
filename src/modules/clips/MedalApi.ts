@@ -1,7 +1,7 @@
-import * as axios from "axios"
+import axios, { type AxiosInstance, type AxiosResponse } from "axios"
 
 export default class MedalApi {
-    private axios: axios.AxiosInstance
+    private axios: AxiosInstance
 
     public constructor() {
         this.axios = axios.create({
@@ -42,7 +42,7 @@ export default class MedalApi {
     }
 
     public async listVideos(userId: string, max?: number, categoryId?: string) {
-        let objs: axios.AxiosResponse[] = []
+        let objs: AxiosResponse[] = []
         let data = null
         let offset = 0
         const category = categoryId != null ? `&categoryId=${categoryId}` : ""

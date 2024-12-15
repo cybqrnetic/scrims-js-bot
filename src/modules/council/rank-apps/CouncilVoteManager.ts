@@ -1,28 +1,20 @@
 import {
     ButtonBuilder,
     ButtonStyle,
+    EmbedBuilder,
     Guild,
+    InteractionContextType,
     Message,
     SlashCommandBuilder,
     User,
     userMention,
+    type ChatInputCommandInteraction,
+    type MessageComponentInteraction,
 } from "discord.js"
 
-import {
-    ColorUtil,
-    Component,
-    ComponentInteraction,
-    LocalizedError,
-    MessageOptionsBuilder,
-    PositionRole,
-    ScrimsBot,
-    SlashCommand,
-    SlashCommandInteraction,
-    UserError,
-} from "lib"
+import { ColorUtil, Component, LocalizedError, MessageOptionsBuilder, SlashCommand, UserError } from "lib"
 
-import { COUNCIL_HEAD_PERMISSIONS } from "@Constants"
-import { EmbedBuilder } from "discord.js"
+import { OnlinePositions, PositionRole } from "@module/positions"
 import { RankAppExtras, RankAppTicketManager } from "./RankApplications"
 import { handleAccept, handleDeny } from "./app-commands"
 
@@ -50,11 +42,9 @@ const VOTE_EMOJIS: Record<number, string> = Object.fromEntries(
 export class CouncilVoteManager {
     constructor(readonly rank: string) {}
 
-    getPendingVotes(guild: Guild) {
+    getPendingVotes() {
         return Object.fromEntries(
-            guild.members.cache
-                .filter((v) => ScrimsBot.INSTANCE?.permissions.hasPosition(v, `${this.rank} Council`))
-                .map((v) => [v.id, NaN]),
+            OnlinePositions.getMembersWithPosition(`${this.rank} Council`).map((v) => [v.id, NaN]),
         )
     }
 
@@ -64,7 +54,7 @@ export class CouncilVoteManager {
         return Object.fromEntries(
             Array.from(votes.matchAll(/(:.+?:).+?<@(\d+)>/gm))
                 .map(([_, emoji, userId]) => {
-                    const vote = VOTE_VALUES[emoji]
+                    const vote = VOTE_VALUES[emoji!]
                     return !vote ? false : [userId, vote]
                 })
                 .filter((v): v is [string, number] => v !== false),
@@ -80,7 +70,7 @@ export class CouncilVoteManager {
     }
 
     buildVoteMessage(user: User | null | undefined, guild: Guild, savedVotes: Votes = {}) {
-        const votes = { ...this.getPendingVotes(guild), ...savedVotes }
+        const votes = { ...this.getPendingVotes(), ...savedVotes }
         return new MessageOptionsBuilder()
             .setContent(PositionRole.getRoles(`${this.rank} Council`, guild.id).join(" "))
             .addEmbeds(
@@ -105,7 +95,7 @@ export class CouncilVoteManager {
     }
 
     buildVoteEvalMessage(user: User | null | undefined, guild: Guild, savedVotes: Votes = {}) {
-        const votes = { ...this.getPendingVotes(guild), ...savedVotes }
+        const votes = { ...this.getPendingVotes(), ...savedVotes }
         return new MessageOptionsBuilder()
             .addEmbeds(
                 this.buildVoteMessageBase(user)
@@ -139,7 +129,7 @@ Component({
         if (!(ticketManager instanceof RankAppTicketManager))
             throw new UserError(`This interaction is not available in this channel.`)
 
-        if (!interaction.userHasPosition(`${ticketManager.rank} Council`))
+        if (!interaction.user.hasPermission(`council.${ticketManager.rank.toLowerCase()}.evaluateVote`))
             throw new LocalizedError("command_handler.missing_permissions")
 
         const vote = parseFloat(interaction.args.shift()!)
@@ -160,19 +150,19 @@ SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("evaluate")
         .setDescription("Use to evaluate the council vote")
-        .setDMPermission(false),
-
-    config: { permissions: COUNCIL_HEAD_PERMISSIONS },
+        .setContexts(InteractionContextType.Guild)
+        .setDefaultMemberPermissions("0"),
     handler: handleEvaluate,
 })
 
 Component({
     builder: "COUNCIL_EVALUATE",
-    config: { permissions: COUNCIL_HEAD_PERMISSIONS },
     handler: handleEvaluate,
 })
 
-async function handleEvaluate(interaction: ComponentInteraction | SlashCommandInteraction) {
+async function handleEvaluate(
+    interaction: MessageComponentInteraction<"cached"> | ChatInputCommandInteraction<"cached">,
+) {
     const action = interaction.args.shift()
     switch (action) {
         case "Accept":
@@ -185,12 +175,12 @@ async function handleEvaluate(interaction: ComponentInteraction | SlashCommandIn
     if (!(ticketManager instanceof RankAppTicketManager))
         throw new UserError("This command can only be used in rank application channels!")
 
-    if (!interaction.userHasPosition(`${ticketManager.rank} Head`))
+    if (!interaction.user.hasPermission(`council.${ticketManager.rank.toLowerCase()}.evaluateVote`))
         throw new LocalizedError("command_handler.missing_permissions")
 
     await interaction.reply(
         ticketManager.vote
-            .buildVoteEvalMessage(ticket.user(), interaction.guild!, ticket.extras?.votes)
+            .buildVoteEvalMessage(ticket.user(), interaction.guild, ticket.extras?.votes)
             .setEphemeral(true),
     )
 }

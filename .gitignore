@@ -1,6 +1,7 @@
 # testing
 node_modules
 dist
+data
 transcripts
 tests
 logs

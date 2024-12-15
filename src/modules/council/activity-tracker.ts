@@ -1,180 +1,207 @@
-import { Positions, RANKS, ROLE_APP_HUB } from "@Constants"
 import { bold, EmbedBuilder, GuildMember, quote, subtext, userMention } from "discord.js"
-import {
-    BotMessage,
-    BotModule,
-    Config,
-    MessageOptionsBuilder,
-    PositionRole,
-    TimeUtil,
-    UserProfile,
-    Vouch,
-} from "lib"
+import { BotModule, MessageOptionsBuilder, TimeUtil } from "lib"
 import { DateTime } from "luxon"
+
+import { RANKS, ROLE_APP_HUB } from "@Constants"
+import { Config } from "@module/config"
+import { BotMessage } from "@module/messages"
+import { OnlinePositions, PositionRole } from "@module/positions"
+import { Vouch } from "@module/vouch-system"
+import { CouncilSession } from "./sessions/CouncilSession"
 
 for (const rank of Object.values(RANKS)) {
     BotMessage({
         name: `${rank} Council Activity`,
-        permissions: { positionLevel: Positions.Staff },
+        permission: `council.${rank}.messages`,
         builder: () => ActivityTracker.getInstance().buildMessage(rank),
     })
 }
 
 export class ActivityTracker extends BotModule {
-    private static readonly weeklyIdeals = {
-        vouches: Config.declareType("Ideal Weekly Vouches"),
-        sessionTime: Config.declareType("Ideal Weekly Session Time"),
+    private static readonly WEEKLY_IDEALS = {
+        Vouches: Config.declareType("Ideal Weekly Vouches"),
+        SessionTime: Config.declareType("Ideal Weekly Session Time"),
     }
 
-    private static readonly channels = Config.declareTypes(
+    private static readonly MESSAGES = Config.declareTypes(
+        Object.fromEntries(Object.values(RANKS).map((rank) => [rank, `${rank} Council Activity Message`])),
+    )
+
+    private static readonly CHANNELS = Config.declareTypes(
         Object.fromEntries(Object.values(RANKS).map((rank) => [rank, `${rank} Council Activity Channel`])),
     )
 
     async onReady() {
-        await this.scheduleActivityLeaderboards()
+        Vouch.onUpdate((vouch) => this.sendActivityLeaderboard(vouch.position))
+        CouncilSession.watcher().on("insert", (session) => this.sendActivityLeaderboard(session.rank))
+        Promise.all([Config.cache.initialized(), PositionRole.cache.initialized()]).then(() => {
+            this.sendActivityLeaderboards()
+            for (const rank of Object.values(RANKS)) {
+                Config.onCache("add", ActivityTracker.CHANNELS[rank]!, (v) =>
+                    this.sendActivityLeaderboard(rank).catch(console.error),
+                )
+            }
+        })
+
+        setInterval(() => this.sendActivityLeaderboards(), 60 * 60 * 1000)
     }
 
-    async scheduleActivityLeaderboards(): Promise<void> {
-        const now = DateTime.utc()
-        const nextMonday = now.startOf("week").plus({ weeks: 1 })
-        const nextEvenMonday = nextMonday.plus({ weeks: nextMonday.weekNumber % 2 })
-
-        await sleep(nextEvenMonday.diff(now).toMillis())
-
-        await Promise.all(
-            Object.values(RANKS).map((rank) => this.sendActivityLeaderboard(rank).catch(() => null)),
-        )
-
-        await UserProfile.updateMany(
-            { councilSessionTime: { $exists: true } },
-            { $unset: { councilSessionTime: "" } },
-        ).catch(() => null)
-
-        return this.scheduleActivityLeaderboards()
+    private async sendActivityLeaderboards() {
+        for (const rank of Object.values(RANKS)) {
+            await this.sendActivityLeaderboard(rank).catch(console.error)
+        }
     }
 
-    async sendActivityLeaderboard(rank: string) {
-        const channelId = this.bot.getConfigValue(ActivityTracker.channels[rank], ROLE_APP_HUB)
+    private async sendActivityLeaderboard(rank: string) {
+        const channelId = Config.getConfigValue(ActivityTracker.CHANNELS[rank]!, ROLE_APP_HUB)
         if (!channelId) return
 
         const channel = await this.bot.channels.fetch(channelId).catch(() => null)
         if (!channel?.isSendable()) return
 
-        await channel.send(await this.buildMessage(rank, true))
+        const message = await this.buildMessage(rank)
+
+        const existingId = Config.getConfigValue(ActivityTracker.MESSAGES[rank]!, ROLE_APP_HUB)
+        if (existingId) {
+            const existing = await channel.messages.fetch(existingId).catch(() => null)
+            if (
+                existing &&
+                existing.embeds[0]?.timestamp?.slice(0, 10) === message.embeds[0]?.timestamp?.slice(0, 10)
+            ) {
+                await existing.edit(message)
+                return
+            }
+        }
+
+        const sent = await channel.send(message)
+        Config.updateOne(
+            { type: ActivityTracker.MESSAGES[rank]!, guildId: ROLE_APP_HUB },
+            { value: sent.id },
+            { upsert: true },
+        ).catch(console.error)
     }
 
-    async buildMessage(rank: string, biWeeklyMessage = false) {
-        const council = this.bot.permissions.getMembersWithPosition(`${rank} Council`)
-        const councilIds = council.map((council) => council.id)
+    async buildMessage(rank: string) {
+        const council = OnlinePositions.getMembersWithPosition(`${rank} Council`, ROLE_APP_HUB)
         const councilRole = PositionRole.getRoles(`${rank} Council`, ROLE_APP_HUB)[0]
 
-        const now = DateTime.utc()
-        const lastEvenMonday = biWeeklyMessage
-            ? now.startOf("week").minus({ weeks: 2 })
-            : now.startOf("week").minus({ weeks: now.weekNumber % 2 })
+        const cutoff = this.getBiweeklyStart()
+        const [vouches, sessions] = await Promise.all([
+            Vouch.find({
+                position: rank,
+                executorId: { $exists: true },
+                givenAt: { $gt: cutoff.toJSDate() },
+            }),
+            CouncilSession.aggregate([
+                {
+                    $match: {
+                        rank,
+                        date: { $gt: cutoff.toJSDate() },
+                    },
+                },
+                {
+                    $group: {
+                        _id: "$council",
+                        time: { $sum: "$time" },
+                    },
+                },
+            ]),
+        ])
 
-        const vouches = await Vouch.find({
-            executorId: { $in: councilIds },
-            position: rank,
-            givenAt: { $gte: lastEvenMonday.toJSDate() },
-        })
+        const councilVouches = new Map<string, number>()
+        const councilDevouches = new Map<string, number>()
+        for (const vouch of vouches) {
+            const map = vouch.isPositive() ? councilVouches : councilDevouches
+            map.set(vouch.executorId, (map.get(vouch.executorId) ?? 0) + 1)
+        }
 
-        const profiles = await UserProfile.find({
-            _id: { $in: councilIds },
-            councilSessionTime: { $exists: true },
-        })
+        const councilTimes = new Map<string, number>()
+        for (const session of sessions) {
+            councilTimes.set(session._id.toString(), session.time)
+        }
 
-        const councilSessionTimes = Object.fromEntries(
-            profiles.map((profile) => [profile._id, profile.councilSessionTime ?? 0]),
-        )
-
-        const idealMetrics = this.calculateIdealMetrics(now.diff(lastEvenMonday).as("days"))
-
-        const councilActivity = await Promise.all(
-            council.map((council) =>
-                this.calculateCouncilActivity(
-                    council,
-                    vouches,
-                    councilSessionTimes[council.id] ?? 0,
-                    idealMetrics,
-                ),
+        const idealMetrics = this.calculateIdealMetrics(DateTime.now().diff(cutoff, "days").days)
+        const councilActivity = council.map((council) =>
+            this.calculateCouncilActivity(
+                council,
+                councilVouches.get(council.id) ?? 0,
+                councilDevouches.get(council.id) ?? 0,
+                councilTimes.get(council.id) ?? 0,
+                idealMetrics,
             ),
         )
 
-        const embed = new EmbedBuilder()
-            .setTitle(`${rank} Council Activity`)
-            .setDescription(
-                councilActivity
-                    .sort((a, b) => b.activityScore - a.activityScore)
-                    .map((council) =>
-                        quote(
-                            userMention(council.id) +
-                                bold(" | ") +
-                                `✅ ${council.positiveVouches}` +
-                                bold(" | ") +
-                                `⛔ ${council.negativeVouches}` +
-                                bold(" | ") +
-                                `⏳ ${TimeUtil.stringifyTimeDelta(council.sessionTime)}` +
-                                bold(" | ") +
-                                `📊 ${council.activityScore.toFixed(2)}`,
-                        ),
-                    )
-                    .join("\n\n") +
-                    "\n\n" +
-                    subtext("Discord | Vouches | Devouches | Session Time | Activity Score"),
-            )
-            .setFooter({ text: "Meassured Since" })
-            .setTimestamp(lastEvenMonday.toJSDate())
-            .setColor(councilRole?.color ?? null)
-
-        if (!council.size) embed.setDescription("None")
-
-        return new MessageOptionsBuilder().addEmbeds(embed)
+        return new MessageOptionsBuilder().addEmbeds(
+            new EmbedBuilder()
+                .setTitle(`${rank} Council Activity`)
+                .setDescription(
+                    council.size
+                        ? councilActivity
+                              .sort((a, b) => b.activityScore - a.activityScore)
+                              .map((council) =>
+                                  quote(
+                                      [
+                                          userMention(council.id),
+                                          `✅ ${council.vouches}`,
+                                          `⛔ ${council.devouches}`,
+                                          `⏳ ${TimeUtil.stringifyTimeDelta(council.sessionTime)}`,
+                                          `📊 ${council.activityScore.toFixed(2)}`,
+                                      ].join(bold(" | ")),
+                                  ),
+                              )
+                              .join("\n\n") +
+                              "\n\n" +
+                              subtext("Discord | Vouches | Devouches | Session Time | Activity Score")
+                        : "None",
+                )
+                .setFooter({ text: "Measured Since" })
+                .setTimestamp(cutoff.toJSDate())
+                .setColor(councilRole?.color ?? null),
+        )
     }
 
     private calculateCouncilActivity(
         council: GuildMember,
-        vouches: Vouch[],
+        vouches: number,
+        devouches: number,
         sessionTime: number,
         idealMetrics: { vouches: number; sessionTime: number },
     ) {
-        const calculateCouncilVouches = (memberId: string, vouches: Vouch[], positive: boolean) =>
-            vouches.filter((vouch) => vouch.executorId === memberId && vouch.isPositive() === positive).length
-
-        const positiveVouches = calculateCouncilVouches(council.id, vouches, true)
-        const negativeVouches = calculateCouncilVouches(council.id, vouches, false)
-
-        const vouchRatio = Math.min(1, (positiveVouches + negativeVouches) / idealMetrics.vouches)
+        const vouchRatio = Math.min(1, (vouches + devouches) / idealMetrics.vouches)
         const sessionTimeRatio = Math.min(1, sessionTime / idealMetrics.sessionTime)
-
         const activityScore = Math.min(1, (vouchRatio + sessionTimeRatio) / 2)
 
         return {
             id: council.id,
-            positiveVouches,
-            negativeVouches,
+            vouches,
+            devouches,
             sessionTime,
             activityScore,
         }
     }
 
-    private calculateIdealMetrics(daysInPeriod: number) {
-        const idealVouches = Config.getConfigValue(ActivityTracker.weeklyIdeals.vouches, ROLE_APP_HUB, "15")
+    private getBiweeklyStart() {
+        const current = DateTime.now().startOf("week")
+        const week = current.diff(DateTime.fromSeconds(0), "weeks").weeks
+        return current.minus({ weeks: week % 2 })
+    }
 
+    private calculateIdealMetrics(daysInPeriod: number) {
+        const idealVouches = Config.getConfigValue(ActivityTracker.WEEKLY_IDEALS.Vouches, ROLE_APP_HUB, "")
         const idealSessionTime = Config.getConfigValue(
-            ActivityTracker.weeklyIdeals.sessionTime,
+            ActivityTracker.WEEKLY_IDEALS.SessionTime,
             ROLE_APP_HUB,
-            "3h",
+            "",
         )
 
         const weeklyIdeals = {
             vouches: parseInt(idealVouches) || 15,
-            sessionTime: TimeUtil.parseDuration(idealSessionTime) * 1000,
+            sessionTime: (TimeUtil.parseDuration(idealSessionTime) || 3 * 60 * 60) * 1000,
         }
 
         return {
-            vouches: (daysInPeriod * weeklyIdeals.vouches) / 7,
-            sessionTime: (daysInPeriod * weeklyIdeals.sessionTime) / 7,
+            vouches: daysInPeriod * (weeklyIdeals.vouches / 7),
+            sessionTime: daysInPeriod * (weeklyIdeals.sessionTime / 7),
         }
     }
 }

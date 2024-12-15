@@ -24,7 +24,7 @@ BotListener(Events.GuildMemberAdd, async (bot, member) => {
     }
 })
 
-BotListener(Events.UserUpdate, async (bot, oldUser, newUser) => {
+BotListener(Events.UserUpdate, async (_bot, oldUser, newUser) => {
     if (oldUser.tag !== newUser.tag)
         await UserProfile.updateOne({ _id: newUser.id }, { username: newUser.tag })
 })

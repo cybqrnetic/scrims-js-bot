@@ -8,18 +8,19 @@ import {
     User,
 } from "discord.js"
 
-import { HOST_GUILD_ID, Positions, RANKS } from "@Constants"
 import {
     AuditedGuildBan,
     AuditedRoleUpdate,
     BotModule,
-    Config,
     DiscordUtil,
     MessageOptionsBuilder,
-    PositionRole,
     SlashCommand,
     UserError,
 } from "lib"
+
+import { HOST_GUILD_ID, RANKS } from "@Constants"
+import { Config } from "@module/config"
+import { OnlinePositions, PositionRole } from "@module/positions"
 
 const LOG_CHANNEL = Config.declareType("Positions Log Channel")
 const CONFIGURED_POSITIONS = new Set<string>()
@@ -120,7 +121,7 @@ export class RoleSyncModule extends BotModule {
         const allowed = new Set<string>()
 
         for (const position of CONFIGURED_POSITIONS) {
-            const permission = this.bot.permissions.hasOnlinePosition(member.user, position)
+            const permission = OnlinePositions.hasPosition(member.user, position)
             if (permission === false) forbidden.add(position)
             else if (permission) allowed.add(position)
         }
@@ -179,7 +180,7 @@ export class RoleSyncModule extends BotModule {
 
     logRolesLost(member: GuildMember | PartialGuildMember, executor: User | null, roles: Role[]) {
         const origin = !executor ? "after leaving" : `because of ${executor}`
-        this.bot.buildSendLogMessages(LOG_CHANNEL, [member.guild.id], () => {
+        Config.buildSendLogMessages(LOG_CHANNEL, [member.guild.id], () => {
             return new MessageOptionsBuilder().setContent(
                 `:outbox_tray:  ${member} **Lost** ${roles.join(" ")} ${origin}.`,
             )
@@ -187,7 +188,7 @@ export class RoleSyncModule extends BotModule {
     }
 
     logRolesGained(member: GuildMember | PartialGuildMember, executor: User, roles: Role[]) {
-        this.bot.buildSendLogMessages(LOG_CHANNEL, [member.guild.id], () => {
+        Config.buildSendLogMessages(LOG_CHANNEL, [member.guild.id], () => {
             return new MessageOptionsBuilder().setContent(
                 `:inbox_tray:  ${member} **Got** ${roles.join(" ")} from ${executor}.`,
             )
@@ -198,11 +199,9 @@ export class RoleSyncModule extends BotModule {
 SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("sync-roles")
-        .setDescription("Sync Bridge Scrims roles with partner servers")
-        .setDMPermission(false)
-        .setDefaultMemberPermissions("0"),
+        .setDescription("Sync Bridge Scrims roles with partner servers"),
 
-    config: { permissions: { positionLevel: Positions.Staff } },
+    config: { restricted: true },
 
     async handler(interaction) {
         const host = interaction.client.host
@@ -217,7 +216,7 @@ SlashCommand({
 
         const start = Date.now()
         await RoleSyncModule.getInstance().syncRoles()
-        await interaction.followUp({ content: `Finished after ${Date.now() - start}ms`, ephemeral: true })
+        await interaction.followUp({ content: `Finished in ${Date.now() - start}ms`, ephemeral: true })
     },
 })
 

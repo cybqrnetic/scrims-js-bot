@@ -1,6 +1,9 @@
-import { HOST_GUILD_ID, Positions } from "@Constants"
 import { AuditLogEvent, User, roleMention, userMention } from "discord.js"
-import { AuditedRoleUpdate, BotModule, Config, MessageOptionsBuilder, PositionRole } from "lib"
+import { AuditedRoleUpdate, BotModule, MessageOptionsBuilder } from "lib"
+
+import { HOST_GUILD_ID } from "@Constants"
+import { Config } from "@module/config"
+import { PositionRole, Positions } from "@module/positions"
 
 const LOG_CHANNEL = Config.declareType("Positions Log Channel")
 
@@ -35,7 +38,7 @@ export class PositionsLogModule extends BotModule {
     }
 
     logRolesLost(memberId: string, executor: User, roles: string[]) {
-        this.bot.buildSendLogMessages(LOG_CHANNEL, [HOST_GUILD_ID], () => {
+        Config.buildSendLogMessages(LOG_CHANNEL, [HOST_GUILD_ID], () => {
             return new MessageOptionsBuilder().setContent(
                 `:outbox_tray:  ${userMention(memberId)} ` +
                     `**Lost** ${roles.map(roleMention).join(" ")} because of ${executor}.`,
@@ -44,7 +47,7 @@ export class PositionsLogModule extends BotModule {
     }
 
     logRolesGained(memberId: string, executor: User, roles: string[]) {
-        this.bot.buildSendLogMessages(LOG_CHANNEL, [HOST_GUILD_ID], () => {
+        Config.buildSendLogMessages(LOG_CHANNEL, [HOST_GUILD_ID], () => {
             return new MessageOptionsBuilder().setContent(
                 `:inbox_tray:  ${userMention(memberId)} ` +
                     `**Got** ${roles.map(roleMention).join(" ")} from ${executor}.`,

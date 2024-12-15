@@ -57,7 +57,7 @@
         },
         "send": {
             "name": "send",
-            "description": "Used to send pre configured messages.",
+            "description": "Used to send pre configured messagess.",
             "message_option": {
                 "name": "message",
                 "description": "The identifier of the message you would like to send."
@@ -134,7 +134,11 @@
             "description": "Use this command to vouch for someone.",
             "user_option": {
                 "name": "user",
-                "description": "The user to vouch."
+                "description": "The Discord user to vouch."
+            },
+            "ign_option": {
+                "name": "ign",
+                "description": "The Minecraft player to vouch."
             },
             "comment_option": {
                 "name": "reason",
@@ -162,7 +166,11 @@
             "description": "Use this command to devouch someone.",
             "user_option": {
                 "name": "user",
-                "description": "The user to devouch."
+                "description": "The Discord user to devouch."
+            },
+            "ign_option": {
+                "name": "ign",
+                "description": "The Minecraft player to devouch."
             },
             "comment_option": {
                 "name": "reason",

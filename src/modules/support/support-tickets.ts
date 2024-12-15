@@ -1,10 +1,12 @@
 import { ButtonBuilder, ButtonStyle, EmbedBuilder, Guild, Role, TextInputStyle } from "discord.js"
-import { Base, BotMessage, Component, MessageOptionsBuilder, PositionRole, redis } from "lib"
+import { Base, Component, MessageOptionsBuilder, redis } from "lib"
 
-import { ExchangeHandlerState, ExchangeInputField, RecallExchangeInteraction } from "../exchange"
-import { TicketCreateHandler, TicketManager, TicketManagerConfig } from "../tickets"
+import { ExchangeHandlerState, ExchangeInputField, RecallExchangeInteraction } from "@module/exchange"
+import { TicketCreateHandler, TicketManager, TicketManagerConfig } from "@module/tickets"
 
-import { Colors, Positions } from "../../Constants"
+import { Colors } from "@Constants"
+import { BotMessage } from "@module/messages"
+import { PositionRole, Positions } from "@module/positions"
 
 class SupportTicketCreateHandler extends TicketCreateHandler {
     constructor() {
@@ -84,7 +86,7 @@ const COMMON_CLOSE_REASONS = [
 const TICKET_CONFIG: TicketManagerConfig = {
     blackListed: Positions.SupportBlacklisted,
     commonCloseReasons: COMMON_CLOSE_REASONS,
-    permissions: { positionLevel: Positions.TrialSupport },
+    permission: "support.manageTickets",
     transcript: { dmUsers: true },
 }
 
@@ -175,7 +177,7 @@ function getSupportPing(guild: Guild & Base) {
 
 function isTestTicket(state: ExchangeHandlerState) {
     return ["testing the ticket system", "no ping"].includes(
-        state.getFieldInputtedValue("reason").toLowerCase(),
+        state.getFieldInputtedValue("reason")!.toLowerCase(),
     )
 }
 
@@ -184,7 +186,7 @@ Component(new ReportTicketCreateHandler().asComponent())
 
 BotMessage({
     name: "Support Message",
-    permissions: { positionLevel: Positions.Staff },
+    permission: "support.messages",
     builder(builder, member) {
         const supportRole = getSupportRole(member.guild as Guild & Base)
         return builder

@@ -1,6 +1,5 @@
-import { Positions } from "@Constants"
-import { PermissionFlagsBits, SlashCommandBuilder, roleMention } from "discord.js"
-import { SlashCommand, SlashCommandInteraction, UserError } from "lib"
+import { SlashCommandBuilder, roleMention } from "discord.js"
+import { SlashCommand, UserError } from "lib"
 
 const Options = {
     Role: "role",
@@ -28,23 +27,20 @@ SlashCommand({
                 .setName(Options.Text)
                 .setDescription("An optional text to add to the message.")
                 .setRequired(false),
-        )
-        .setDefaultMemberPermissions(PermissionFlagsBits.MoveMembers)
-        .setDMPermission(false),
-    config: { defer: "ephemeral_reply", permissions: { positionLevel: Positions.TrialSupport } },
-    handler: onPingCommand,
+        ),
+
+    config: { defer: "ephemeral_reply", permission: "support.ping", restricted: true },
+    async handler(interaction) {
+        const roleId = interaction.options.getString(Options.Role, true)
+        const text = interaction.options.getString(Options.Text) ?? ""
+
+        if (!interaction.channel?.isSendable()) throw new UserError("Invalid Channel")
+
+        await interaction.channel.send({
+            content: `${interaction.user}: ${roleMention(roleId)} ${text}`,
+            allowedMentions: { roles: [roleId] },
+        })
+
+        await interaction.editReply("Ping sent!")
+    },
 })
-
-async function onPingCommand(interaction: SlashCommandInteraction) {
-    if (interaction.guildId !== interaction.client.hostGuildId)
-        throw new UserError("Host Guild Command Only!")
-
-    const roleId = interaction.options.getString(Options.Role, true)
-    const text = interaction.options.getString(Options.Text) ?? ""
-
-    await interaction.channel?.send({
-        content: `${interaction.user}: ${roleMention(roleId)} ${text}`,
-        allowedMentions: { roles: [roleId] },
-    })
-    await interaction.editReply("Ping sent!")
-}

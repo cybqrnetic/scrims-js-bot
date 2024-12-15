@@ -1,82 +1,34 @@
-import { ApplicationCommandType, ButtonBuilder, ButtonStyle, PermissionFlagsBits, time } from "discord.js"
+import {
+    ApplicationCommandType,
+    ButtonBuilder,
+    ButtonStyle,
+    time,
+    type BaseInteraction,
+    type ContextMenuCommandType,
+} from "discord.js"
 
 import {
     CommandConfig,
-    CommandHandlerInteractionData,
     Component,
-    ComponentInteraction,
     ContextMenu,
-    ContextMenuInteraction,
     LocalizedContextMenuCommandBuilder,
     MessageOptionsBuilder,
-    Suggestion,
     TextUtil,
     UserError,
 } from "lib"
 
-import { Colors, Positions } from "@Constants"
+import { Colors } from "@Constants"
+import { Suggestion } from "./Suggestion"
 import suggestionsModule from "./module"
 
-async function onDeleteCommand(interaction: ContextMenuInteraction) {
-    const suggestion = await suggestionsModule.findSuggestionByMessage(interaction.targetId)
-    if (!suggestion)
-        throw new UserError("Unknown Suggestion", "This can only be used on suggestion messages!")
-    await deleteSuggestion(interaction, suggestion)
-}
-
-async function getSuggestions(interaction: CommandHandlerInteractionData) {
+async function getSuggestions(interaction: BaseInteraction) {
     const suggestions = await Suggestion.find({ creatorId: interaction.user.id })
     return suggestions
         .filter((v) => interaction.client.guilds.cache.has(v.guildId))
         .sort((a, b) => b.createdAt.valueOf() - a.createdAt.valueOf())
 }
 
-async function onDeleteComponent(interaction: ComponentInteraction) {
-    const suggestionId = interaction.args.shift()
-    if (suggestionId) {
-        const suggestion = await suggestionsModule.findSuggestionById(suggestionId)
-        if (suggestion) return deleteSuggestion(interaction, suggestion)
-    }
-
-    const removable = (await getSuggestions(interaction))
-        .filter((suggestion) => !suggestion.epic && suggestion.title)
-        .slice(0, 4)
-    const channel = suggestionsModule.getInfoMessageFloaters(interaction.guildId!)[0]?.channel
-
-    if (removable.length === 0)
-        throw new UserError(
-            "No Removable Suggestions",
-            `You currently have no removable suggestions. ${
-                channel
-                    ? `To create a suggestion, check out ${channel} and click on the **Make a Suggestion** button at the bottom. `
-                    : ""
-            }*If your suggestion has a lot of up-votes or is very old it may not show up as removable.*`,
-        )
-
-    return interaction.reply(
-        new MessageOptionsBuilder()
-            .setEphemeral(true)
-            .addEmbeds((e) =>
-                e
-                    .setColor(Colors.RedPink)
-                    .setTitle("Remove Suggestion")
-                    .setDescription("Please confirm which suggestion you would like to remove.")
-                    .addFields(getSuggestionFields(removable)),
-            )
-            .addButtons(
-                ...removable.map<(b: ButtonBuilder) => ButtonBuilder>(
-                    (s, idx) => (b) =>
-                        b
-                            .setLabel(`${idx + 1}`)
-                            .setEmoji("🗑️")
-                            .setCustomId(`SuggestionDelete/${s.id}`)
-                            .setStyle(ButtonStyle.Danger),
-                ),
-            ),
-    )
-}
-
-async function deleteSuggestion(interaction: CommandHandlerInteractionData, suggestion: Suggestion) {
+async function deleteSuggestion(interaction: BaseInteraction, suggestion: Suggestion) {
     // Remove from cache so that when the message delete event arrives it will not trigger anything
     const message = suggestionsModule.suggestionMessage(suggestion)
     if (message) message.channel.messages.cache.delete(suggestion.messageId)
@@ -91,7 +43,7 @@ async function deleteSuggestion(interaction: CommandHandlerInteractionData, sugg
     }
 
     await suggestion.deleteOne()
-    await suggestionsModule.logRemove(suggestion, interaction.user, `${rating}`, message).catch(console.error)
+    await suggestionsModule.logRemove(suggestion, interaction.user, `${rating}`).catch(console.error)
     await interaction.return(
         new MessageOptionsBuilder().setContent("Suggestion successfully removed.").setEphemeral(true),
     )
@@ -109,56 +61,95 @@ function getSuggestionFields(suggestions: Suggestion[]) {
     })
 }
 
-async function onDetachCommand(interaction: ContextMenuInteraction) {
-    const suggestion = await suggestionsModule.findSuggestionByMessage(interaction.targetId)
-    if (!suggestion)
-        throw new UserError("Unknown Suggestion", "This can only be used on suggestion messages!")
-    if (!suggestion.imageURL)
-        throw new UserError("Invalid Operation", "This suggestion doesn't have an image attached to it!")
-
-    const oldURL = suggestion.imageURL
-    suggestion.imageURL = undefined
-    const message = suggestionsModule.suggestionMessage(suggestion)
-    if (message?.editable) {
-        await message.edit({
-            embeds: [suggestion.toEmbed().setColor(message.embeds[0]!.color)],
-        })
-    }
-
-    await suggestion.save()
-    await suggestionsModule.logDetach(suggestion, interaction.user, oldURL).catch(console.error)
-    await interaction.editReply({ content: "Image removed." })
-}
-
 const CM_CONFIG: CommandConfig = {
-    permissions: { positionLevel: Positions.TrialSupport },
+    permission: "suggestions.delete",
     defer: "ephemeral_reply",
 }
 
-const COMPONENT_CONFIG: CommandConfig = { forceGuild: true }
-
 ContextMenu({
     builder: new LocalizedContextMenuCommandBuilder()
-        .setType(ApplicationCommandType.Message)
-        .setName("commands.suggestions.detach.cm")
-        .setDefaultMemberPermissions(PermissionFlagsBits.MoveMembers)
-        .setDMPermission(false),
+        .setType(ApplicationCommandType.Message as ContextMenuCommandType)
+        .setName("commands.suggestions.detach.cm"),
     config: CM_CONFIG,
-    handler: onDetachCommand,
+    async handler(interaction) {
+        const suggestion = await suggestionsModule.findSuggestionByMessage(interaction.targetId)
+        if (!suggestion)
+            throw new UserError("Unknown Suggestion", "This can only be used on suggestion messages!")
+        if (!suggestion.imageURL)
+            throw new UserError("Invalid Operation", "This suggestion doesn't have an image attached to it!")
+
+        const oldURL = suggestion.imageURL
+        suggestion.imageURL = undefined
+        const message = suggestionsModule.suggestionMessage(suggestion)
+        if (message?.editable) {
+            await message.edit({
+                embeds: [suggestion.toEmbed().setColor(message.embeds[0]!.color)],
+            })
+        }
+
+        await suggestion.save()
+        await suggestionsModule.logDetach(suggestion, interaction.user, oldURL).catch(console.error)
+        await interaction.editReply({ content: "Image removed." })
+    },
 })
 
 ContextMenu({
     builder: new LocalizedContextMenuCommandBuilder()
-        .setType(ApplicationCommandType.Message)
-        .setName("commands.suggestions.delete.cm")
-        .setDefaultMemberPermissions(PermissionFlagsBits.MoveMembers)
-        .setDMPermission(false),
+        .setType(ApplicationCommandType.Message as ContextMenuCommandType)
+        .setName("commands.suggestions.delete.cm"),
     config: CM_CONFIG,
-    handler: onDeleteCommand,
+    async handler(interaction) {
+        const suggestion = await suggestionsModule.findSuggestionByMessage(interaction.targetId)
+        if (!suggestion)
+            throw new UserError("Unknown Suggestion", "This can only be used on suggestion messages!")
+        await deleteSuggestion(interaction, suggestion)
+    },
 })
 
 Component({
     builder: "SuggestionDelete",
-    handler: onDeleteComponent,
-    config: COMPONENT_CONFIG,
+    async handler(interaction) {
+        const suggestionId = interaction.args.shift()
+        if (suggestionId) {
+            const suggestion = await suggestionsModule.findSuggestionById(suggestionId)
+            if (suggestion) return deleteSuggestion(interaction, suggestion)
+        }
+
+        const removable = (await getSuggestions(interaction))
+            .filter((suggestion) => !suggestion.epic && suggestion.title)
+            .slice(0, 4)
+        const channel = suggestionsModule.getInfoMessageFloaters(interaction.guildId!)[0]?.channel
+
+        if (removable.length === 0)
+            throw new UserError(
+                "No Removable Suggestions",
+                `You currently have no removable suggestions. ${
+                    channel
+                        ? `To create a suggestion, check out ${channel} and click on the **Make a Suggestion** button at the bottom. `
+                        : ""
+                }*If your suggestion has a lot of up-votes or is very old it may not show up as removable.*`,
+            )
+
+        return interaction.reply(
+            new MessageOptionsBuilder()
+                .setEphemeral(true)
+                .addEmbeds((e) =>
+                    e
+                        .setColor(Colors.RedPink)
+                        .setTitle("Remove Suggestion")
+                        .setDescription("Please confirm which suggestion you would like to remove.")
+                        .addFields(getSuggestionFields(removable)),
+                )
+                .addButtons(
+                    ...removable.map<(b: ButtonBuilder) => ButtonBuilder>(
+                        (s, idx) => (b) =>
+                            b
+                                .setLabel(`${idx + 1}`)
+                                .setEmoji("🗑️")
+                                .setCustomId(`SuggestionDelete/${s.id}`)
+                                .setStyle(ButtonStyle.Danger),
+                    ),
+                ),
+        )
+    },
 })

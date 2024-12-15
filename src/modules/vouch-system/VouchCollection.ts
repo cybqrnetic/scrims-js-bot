@@ -1,16 +1,8 @@
 import { EmbedField, StringSelectMenuBuilder, userMention } from "discord.js"
-import {
-    ColorUtil,
-    I18n,
-    LocalizedError,
-    MessageOptionsBuilder,
-    PositionRole,
-    ScrimsBot,
-    TextUtil,
-    TimeUtil,
-    Vouch,
-} from "lib"
+import { ColorUtil, DiscordBot, I18n, LocalizedError, MessageOptionsBuilder, TextUtil, TimeUtil } from "lib"
 
+import { PositionRole } from "@module/positions"
+import { Vouch } from "./Vouch"
 import { VouchUtil } from "./VouchUtil"
 
 interface VouchMessageOptions {
@@ -35,7 +27,7 @@ export class VouchCollection {
     }
 
     get user() {
-        return ScrimsBot.INSTANCE?.users?.resolve(this.userId) ?? null
+        return DiscordBot.INSTANCE?.users?.resolve(this.userId) ?? null
     }
 
     get size() {

@@ -1,7 +1,14 @@
-import { EmbedBuilder, GuildChannelCreateOptions, GuildMember, TextChannel } from "discord.js"
-import { CommandHandlerInteraction, MessageOptionsBuilder, Ticket } from "lib"
+import {
+    EmbedBuilder,
+    GuildChannelCreateOptions,
+    GuildMember,
+    TextChannel,
+    type Interaction,
+} from "discord.js"
+import { MessageOptionsBuilder } from "lib"
 
 import { ExchangeHandler, ExchangeInputField, RecallExchangeInteraction } from "../exchange"
+import { Ticket } from "./Ticket"
 import { TicketManager } from "./TicketManager"
 
 export class TicketCreateHandler extends ExchangeHandler {
@@ -15,7 +22,7 @@ export class TicketCreateHandler extends ExchangeHandler {
     }
 
     /** @override */
-    async verify(interaction: CommandHandlerInteraction) {
+    async verify(interaction: Interaction) {
         await this.tickets.verifyTicketRequest(interaction.user, interaction.guildId!)
         return true
     }

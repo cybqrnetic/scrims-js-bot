@@ -1,17 +1,26 @@
+import { userMention } from "discord.js"
 import { DateTime } from "luxon"
+
 import { MojangClient } from "../../apis/Mojang"
 import { TimeUtil } from "../../utils/TimeUtil"
-
-import { userMention } from "discord.js"
 import {
     DiscordIdProp,
     Document,
     Prop,
-    SchemaDocument,
     UuidProp,
     getSchemaFromClass,
     modelSchemaWithCache,
+    type SchemaDocument,
 } from "../util"
+
+interface RankedStats {
+    elo: number
+    wins: number
+    losses: number
+    draws: number
+    winStreak: number
+    bestWinStreak: number
+}
 
 @Document("UserProfile", "userprofiles")
 class UserProfileSchema {
@@ -42,9 +51,6 @@ class UserProfileSchema {
     @Prop({ type: Number, required: false })
     offset?: number
 
-    @Prop({ type: Number, required: false })
-    councilSessionTime?: number
-
     getCurrentTime() {
         if (!this.offset) return undefined
         return DateTime.now().plus({ minutes: this.offset })
@@ -59,6 +65,9 @@ class UserProfileSchema {
         if (!this.mcUUID) return undefined
         return MojangClient.uuidToName(this.mcUUID)
     }
+
+    @Prop({ type: Object, required: false })
+    ranked?: Record<string, Partial<RankedStats>>
 
     toString() {
         return userMention(this._id)

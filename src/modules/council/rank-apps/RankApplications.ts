@@ -1,21 +1,19 @@
-import { ButtonStyle, EmbedBuilder, GuildChannelCreateOptions, GuildMember, TextInputStyle } from "discord.js"
 import {
-    BotMessage,
-    CommandHandlerInteraction,
-    Component,
-    Config,
-    I18n,
-    LocalizedError,
-    MessageOptionsBuilder,
-    PositionRole,
-    TextUtil,
-    TimeUtil,
-    Vouch,
-} from "lib"
+    ButtonStyle,
+    EmbedBuilder,
+    GuildChannelCreateOptions,
+    GuildMember,
+    TextInputStyle,
+    type Interaction,
+} from "discord.js"
+import { Component, I18n, LocalizedError, MessageOptionsBuilder, TextUtil, TimeUtil } from "lib"
 
-import { Positions } from "@Constants"
+import { Config } from "@module/config"
 import { ExchangeInputField, RecallExchangeInteraction } from "@module/exchange"
+import { BotMessage } from "@module/messages"
+import { PositionRole } from "@module/positions"
 import { TicketCreateHandler, TicketManager } from "@module/tickets"
+import { Vouch } from "@module/vouch-system"
 import { VouchCollection } from "@module/vouch-system/VouchCollection"
 import { CouncilVoteManager } from "./CouncilVoteManager"
 
@@ -67,10 +65,7 @@ export class RankAppTicketManager extends TicketManager {
             creatorPermissions: [],
             closeIfLeave: false,
             cooldown,
-            permissions: {
-                positionLevel: Positions.Staff,
-                positions: [`${rank} Head`],
-            },
+            permission: `council.${rank.toLowerCase()}.manageApp`,
         })
 
         this.vote = new CouncilVoteManager(rank)
@@ -125,16 +120,16 @@ class RankAppCreateHandler extends TicketCreateHandler {
     }
 
     /** @override */
-    async verify(interaction: CommandHandlerInteraction) {
+    async verify(interaction: Interaction<"cached">) {
         await super.verify(interaction)
         const vouches = await VouchCollection.fetch(interaction.user.id, this.rank)
-        const minVouches = this.minVouches(interaction.guildId!)
+        const minVouches = this.minVouches(interaction.guildId)
         if (vouches.getPositive().length < minVouches)
             throw new LocalizedError("app_not_enough_vouches", {
                 title: [minVouches, this.rank],
                 description: [
-                    interaction.client.getConfigValue(this.GuildConfig.InfoChannel, interaction.guildId!),
-                    interaction.client.getConfigValue("Support Channel", interaction.guildId!),
+                    Config.getConfigValue(this.GuildConfig.InfoChannel, interaction.guildId),
+                    Config.getConfigValue("Support Channel", interaction.guildId),
                 ],
                 footer: [TimeUtil.stringifyTimeDelta(Vouch.getExpiration(this.rank))],
             })

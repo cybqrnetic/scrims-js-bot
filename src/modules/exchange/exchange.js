@@ -4,10 +4,11 @@ import { MessageOptionsBuilder, StateComponentHandler } from "lib"
 import { ExchangeHandlerParser, ExchangeHandlerState, ExchangeHandlerStateManager } from "./exchange-state"
 
 /**
- * @typedef {import("discord.js").Interaction & import("lib").CommandHandlerInteractionData & RecallExchangeInteractionData} RecallExchangeInteraction
+ * @typedef {import("discord.js").Interaction<"cached"> & RecallExchangeInteractionData} RecallExchangeInteraction
  * @typedef RecallExchangeInteractionData
  * @property {ExchangeHandler} handler
  * @property {ExchangeHandlerState} state
+ * @property {import("discord.js").SendableChannels} channel
  */
 
 /** @extends {StateComponentHandler<ExchangeHandlerState>} */

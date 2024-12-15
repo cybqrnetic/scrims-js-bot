@@ -105,7 +105,7 @@ export class TimeUtil {
      * @param precision the amount of units to show
      * @param bind whether to use binding words/letters like "and" & ","
      */
-    static stringifyTimeDelta(delta: number, precision = 2, bind = false) {
+    static stringifyTimeDelta(delta: number, precision = 2, bind = false, def = "less than a second") {
         const parts = []
         for (const unit of NAMED_UNITS) {
             const count = Math.floor(delta / unit.value)
@@ -116,7 +116,7 @@ export class TimeUtil {
             if (parts.length === precision) break
         }
 
-        if (!parts.length) return "less than a second"
+        if (!parts.length) return def
         return bind ? parts.slice(0, -1).join(", ") + " and " + parts.slice(-1)[0] : parts.join(" ")
     }
 

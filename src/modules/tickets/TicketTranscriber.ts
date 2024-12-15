@@ -6,31 +6,32 @@ import {
     EmbedBuilder,
     Guild,
     Message,
-    TextChannel,
     codeBlock,
     time,
     userMention,
+    type GuildTextBasedChannel,
 } from "discord.js"
 
 import discordTranscripts, { ExportReturnType } from "discord-html-transcripts"
-import { writeFile } from "fs/promises"
+import { DiscordBot, DiscordUtil, TextUtil, request } from "lib"
 import path from "path"
 
 import { Colors, Emojis } from "@Constants"
-import { Config, DiscordUtil, ScrimsBot, TextUtil, Ticket, request } from "lib"
+import { Config } from "@module/config"
+import type { Ticket } from "./Ticket"
 
 export interface TicketTranscriberOptions {
     dmUsers?: boolean
 }
 
-ScrimsBot.useBot((bot) => {
+DiscordBot.useBot((bot) => {
     Object.defineProperty(TicketTranscriber, "bot", { value: bot })
 })
 
 Config.declareTypes(["Attachment Locking Channel"])
 
 export default class TicketTranscriber {
-    private static readonly bot: ScrimsBot
+    private static readonly bot: DiscordBot
     constructor(protected readonly options: TicketTranscriberOptions = {}) {}
 
     protected get bot() {
@@ -43,7 +44,7 @@ export default class TicketTranscriber {
             if (file.byteLength / 1000000 > 8) throw new Error(`${file.byteLength / 1000000} MB is too large`)
             const lockedFile = new AttachmentBuilder(Buffer.from(file), attachment as AttachmentData)
 
-            const channelId = this.bot.getConfigValue("Attachment Locking Channel", guild.id)
+            const channelId = Config.getConfigValue("Attachment Locking Channel", guild.id)
             if (!channelId) throw new Error("Channel not configured")
             const channel = await guild.channels.fetch(channelId)
             if (!channel?.isTextBased()) throw new Error("Channel not available")
@@ -58,15 +59,8 @@ export default class TicketTranscriber {
         }
     }
 
-    async generateHTMLTranscript(ticket: Ticket, guild: Guild, channel?: TextChannel | null) {
-        if (!channel)
-            channel = (await this.bot.channels
-                .fetch(ticket.channelId)
-                .catch(() => null)) as TextChannel | null
-
-        if (!channel) return
-
-        const messages = await DiscordUtil.completelyFetch(channel.messages).then((v) =>
+    async generateHTMLTranscript(ticket: Ticket, guild: Guild, channel: GuildTextBasedChannel) {
+        const messages = await DiscordUtil.completelyFetchMessages(channel.messages).then((v) =>
             v.sort((a, b) => a.createdTimestamp - b.createdTimestamp),
         )
 
@@ -80,12 +74,12 @@ export default class TicketTranscriber {
             transcriptContent = transcriptContent.replaceAll(`:${name}:`, unicode)
         }
 
-        await writeFile(path.join(".", "transcripts", ticket.id!), transcriptContent)
-        return encodeURI(
-            process.env.NODE_ENV === "production"
-                ? `https://transcripts.${process.env.DOMAIN}/${ticket.id}`
-                : `${path.resolve(".", "transcripts", ticket.id!)}`,
-        )
+        const file = path.join(".", "transcripts", ticket.id!)
+        await Bun.write(file, transcriptContent)
+
+        return process.env.NODE_ENV === "production"
+            ? `https://transcripts.${process.env["DOMAIN"]}/${ticket.id}`
+            : path.resolve(file)
     }
 
     async lockAttachments(messages: Collection<string, Message<true>>, guild: Guild) {
@@ -131,11 +125,11 @@ export default class TicketTranscriber {
             .setFooter({ text: `ID: ${ticket.id}` })
     }
 
-    async send(guild: Guild, ticket: Ticket, channel?: TextChannel | null) {
+    async send(guild: Guild, ticket: Ticket, channel: GuildTextBasedChannel) {
         const link = await this.generateHTMLTranscript(ticket, guild, channel)
         if (!link) return
 
-        const channelId = this.bot.getConfigValue(`${ticket.type} Transcripts Channel`, guild.id)
+        const channelId = Config.getConfigValue(`${ticket.type} Transcripts Channel`, guild.id)
         if (channelId) {
             const channel = await guild.channels.fetch(channelId).catch(() => null)
             if (channel?.isTextBased())

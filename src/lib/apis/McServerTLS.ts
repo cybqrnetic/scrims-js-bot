@@ -4,7 +4,7 @@ import { EventEmitter } from "events"
 import fs from "fs/promises"
 import tls, { TLSSocket } from "tls"
 
-const KEY = process.env.MC_TLS_KEY ? Buffer.from(process.env.MC_TLS_KEY, "base64") : null
+const KEY = process.env["MC_TLS_KEY"] ? Buffer.from(process.env["MC_TLS_KEY"], "base64") : null
 const HEADER_SIZE = 4
 
 let CA: Buffer, CERT: Buffer
@@ -43,8 +43,8 @@ export class McServerTLSConnection {
                 ca: CA,
                 cert: CERT,
                 key: KEY,
-                host: process.env.MC_TLS_HOST!,
-                port: parseInt(process.env.MC_TLS_PORT!),
+                host: process.env["MC_TLS_HOST"]!,
+                port: parseInt(process.env["MC_TLS_PORT"]!),
                 session: this.session,
                 rejectUnauthorized: true,
             })

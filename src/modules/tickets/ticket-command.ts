@@ -3,8 +3,7 @@ import {
     ButtonStyle,
     EmbedBuilder,
     GuildMember,
-    InteractionType,
-    PermissionFlagsBits,
+    InteractionContextType,
     PermissionsString,
     SlashCommandBuilder,
     SlashCommandStringOption,
@@ -12,22 +11,16 @@ import {
     TextChannel,
     User,
     userMention,
+    type AutocompleteInteraction,
+    type ChatInputCommandInteraction,
+    type Interaction,
+    type MessageComponentInteraction,
 } from "discord.js"
 
-import {
-    AutocompleteInteraction,
-    CommandHandlerInteraction,
-    ComponentInteraction,
-    LocalizedError,
-    MessageOptionsBuilder,
-    SlashCommand,
-    SlashCommandInteraction,
-    Ticket,
-    TimeUtil,
-    UserError,
-} from "lib"
+import { LocalizedError, MessageOptionsBuilder, SlashCommand, TimeUtil, UserError } from "lib"
 
 import { Colors } from "../../Constants"
+import type { Ticket } from "./Ticket"
 import { TicketManager } from "./TicketManager"
 
 const Options = {
@@ -48,17 +41,16 @@ const subCommands: Record<string, any> = {
     close: onTicketCloseCommand,
 }
 
-async function onTicketCommand(interaction: CommandHandlerInteraction) {
-    const handler = subCommands[interaction.subCommandName!]
-    if (!handler)
-        throw new Error(`Subcommand with name '${interaction.subCommandName}' does not have a handler!`)
+async function onTicketCommand(interaction: Interaction) {
+    const handler = subCommands[interaction.subCommandName || interaction.args.shift()!]
+    if (!handler) throw new Error(`Handler not found!`)
 
     const { ticket, ticketManager } = await TicketManager.findTicket(interaction)
 
     if (
-        interaction.subCommandName !== "closeResponse" &&
-        ticketManager.options.permissions &&
-        !interaction.client.permissions.hasPermissions(interaction.user, ticketManager.options.permissions)
+        !interaction.isButton() &&
+        ticketManager.options.permission &&
+        !interaction.user.hasPermission(ticketManager.options.permission)
     )
         throw new LocalizedError("tickets.unauthorized_manage", ticket.type)
 
@@ -73,7 +65,7 @@ const ActionPermissions: Record<string, [boolean, PermissionsString[]]> = {
 }
 
 async function onTicketPermissionsCommand(
-    interaction: SlashCommandInteraction,
+    interaction: ChatInputCommandInteraction<"cached">,
     ticketManager: TicketManager,
     ticket: Ticket,
 ) {
@@ -115,19 +107,21 @@ async function onTicketPermissionsCommand(
 }
 
 async function onTicketDeleteCommand(
-    interaction: SlashCommandInteraction | AutocompleteInteraction,
+    interaction: ChatInputCommandInteraction | AutocompleteInteraction,
     ticketManager: TicketManager,
     ticket: Ticket,
 ) {
-    if (interaction.type === InteractionType.ApplicationCommandAutocomplete)
+    if (interaction.isAutocomplete()) {
         return onTicketReasonAutocomplete(interaction, ticketManager, ticket)
+    }
+
     await interaction.deferReply()
     const reason = interaction.options.getString(Options.Reason) ?? undefined
-    await ticketManager.closeTicket(ticket, interaction.user, reason)
+    await ticketManager.closeTicket(ticket.id, interaction.user.id, reason)
 }
 
 async function onTicketRenameCommand(
-    interaction: SlashCommandInteraction,
+    interaction: ChatInputCommandInteraction,
     ticketManager: TicketManager,
     ticket: Ticket,
 ) {
@@ -164,12 +158,13 @@ async function onTicketReasonAutocomplete(
 }
 
 async function onTicketCloseCommand(
-    interaction: SlashCommandInteraction | AutocompleteInteraction,
+    interaction: ChatInputCommandInteraction | AutocompleteInteraction,
     ticketManager: TicketManager,
     ticket: Ticket,
 ) {
-    if (interaction.type === InteractionType.ApplicationCommandAutocomplete)
+    if (interaction.isAutocomplete()) {
         return onTicketReasonAutocomplete(interaction, ticketManager, ticket)
+    }
 
     const reason = interaction.options.getString(Options.Reason) ?? undefined
     const timeout = interaction.options.getString(Options.Timeout)
@@ -177,7 +172,7 @@ async function onTicketCloseCommand(
     if (ticket.userId === interaction.user.id) {
         // Creator wants to close the ticket, so close it
         await interaction.reply({ content: "Ticket closing..." })
-        return ticketManager.closeTicket(ticket, interaction.user, reason)
+        return ticketManager.closeTicket(ticket.id, interaction.user.id, reason)
     }
 
     if (timeout) {
@@ -190,20 +185,24 @@ async function onTicketCloseCommand(
             fetchReply: true,
         })
 
-        await ticketManager
-            .addCloseTimeout(ticket, message, interaction.user, duration, reason)
-            .catch(console.error)
+        await ticketManager.addCloseTimeout({
+            ticketId: ticket.id,
+            messageId: message.id,
+            closerId: interaction.user.id,
+            timestamp: Date.now() + duration * 1000,
+            reason,
+        })
     } else {
         await interaction.reply(getCloseRequestMessage(ticket, interaction.user, reason))
     }
 }
 
 async function onTicketCloseResponse(
-    interaction: ComponentInteraction,
+    interaction: MessageComponentInteraction<"cached">,
     ticketManager: TicketManager,
     ticket: Ticket,
 ) {
-    const [_, requesterId, action] = interaction.args
+    const [requesterId, action] = interaction.args
     const requester = await interaction.client.users.fetch(requesterId!).catch(() => null)
 
     const fields = interaction.message.embeds[0]?.fields
@@ -212,15 +211,12 @@ async function onTicketCloseResponse(
         : undefined
 
     if (
-        action === "FORCE" && ticketManager.options.permissions
-            ? interaction.client.permissions.hasPermissions(
-                  interaction.user,
-                  ticketManager.options.permissions,
-              )
+        action === "FORCE" && ticketManager.options.permission
+            ? interaction.user.hasPermission(ticketManager.options.permission)
             : interaction.memberPermissions?.has("Administrator")
     ) {
         await interaction.update({ content: "Ticket closing...", embeds: [], components: [] })
-        await ticketManager.closeTicket(ticket, requester ?? interaction.user, reason)
+        await ticketManager.closeTicket(ticket.id, requester?.id ?? interaction.user.id, reason)
     }
 
     if (interaction.user.id !== ticket.userId)
@@ -233,7 +229,7 @@ async function onTicketCloseResponse(
             components: [],
         })
 
-        await ticketManager.cancelCloseTimeouts(interaction.message.id)
+        ticketManager.cancelCloseTimeouts(interaction.message.id)
 
         await interaction
             .followUp(
@@ -243,14 +239,16 @@ async function onTicketCloseResponse(
             )
             .catch(console.error)
 
-        await interaction
-            .channel!.send(`${interaction.user} why do you want to keep this open?`)
-            .catch(console.error)
+        if (interaction.channel?.isSendable()) {
+            await interaction.channel
+                .send(`${interaction.user} why do you want to keep this open?`)
+                .catch(console.error)
+        }
     }
 
     if (action === "ACCEPT") {
         await interaction.update({ content: "Ticket closing...", embeds: [], components: [] })
-        await ticketManager.closeTicket(ticket, requester, reason)
+        await ticketManager.closeTicket(ticket.id, requester?.id, reason)
     }
 }
 
@@ -373,7 +371,7 @@ SlashCommand({
         .addSubcommand(buildTicketDeleteSubcommand())
         .addSubcommand(buildTicketCloseSubcommand())
         .addSubcommand(buildTicketRenameSubcommand())
-        .setDefaultMemberPermissions(PermissionFlagsBits.MoveMembers)
-        .setDMPermission(false),
+        .setContexts(InteractionContextType.Guild)
+        .setDefaultMemberPermissions("0"),
     mixedHandler: onTicketCommand,
 })

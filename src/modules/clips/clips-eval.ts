@@ -1,3 +1,4 @@
+import axios from "axios"
 import {
     EmbedBuilder,
     Events,
@@ -7,14 +8,14 @@ import {
     MessageReaction,
     PartialMessage,
     PartialMessageReaction,
-    TextBasedChannel,
     bold,
     time,
 } from "discord.js"
-
-import axios from "axios"
-import { BotModule, Config, LikedClips } from "lib"
+import { BotModule } from "lib"
 import { DateTime } from "luxon"
+
+import { Config } from "@module/config"
+import { LikedClips } from "./LikedClips"
 import MedalApi from "./MedalApi"
 
 const GuildConfig = Config.declareTypes({
@@ -38,12 +39,12 @@ export class ClipsEvalFeature extends BotModule {
     }
 
     async sendWeekDividerMessage(guild: Guild) {
-        const likedChannelId = this.bot.getConfigValue(GuildConfig.LikedChannel, guild.id)
+        const likedChannelId = Config.getConfigValue(GuildConfig.LikedChannel, guild.id)
         if (!likedChannelId) return
         const likedChannel = await guild.channels.fetch(likedChannelId)
-        if (likedChannel) {
-            const dividerContent = this.bot.getConfigValue(GuildConfig.DividerContent, guild.id)
-            const dividerMessage = await (likedChannel as TextBasedChannel).send(
+        if (likedChannel?.isSendable()) {
+            const dividerContent = Config.getConfigValue(GuildConfig.DividerContent, guild.id)
+            const dividerMessage = await likedChannel.send(
                 `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${dividerContent ?? `Send the best clips in the thread below!`}`,
             )
             const startDate = DateTime.utc(2023, 3, 24, 21)
@@ -68,7 +69,7 @@ export class ClipsEvalFeature extends BotModule {
 
     async filterLinks(message: Message | PartialMessage) {
         if (!message.inGuild() || message?.author?.bot) return
-        const clipsChannelId = this.bot.getConfigValue(GuildConfig.ClipsChannel, message.guildId)
+        const clipsChannelId = Config.getConfigValue(GuildConfig.ClipsChannel, message.guildId)
         if (message.channelId !== clipsChannelId) return
 
         if (/youtube|youtu\.be/i.test(message.content)) {
@@ -99,8 +100,8 @@ export class ClipsEvalFeature extends BotModule {
 
     async onReactionUpdate({ message }: MessageReaction | PartialMessageReaction) {
         if (!message.inGuild()) return
-        const clipsChannel = this.bot.getConfigValue(GuildConfig.ClipsChannel, message.guildId)
-        const criticalVote = this.bot.getConfigValue(GuildConfig.CriticalVote, message.guildId)
+        const clipsChannel = Config.getConfigValue(GuildConfig.ClipsChannel, message.guildId)
+        const criticalVote = Config.getConfigValue(GuildConfig.CriticalVote, message.guildId)
         if (message.channelId !== clipsChannel) return
         if (!criticalVote) return
 
@@ -112,15 +113,15 @@ export class ClipsEvalFeature extends BotModule {
         if (upVotes >= parseInt(criticalVote)) await this.markLikedClip(message)
     }
 
-    wasMarked(message: PartialMessage | Message) {
-        if (!LikedClips.cache.initialized.get()) return true
+    async wasMarked(message: PartialMessage | Message) {
+        await LikedClips.cache.initialized()
         return LikedClips.cache.has(message.id)
     }
 
     async markLikedClip(message: Message<true>) {
-        if (this.wasMarked(message)) return
+        if (await this.wasMarked(message)) return
 
-        const likedChannelId = this.bot.getConfigValue(GuildConfig.LikedChannel, message.guildId)
+        const likedChannelId = Config.getConfigValue(GuildConfig.LikedChannel, message.guildId)
         if (!likedChannelId) return
 
         const likedChannel = await message.guild.channels.fetch(likedChannelId)

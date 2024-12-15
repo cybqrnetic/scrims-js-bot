@@ -3,7 +3,7 @@ import { HTTPError, RequestOptions, TimeoutError, request } from "./request"
 
 export class ChalllongeAPIError extends LocalizedError {}
 
-const API_TOKEN = process.env.CHALLONGE_TOKEN
+const API_TOKEN = process.env["CHALLONGE_TOKEN"]!
 const SERVER = "api.challonge.com/v1"
 const TIMEOUT = 7000
 
@@ -13,7 +13,7 @@ export class ChallongeBracketClient {
 
     protected extractParticipants(participants: any[] = []) {
         return Object.fromEntries(
-            participants.map((item) => [item.participant.id, item.participant])
+            participants.map((item) => [item.participant.id, item.participant]),
         ) as ChallongeParticipants
     }
 
@@ -31,7 +31,7 @@ export class ChallongeBracketClient {
         method: "GET" | "POST" | "PUT" | "DELETE",
         path: string[],
         urlParams: Record<string, string> = {},
-        options: RequestOptions = {}
+        options: RequestOptions = {},
     ) {
         if (!API_TOKEN) throw new TypeError("CHALLONGE_TOKEN is not set!")
 
@@ -42,14 +42,14 @@ export class ChallongeBracketClient {
         if (!options.headers) options.headers = {}
         options.headers["Content-Type"] = "application/json; charset=utf-8"
         return request(`https://${SERVER}/tournaments/${path.join("/")}.json`, options)
-            .then((v) => v.json())
+            .then((v) => v.json() as Promise<any>)
             .catch((error) => this.onError(error))
     }
 
     async start() {
         const response = await this.challongeRequest("POST", ["start"], {
             include_participants: "1",
-            include_matches: "1"
+            include_matches: "1",
         })
         return this.extractTournament(response.tournament)
     }
@@ -57,7 +57,7 @@ export class ChallongeBracketClient {
     async getTournament() {
         const response = await this.challongeRequest("GET", [], {
             include_participants: "1",
-            include_matches: "1"
+            include_matches: "1",
         })
         return this.extractTournament(response.tournament)
     }
@@ -97,7 +97,7 @@ export class ChallongeBracketClient {
     protected async onError(error: unknown): Promise<never> {
         if (error instanceof TimeoutError) throw new ChalllongeAPIError("api.timeout", "Challonge API")
         if (error instanceof HTTPError) {
-            const resp = await error.response.json()
+            const resp = (await error.response.json()) as any
             if (resp.errors)
                 console.error(`${error.response.url} responded with errors in body!`, resp.errors)
             else console.error(`${error.response.url} responded with a ${error.response.status} status!`)

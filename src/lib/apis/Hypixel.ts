@@ -6,7 +6,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 export class HypixelAPIError extends LocalizedError {}
 
-const API_TOKEN = process.env.HYPIXEL_TOKEN
+const API_TOKEN = process.env["HYPIXEL_TOKEN"]!
 const SERVER = "api.hypixel.net"
 const TIMEOUT = 7000
 
@@ -18,7 +18,7 @@ export class HypixelClient {
     async hypixelRequest(
         endpoint: string,
         urlParams: Record<string, string> = {},
-        options: RequestOptions = {}
+        options: RequestOptions = {},
     ) {
         if (!API_TOKEN) throw new TypeError("HYPIXEL_TOKEN is not set!")
         options.urlParams = new URLSearchParams({ key: API_TOKEN, ...urlParams })
@@ -26,7 +26,7 @@ export class HypixelClient {
 
         await this.waitForThrottlingOrAbort()
         return request(`https://${SERVER}/${endpoint}`, options)
-            .then((v) => v.json())
+            .then((v) => v.json() as Promise<any>)
             .catch((error) => this.onError(error))
     }
 
@@ -39,7 +39,7 @@ export class HypixelClient {
                 throw new HypixelAPIError("api.throttling", "Hypixel API")
             }
 
-            const resp = await error.response.json()
+            const resp = (await error.response.json()) as any
             if (resp.cause)
                 console.error(`${error.response.url} reported ${error.response.status}: ${resp.cause}!`)
             else console.error(`${error.response.url} responded with a ${error.response.status} status!`)
@@ -65,7 +65,7 @@ export class HypixelClient {
 }
 
 // prettier-ignore
-const BEDWARS_ODD_LEVELS = [[500, 0], [1500, 1], [3500, 2], [7000, 3]]
+const BEDWARS_ODD_LEVELS: [number, number][] = [[500, 0], [1500, 1], [3500, 2], [7000, 3]]
 const BEDWARS_LEVELS_PER_PRESTIGE = 100
 const BEDWARS_EXP_PER_PRESTIGE = 487000
 const BEDWARS_EXP_PER_LEVEL = 5000
@@ -81,8 +81,8 @@ class HypixelPlayers {
 
     protected getBedwarsLevelProgress(exp: number) {
         exp = exp % BEDWARS_EXP_PER_PRESTIGE
-        const lastOddLevel = BEDWARS_ODD_LEVELS.slice(-1)[0]
-        const strangeLevel = BEDWARS_ODD_LEVELS.filter(([max, _]) => exp < max).map(([_, level]) => level)[0]
+        const lastOddLevel = BEDWARS_ODD_LEVELS.slice(-1)[0]!
+        const strangeLevel = BEDWARS_ODD_LEVELS.filter(([max, _]) => exp < max).map(([_, level]) => level)[0]!
         return (
             strangeLevel ?? Math.floor((exp - lastOddLevel[0]) / BEDWARS_EXP_PER_LEVEL) + lastOddLevel[1] + 1
         )

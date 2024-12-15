@@ -1,7 +1,8 @@
-import { EmbedBuilder, TextInputStyle } from "discord.js"
-import { CommandHandlerInteraction, Component, MessageOptionsBuilder, Suggestion, TextUtil } from "lib"
+import { EmbedBuilder, TextInputStyle, type Interaction } from "discord.js"
+import { Component, MessageOptionsBuilder, TextUtil } from "lib"
 
-import { ExchangeHandler, ExchangeInputField, RecallExchangeInteraction } from "../exchange"
+import { ExchangeHandler, ExchangeInputField, RecallExchangeInteraction } from "@module/exchange"
+import { Suggestion } from "./Suggestion"
 import suggestionsModule from "./module"
 
 const FIELDS = [
@@ -30,7 +31,7 @@ const FIELDS = [
         required: false,
         minLength: 15,
         placeholder: "https:// ... .png/jpg",
-        async parse(interaction, inputted) {
+        async parse(_interaction, inputted) {
             return TextUtil.isValidHttpUrl(inputted) ? inputted : undefined
         },
     }),
@@ -42,7 +43,7 @@ class SuggestionsCreateHandler extends ExchangeHandler {
     }
 
     /** @override */
-    async verify(interaction: CommandHandlerInteraction) {
+    async verify(interaction: Interaction) {
         return suggestionsModule.verifyCreate(interaction.user)
     }
 
@@ -53,8 +54,8 @@ class SuggestionsCreateHandler extends ExchangeHandler {
             .setContent(
                 "***Joke Suggestions that do not include legitimate ideas to improve the server " +
                     "or include anything against our rules will be removed and could result in punishments!***" +
-                    "\n**This suggestion is for the Bridge Scrims Discord server.**" + 
-                    "\nFor suggestions related to the Minecraft server, " + 
+                    "\n**This suggestion is for the Bridge Scrims Discord server.**" +
+                    "\nFor suggestions related to the Minecraft server, " +
                     "please join the [Scrims Network](https://discord.gg/rE3qHxvMNq) Discord server." +
                     "\nWith this in mind, please confirm your suggestion below.",
             )
@@ -70,7 +71,7 @@ class SuggestionsCreateHandler extends ExchangeHandler {
             .exec()
             .then((v) => (v[0]?.sequence ?? 0) + 1)
 
-        const msg = await interaction.channel!.send({ embeds: [suggestion.toEmbed()] })
+        const msg = await interaction.channel.send({ embeds: [suggestion.toEmbed()] })
         await suggestionsModule
             .getInfoMessageFloaters(msg.guildId!)
             .find((v) => v.channelId === interaction.channelId)
@@ -86,7 +87,7 @@ class SuggestionsCreateHandler extends ExchangeHandler {
             throw resp
         }
 
-        await suggestionsModule.logCreate(suggestion, msg).catch(console.error)
+        await suggestionsModule.logCreate(suggestion).catch(console.error)
         await Promise.all(
             suggestionsModule
                 .getVoteEmojis(msg.guild!)

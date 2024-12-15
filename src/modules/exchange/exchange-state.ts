@@ -5,9 +5,10 @@ import {
     TextInputBuilder,
     TextInputModalData,
     codeBlock,
+    type Interaction,
 } from "discord.js"
 
-import { CommandHandlerInteraction, TextUtil } from "lib"
+import { TextUtil } from "lib"
 import { ExchangeInputField } from "./ExchangeInputField"
 import { RecallExchangeInteraction } from "./exchange"
 
@@ -44,10 +45,7 @@ export class ExchangeHandlerParser {
 export class ExchangeHandlerStateManager {
     constructor(
         readonly fields: ExchangeInputField<unknown>[],
-        readonly getInitialStateCall?: (
-            i: CommandHandlerInteraction,
-            s: ExchangeHandlerState,
-        ) => Promise<unknown>,
+        readonly getInitialStateCall?: (i: Interaction, s: ExchangeHandlerState) => Promise<unknown>,
     ) {}
 
     newState() {
@@ -60,7 +58,7 @@ export class ExchangeHandlerStateManager {
         return new ExchangeHandlerState(id, this.fields, index, values)
     }
 
-    async getInitialState(interaction: CommandHandlerInteraction) {
+    async getInitialState(interaction: Interaction) {
         const state = this.newState()
         if (this.getInitialStateCall) await this.getInitialStateCall(interaction, state)
         return state

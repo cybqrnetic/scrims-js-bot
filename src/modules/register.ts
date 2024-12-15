@@ -1,22 +1,23 @@
-import { ButtonBuilder, ButtonStyle, EmbedBuilder, TextInputStyle, User } from "discord.js"
 import {
-    BotMessage,
-    CommandHandlerInteraction,
-    Component,
-    MessageOptionsBuilder,
-    MojangClient,
-    MojangResolvedUser,
-    UserProfile,
-} from "lib"
+    ButtonBuilder,
+    ButtonStyle,
+    EmbedBuilder,
+    TextInputStyle,
+    User,
+    type BaseInteraction,
+    type Interaction,
+} from "discord.js"
+import { Component, MessageOptionsBuilder, MojangClient, MojangResolvedUser, UserProfile } from "lib"
+import { DateTime } from "luxon"
 
 import { Colors } from "@Constants"
-import { DateTime } from "luxon"
 import {
     ExchangeHandler,
     ExchangeHandlerState,
     ExchangeInputField,
     RecallExchangeInteraction,
-} from "./exchange"
+} from "@module/exchange"
+import { BotMessage } from "@module/messages"
 
 export const FIELDS = [
     ExchangeInputField("McAccount", {
@@ -42,7 +43,7 @@ export async function updateRegistration(user: User, mcUUID: string, offset: num
     await UserProfile.updateOne({ _id: user.id }, { mcUUID, offset }, { upsert: true })
 }
 
-export async function getInitialState(interaction: CommandHandlerInteraction, state: ExchangeHandlerState) {
+export async function getInitialState(interaction: BaseInteraction, state: ExchangeHandlerState) {
     const profile = UserProfile.cache.get(interaction.user.id)
     if (profile && (profile.mcUUID !== undefined || profile.offset !== undefined)) {
         if (profile.mcUUID !== undefined) {
@@ -66,7 +67,7 @@ class RegistrationHandler extends ExchangeHandler {
     }
 
     /** @override */
-    async getInitialState(interaction: CommandHandlerInteraction, state: ExchangeHandlerState) {
+    async getInitialState(interaction: Interaction, state: ExchangeHandlerState) {
         return getInitialState(interaction, state)
     }
 

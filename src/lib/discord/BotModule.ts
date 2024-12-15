@@ -1,4 +1,4 @@
-import { ScrimsBot } from "./ScrimsBot"
+import { DiscordBot } from "./DiscordBot"
 
 export class BotModule {
     static readonly instances: Record<string, BotModule> = {}
@@ -6,15 +6,15 @@ export class BotModule {
         if (!(this.name in this.instances)) {
             const instance = new this() as T
             this.instances[this.name] = instance
-            ScrimsBot.useBot((bot) => instance.setBot(bot))
+            DiscordBot.useBot((bot) => instance.setBot(bot))
             return instance
         }
         return this.instances[this.name] as T
     }
 
-    protected readonly bot!: ScrimsBot
+    protected readonly bot!: DiscordBot
 
-    private setBot(bot: ScrimsBot) {
+    private setBot(bot: DiscordBot) {
         Object.defineProperty(this, "bot", { value: bot })
         this.bot.on("ready", () => this.onReady())
         this.bot.on("initialized", () => this.onInitialized())

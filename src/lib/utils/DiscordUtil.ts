@@ -4,9 +4,9 @@ import {
     EmbedAuthorData,
     Guild,
     GuildMember,
+    MessageManager,
     TimestampStylesString,
     User,
-    userMention,
 } from "discord.js"
 
 import { DateTime } from "luxon"
@@ -62,6 +62,7 @@ export class DiscordUtil {
     static async *multiFetch<K extends string, Holds, V>(
         cacheManager: BasicCachedManager<K, Holds, V>,
         chunkSize = 100,
+        reverse = false,
         limit?: number,
     ): AsyncGenerator<Collection<K, Holds>, void, void> {
         let chunk: Collection<K, Holds> = await cacheManager.fetch({ limit: chunkSize })
@@ -71,24 +72,30 @@ export class DiscordUtil {
             if (chunk.size === 0) break
             yield chunk
             if (chunk.size !== chunkSize || (limit !== undefined && limit <= 0)) break
-            chunk = await cacheManager.fetch({ limit: chunkSize, after: chunk.lastKey() })
+            chunk = await cacheManager.fetch({
+                limit: chunkSize,
+                [reverse ? "before" : "after"]: chunk.lastKey(),
+            })
         }
     }
 
     static async completelyFetch<K extends string, Holds, V>(
         cacheManager: BasicCachedManager<K, Holds, V>,
         chunkSize = 100,
+        reverse = false,
         limit?: number,
     ) {
         let results = new Collection<K, Holds>()
-        for await (const fetched of this.multiFetch(cacheManager, chunkSize, limit))
+        for await (const fetched of this.multiFetch(cacheManager, chunkSize, reverse, limit))
             results = results.concat(fetched)
         return results
     }
 
-    static userMention(userId?: string, unknown = "") {
-        if (!userId) return unknown
-        return userMention(userId)
+    static async completelyFetchMessages<InGuild extends boolean>(
+        manager: MessageManager<InGuild>,
+        limit?: number,
+    ) {
+        return this.completelyFetch(manager, 100, true, limit)
     }
 
     static parseUser(resolvable: string, guild: Guild): GuildMember | undefined {

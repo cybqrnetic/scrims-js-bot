@@ -1,29 +1,30 @@
 import { Events } from "discord.js"
-import { BotListener, Config, PositionRole } from "lib"
+import { BotListener } from "lib"
 
 import { RANKS, ROLE_APP_HUB } from "@Constants"
+import { Config } from "@module/config"
+import { PositionRole } from "@module/positions"
 import { VouchDuelSession } from "./VouchDuelSession"
 
-const RANK_CHANNELS = Object.values(RANKS).map((rank) => [
-    Config.declareType(`${rank} Council Duels Channel`),
-    rank,
-])
+const channelRanks: Record<string, string> = {}
+for (const rank of Object.values(RANKS)) {
+    const key = Config.declareType(`${rank} Council Duels Channel`)
+    Config.onCache("add", key, (config) => (channelRanks[config.value] = rank))
+    Config.onCache("delete", key, (config) => delete channelRanks[config.value])
+}
 
 const PING_POSITIONS = PositionRole.declarePositions(
     Object.fromEntries(Object.values(RANKS).map((rank) => [rank, `${rank} Duels Ping`])),
 )
 
-BotListener(Events.MessageCreate, async (bot, msg) => {
+BotListener(Events.MessageCreate, async (_bot, msg) => {
     if (msg.guildId !== ROLE_APP_HUB || msg.content.toLowerCase() !== "$duels") return
 
-    const rank = RANK_CHANNELS.find(
-        ([config]) => bot.getConfigValue(config, msg.guildId!) === msg.channelId,
-    )?.[1]
+    const rank = channelRanks[msg.channelId]
+    if (!rank || !msg.author.hasPermission(`council.${rank.toLowerCase()}.vouchDuels`)) return
 
-    if (!rank || !bot.permissions.hasPosition(msg.author, `${rank} Council`)) return
-
-    const role = PositionRole.getRoles(PING_POSITIONS[rank], msg.guildId)[0]
+    const role = PositionRole.getRoles(PING_POSITIONS[rank]!, msg.guildId)[0]
     await Promise.all([msg.delete(), role ? msg.channel.send(`${msg.author}: ${role}`) : null])
 
-    new VouchDuelSession(msg.author.id, rank)
+    await VouchDuelSession.create(msg.author.id, rank)
 })

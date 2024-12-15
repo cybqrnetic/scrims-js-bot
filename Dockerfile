@@ -1,12 +1,7 @@
-FROM node:lts-alpine
+FROM oven/bun:latest
 
 WORKDIR /app
 COPY . .
 
-RUN npm install -g pnpm
-RUN pnpm install
-
-RUN npm run build
-RUN npm run test
-
-ENTRYPOINT ["node", "."]
+RUN bun install
+RUN bun run test

@@ -41,7 +41,7 @@ export async function request(url: string, options: RequestOptions = {}): Promis
         throw new RequestError("Request Failed", error)
     }
 
-    return fetch(url, { ...options, signal: controller.signal, cache: "no-cache" })
+    return fetch(url, { ...options, signal: controller.signal })
         .catch(requestError)
         .then(async (resp) => {
             clearTimeout(timeoutId)

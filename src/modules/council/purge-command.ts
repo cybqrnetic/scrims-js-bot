@@ -1,21 +1,30 @@
-import { ActionRowBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, inlineCode } from "discord.js"
 import {
-    CommandHandlerInteraction,
+    ActionRowBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    bold,
+    inlineCode,
+    type BaseInteraction,
+} from "discord.js"
+import {
     LocalizedSlashCommandBuilder,
     MessageOptionsBuilder,
     SlashCommand,
     UserError,
     UserProfile,
-    Vouch,
 } from "lib"
+import { DateTime } from "luxon"
 
-import { COUNCIL_HEAD_PERMISSIONS } from "@Constants"
-import { LogUtil } from "@module/vouch-system/LogUtil"
+import { Config } from "@module/config"
+import { LogUtil } from "@module/council/vouches/LogUtil"
+import { OfflinePositions } from "@module/sticky-roles"
+import { Vouch } from "@module/vouch-system"
 import { VouchUtil } from "@module/vouch-system/VouchUtil"
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder("commands.purge").setDMPermission(false),
-    config: { permissions: COUNCIL_HEAD_PERMISSIONS },
+    builder: new LocalizedSlashCommandBuilder("commands.purge").setDefaultMemberPermissions("0"),
+
     async handler(interaction) {
         const reason = new TextInputBuilder()
             .setLabel("Reason")
@@ -43,7 +52,7 @@ SlashCommand({
         await interaction.showModal(
             new ModalBuilder()
                 .setTitle("Council Purge")
-                .setCustomId(interaction.path)
+                .setCustomId("PURGE")
                 .addComponents(
                     new ActionRowBuilder<TextInputBuilder>().addComponents(reason),
                     new ActionRowBuilder<TextInputBuilder>().addComponents(users),
@@ -105,7 +114,7 @@ SlashCommand({
 })
 
 async function purge(
-    interaction: CommandHandlerInteraction,
+    interaction: BaseInteraction<"cached">,
     resolved: Set<UserProfile>,
     resolvable: string,
     reason: string,
@@ -123,31 +132,35 @@ async function purge(
     }
 
     const removeReason = `Demoted from ${rank} by ${interaction.user.tag}.`
-    await interaction.client.permissions.removePosition(user, rank, removeReason)
+    await OfflinePositions.removePosition(user, rank, removeReason)
 
-    const vouch = await Vouch.create({
-        comment: reason,
+    const filter = {
         position: rank,
         userId: user.id,
         worth: -2,
-    }).catch(console.error)
+    }
+
+    const vouch = await Vouch.findOneAndUpdate(
+        {
+            givenAt: { $lte: DateTime.now().plus({ days: 7 }).toJSDate() },
+            executorId: { $exists: false },
+            ...filter,
+        },
+        { ...filter, comment: reason, givenAt: new Date() },
+        { upsert: true, new: true },
+    ).catch(console.error)
 
     if (vouch) {
         LogUtil.logCreate(vouch, interaction.user).catch(console.error)
-        await VouchUtil.removeSimilarVouches(vouch).catch((err) =>
-            console.error("Failed to remove similar vouches!", err),
-        )
     }
 
     LogUtil.logDemotion(user, rank, interaction.user).catch(console.error)
 
     await interaction.client.users
         .createDM(user.id)
-        .then((dm) => dm.send(`**You lost your ${rank} rank in Bridge Scrims for ${reason}.**`))
+        .then((dm) => dm.send(bold(`You lost your ${rank} rank in Bridge Scrims for ${reason}.`)))
         .catch(() => null)
 
-    const announcement = new MessageOptionsBuilder().setContent(`**${user} was removed from ${rank}.**`)
-    interaction.client
-        .buildSendMessages(`${rank} Announcements Channel`, null, announcement)
-        .catch(console.error)
+    const announcement = new MessageOptionsBuilder().setContent(bold(`${user} was removed from ${rank}.`))
+    Config.buildSendMessages(`${rank} Announcements Channel`, null, announcement).catch(console.error)
 }

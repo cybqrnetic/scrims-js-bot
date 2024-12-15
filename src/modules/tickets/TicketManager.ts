@@ -6,31 +6,21 @@ import {
     Events,
     GuildChannelCreateOptions,
     GuildMember,
-    Message,
     OverwriteData,
     PartialGuildMember,
     PermissionFlagsBits,
     PermissionResolvable,
-    TextChannel,
     User,
     channelMention,
-    time,
+    type BaseInteraction,
+    type GuildTextBasedChannel,
 } from "discord.js"
 
-import {
-    AuditedChannelAction,
-    CommandHandlerInteraction,
-    Config,
-    LocalizedError,
-    Permissions,
-    PositionRole,
-    ScrimsBot,
-    Ticket,
-    UserError,
-    redis,
-} from "lib"
+import { AuditedChannelAction, BotListener, DiscordBot, LocalizedError, PersistentData, UserError } from "lib"
 
-import { DateTime } from "luxon"
+import { Config } from "@module/config"
+import { OnlinePositions, PositionRole } from "@module/positions"
+import { Ticket } from "./Ticket"
 import TicketTranscriber, { TicketTranscriberOptions } from "./TicketTranscriber"
 
 const CLOSE_REASONS = {
@@ -40,19 +30,16 @@ const CLOSE_REASONS = {
     ChannelDeletedUnaudited: "closed this ticket after someone deleted the channel",
 }
 
-interface TicketCloseTimeout {
+interface CloseTimeout {
     ticketId: string
-    channelId: string
     messageId: string
-    /** timestamp in seconds */
     timestamp: number
     closerId: string
     reason?: string
-    timeout: NodeJS.Timeout
 }
 
 export interface TicketManagerConfig {
-    permissions?: Permissions
+    permission?: string
     blackListed?: string | null
     transcript?: TicketTranscriberOptions | false
     commonCloseReasons?: string[]
@@ -62,29 +49,40 @@ export interface TicketManagerConfig {
     creatorPermissions?: PermissionResolvable
 }
 
-ScrimsBot.useBot((bot) => {
+DiscordBot.useBot((bot) => {
     Object.values(TicketManager.managers).forEach((m) => Object.defineProperty(m, "bot", { value: bot }))
     Object.values(TicketManager.managers).forEach((m) => m.__addListeners())
+})
 
+const persistentTimeouts = new PersistentData(
+    "TicketCloseTimeouts",
+    new Map<string, Set<CloseTimeout>>(),
+    (data) => Array.from(data.entries()).map(([k, v]): [string, CloseTimeout[]] => [k, Array.from(v)]),
+    (from, data) =>
+        new Map(
+            data
+                .filter(([k, v]) => TicketManager.getManager(k))
+                .map(([k, v]): [string, Set<CloseTimeout>] => [k, new Set(v)]),
+        ),
+)
+
+BotListener("initialized", () => {
     deleteGhostTicketsLoop()
-    restoreCloseTimeouts().catch(console.error)
-
-    bot.on(Events.GuildMemberRemove, async (member) => {
-        await Promise.all(Object.values(TicketManager.managers).map((m) => m.onMemberRemove(member)))
-    })
+    persistentTimeouts.load()
 })
 
 export class TicketManager {
-    static ticketManagers: Record<string, TicketManager> = {}
+    private static ticketManagers: Record<string, TicketManager> = {}
+
     static get managers() {
         return Object.values(this.ticketManagers)
     }
 
-    static getManager(ticketType: string) {
-        return this.ticketManagers[ticketType]
+    static getManager(type: string) {
+        return this.ticketManagers[type]
     }
 
-    static async findTicket<Extras extends object>(interaction: CommandHandlerInteraction) {
+    static async findTicket<Extras extends object>(interaction: BaseInteraction) {
         const ticket = await Ticket.findOne({ channelId: interaction.channelId! })
         if (!ticket) throw new LocalizedError("tickets.none")
         const ticketManager = TicketManager.getManager(ticket.type)
@@ -95,14 +93,14 @@ export class TicketManager {
         return { ticket: ticket as Ticket<Extras>, ticketManager }
     }
 
-    protected readonly bot!: ScrimsBot
-    readonly transcriber?: TicketTranscriber
+    private readonly bot!: DiscordBot
+    private readonly transcriber?: TicketTranscriber
+    private readonly guildConfig
 
-    ticketChannels = new Set<string>()
-    protected channelTicketsMap: Record<string, string | null> = {}
-    readonly closeTimeouts = new Set<TicketCloseTimeout>()
-    readonly pendingDeletion = new Set<string>()
-    readonly guildConfig
+    private readonly timeouts: Promise<Set<CloseTimeout>>
+    private readonly timeoutIndex = new Map<string, Set<CloseTimeout>>()
+    private readonly timeoutTimers = new Map<CloseTimeout, Timer>()
+    private ticketChannels = new Set<string>()
 
     constructor(
         readonly type: string,
@@ -123,26 +121,32 @@ export class TicketManager {
 
         if (options.transcript !== false) this.transcriber = new TicketTranscriber(options.transcript)
 
+        this.timeouts = persistentTimeouts.get(false).then((v) => {
+            const timeouts = v.get(type) ?? new Set()
+            v.set(type, timeouts)
+            timeouts.forEach((v) => this.startCloseTimeout(v))
+            return timeouts
+        })
+
         TicketManager.ticketManagers[type] = this
     }
 
-    ticketShouldExist(ticket: Ticket) {
+    private ticketShouldExist(ticket: Ticket) {
         return (
             !this.bot.guilds.cache.get(ticket.guildId)?.members?.me ||
             this.bot.channels.cache.get(ticket.channelId)
         )
     }
 
-    async deleteGhostTickets(existingTickets: Ticket[]) {
-        existingTickets = existingTickets.filter((v) => v.type === this.type)
-        this.ticketChannels = new Set(existingTickets.map((v) => v.channelId))
-        this.channelTicketsMap = Object.fromEntries(existingTickets.map((v) => [v.channelId, v.id!]))
-
-        for (const ticket of existingTickets) {
-            if (!this.ticketShouldExist(ticket)) {
-                await this.closeTicket(ticket, null, CLOSE_REASONS.ChannelMissing).catch(console.error)
-            }
-        }
+    async deleteGhostTickets(tickets: Ticket[]) {
+        this.ticketChannels = new Set(tickets.map((v) => v.channelId))
+        await Promise.all(
+            tickets
+                .filter((v) => !this.ticketShouldExist(v))
+                .map((v) =>
+                    this.closeTicket(v.id, undefined, CLOSE_REASONS.ChannelMissing).catch(console.error),
+                ),
+        )
     }
 
     __addListeners() {
@@ -151,38 +155,54 @@ export class TicketManager {
         this.bot.auditedEvents.on(AuditLogEvent.ChannelDelete, (channel) => this.onChannelDelete(channel))
     }
 
-    async cancelCloseTimeouts(resolvable: string) {
-        await Promise.all(
-            Array.from(this.closeTimeouts)
-                .filter((v) => v.ticketId === resolvable || v.messageId === resolvable)
-                .map((v) => {
-                    clearTimeout(v.timeout)
-                    this.closeTimeouts.delete(v)
-                    return redis.sRem("ticketCloseTimeouts", JSON.stringify({ ...v, timeout: undefined }))
-                }),
+    getCloseTimeouts() {
+        return Array.from(this.timeoutTimers.keys())
+    }
+
+    cancelCloseTimeouts(resolvable: string) {
+        const timeouts = this.timeoutIndex.get(resolvable)
+        if (timeouts) {
+            this.timeoutIndex.delete(resolvable)
+            for (const timeout of timeouts) {
+                this.timeoutIndex.get(timeout.ticketId)?.delete(timeout)
+                this.timeoutIndex.get(timeout.messageId)?.delete(timeout)
+                clearTimeout(this.timeoutTimers.get(timeout))
+                this.timeoutTimers.delete(timeout)
+                this.timeouts.then((v) => v.delete(timeout))
+            }
+        }
+    }
+
+    private addCloseTimeoutIndex(key: string, timeout: CloseTimeout) {
+        if (!this.timeoutIndex.get(key)?.add(timeout)) {
+            this.timeoutIndex.set(key, new Set([timeout]))
+        }
+    }
+
+    private startCloseTimeout(timeout: CloseTimeout) {
+        const time = Math.max(0, timeout.timestamp - Date.now())
+
+        this.addCloseTimeoutIndex(timeout.ticketId, timeout)
+        this.addCloseTimeoutIndex(timeout.messageId, timeout)
+
+        this.timeoutTimers.set(
+            timeout,
+            setTimeout(
+                () =>
+                    this.closeTicket(timeout.ticketId, timeout.closerId, timeout.reason).catch(console.error),
+                time,
+            ),
         )
     }
 
-    async addCloseTimeout(ticket: Ticket, message: Message, closer: User, seconds: number, reason?: string) {
-        const timeout: TicketCloseTimeout = {
-            ticketId: ticket.id!,
-            channelId: message.channelId,
-            messageId: message.id,
-            timestamp: DateTime.now().toSeconds() + seconds,
-            closerId: closer.id,
-            reason,
-            timeout: setTimeout(
-                () => this.closeTicket(ticket, closer, reason).catch(console.error),
-                seconds * 1000,
-            ),
-        }
-
-        await redis.sAdd("ticketCloseTimeouts", JSON.stringify({ ...timeout, timeout: undefined }))
-        this.closeTimeouts.add(timeout)
+    async addCloseTimeout(timeout: CloseTimeout) {
+        const timeouts = await this.timeouts
+        timeouts.add(timeout)
+        this.startCloseTimeout(timeout)
     }
 
     getTicketCategory(guildId: string) {
-        const id = this.bot.getConfigValue(this.guildConfig.Category, guildId)
+        const id = Config.getConfigValue(this.guildConfig.Category, guildId)
         if (id) return (this.bot.channels.cache.get(id) as CategoryChannel) ?? null
         return null
     }
@@ -220,30 +240,17 @@ export class TicketManager {
         return Ticket.findOne({ channelId, type: this.type })
     }
 
-    async channelTicketId(channelId: string) {
-        const cached = this.channelTicketsMap[channelId]
-        if (cached !== undefined) return cached
-
-        const ticket = await Ticket.findOne({ channelId, type: this.type })
-        this.channelTicketsMap[channelId] = ticket?._id.toString() ?? null
-        return ticket?._id.toString() ?? null
-    }
-
     async verifyTicketRequest(user: User, guildId: string) {
         if (this.options.blackListed) {
-            const blacklisted = this.bot.permissions.hasPosition(user, this.options.blackListed, guildId)
-            if (blacklisted)
-                throw new LocalizedError(
-                    "tickets.blacklisted",
-                    await blacklisted.expiration().then((v) => v && time(v, "R")),
-                )
+            const blacklisted = OnlinePositions.hasPosition(user, this.options.blackListed)
+            if (blacklisted) throw new LocalizedError("tickets.blacklisted")
         }
 
         const existing = await Ticket.find({ guildId, userId: user.id, type: this.type, status: "open" })
         existing
             .filter((ticket) => !this.ticketShouldExist(ticket))
             .forEach((ticket) =>
-                this.closeTicket(ticket, null, CLOSE_REASONS.ChannelMissing).catch(console.error),
+                this.closeTicket(ticket.id, undefined, CLOSE_REASONS.ChannelMissing).catch(console.error),
             )
 
         const stillExisting = existing.filter((ticket) => this.ticketShouldExist(ticket))
@@ -279,44 +286,28 @@ export class TicketManager {
         const ticket = await this.channelTicket(channelId)
         if (!ticket) return
 
-        if (executor) await this.closeTicket(ticket, executor, CLOSE_REASONS.ChannelDeletedAudited)
-        else await this.closeTicket(ticket, null, CLOSE_REASONS.ChannelDeletedUnaudited)
+        if (executor) await this.closeTicket(ticket.id, executor.id, CLOSE_REASONS.ChannelDeletedAudited)
+        else await this.closeTicket(ticket.id, undefined, CLOSE_REASONS.ChannelDeletedUnaudited)
     }
 
-    async closeTicket(ticket: Ticket, ticketCloser: User | null, reason?: string) {
+    async closeTicket(ticketId: string, closerId?: string, reason?: string) {
+        this.cancelCloseTimeouts(ticketId)
+        const ticket = await Ticket.findOneAndUpdate(
+            { _id: ticketId, status: { $ne: "deleted" } },
+            { status: "deleted", closerId, closeReason: reason, deletedAt: new Date() },
+        )
+
+        if (!ticket) return
+
         const guild = this.bot.guilds.cache.get(ticket.guildId)
-        const channel = this.bot.channels.cache.get(ticket.channelId)
-
-        const transcribeAndClose = async () => {
-            const previousStatus = ticket.status
-            try {
-                ticket.status = "deleted"
-                ticket.closerId = ticketCloser?.id
-                ticket.closeReason = reason
-                ticket.deletedAt = new Date()
-                await ticket.save()
-
-                if (this.transcriber && guild) await this.transcriber.send(guild, ticket)
-            } catch (error) {
-                ticket.status = previousStatus
-                ticket.closerId = undefined
-                ticket.closeReason = undefined
-                ticket.deletedAt = undefined
-                await ticket.save().catch(() => null)
-
-                throw error
-            }
+        const channel = await this.bot.channels.fetch(ticket.channelId).catch(() => null)
+        if (this.transcriber && guild && channel?.isTextBased()) {
+            await this.transcriber.send(guild, ticket, channel as GuildTextBasedChannel).catch(console.error)
         }
 
-        if (!this.pendingDeletion.has(ticket.id!)) {
-            this.pendingDeletion.add(ticket.id!)
-            try {
-                await this.cancelCloseTimeouts(ticket.id)
-                if (ticket.status !== "deleted") await transcribeAndClose()
-                if (channel) await channel.delete().catch(() => null)
-            } finally {
-                this.pendingDeletion.delete(ticket.id!)
-            }
+        if (channel) {
+            this.ticketChannels.delete(ticket.channelId)
+            await channel.delete().catch(() => null)
         }
     }
 
@@ -326,7 +317,7 @@ export class TicketManager {
         const tickets = await Ticket.find({ userId: member.id, type: this.type })
         await Promise.allSettled(
             tickets.map((ticket) =>
-                this.closeTicket(ticket, null, CLOSE_REASONS.CreatorLeft).catch((err) =>
+                this.closeTicket(ticket.id, undefined, CLOSE_REASONS.CreatorLeft).catch((err) =>
                     console.error(`Error while automatically closing ticket ${ticket.id}!`, err),
                 ),
             ),
@@ -344,37 +335,14 @@ function deleteGhostTicketsLoop() {
 
 async function deleteGhostTickets() {
     const tickets = await Ticket.find({ status: { $ne: "deleted" } })
-    await Promise.all(Object.values(TicketManager.managers).map((m) => m.deleteGhostTickets(tickets)))
-}
+    const ticketTypes = new Map<string, Ticket[]>()
+    for (const ticket of tickets) {
+        if (!ticketTypes.get(ticket.type)?.push(ticket)) {
+            ticketTypes.set(ticket.type, [ticket])
+        }
+    }
 
-async function restoreCloseTimeouts() {
-    const timeouts = await redis.sMembers("ticketCloseTimeouts")
-    const parsed = timeouts.map((v) => JSON.parse(v) as TicketCloseTimeout)
-
-    const tickets = await Ticket.findAndMap({ _id: { $in: parsed.map((p) => p.ticketId) } })
     await Promise.all(
-        Object.values(parsed).map(async (v) => {
-            const ticket = tickets[v.ticketId]
-            if (!ticket) return
-
-            const manager = TicketManager.getManager(ticket.type)
-            if (!manager?.ticketChannels.has(v.channelId)) return
-
-            const channel = ScrimsBot.INSTANCE?.channels.cache.get(v.channelId) as TextChannel
-            if (await channel?.messages.fetch(v.messageId).catch(() => null)) {
-                v.timeout = setTimeout(
-                    () =>
-                        manager
-                            .closeTicket(
-                                ticket,
-                                ScrimsBot.INSTANCE?.users.cache.get(v.closerId) ?? null,
-                                v.reason,
-                            )
-                            .catch(console.error),
-                    Math.max(v.timestamp - DateTime.now().toSeconds(), 0) * 1000,
-                )
-                manager.closeTimeouts.add(v)
-            }
-        }),
+        Object.values(TicketManager.managers).map((m) => m.deleteGhostTickets(ticketTypes.get(m.type) ?? [])),
     )
 }

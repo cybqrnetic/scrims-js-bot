@@ -1,271 +1,210 @@
 import {
-    ApplicationCommand,
-    ApplicationCommandData,
-    Collection,
+    ApplicationCommandType,
+    ApplicationIntegrationType,
+    ChatInputCommandInteraction,
     ContextMenuCommandBuilder,
     Events,
-    InteractionType,
+    InteractionContextType,
     SlashCommandBuilder,
     SlashCommandOptionsOnlyBuilder,
     SlashCommandSubcommandsOnlyBuilder,
+    type AutocompleteInteraction,
+    type CacheType,
+    type Client,
+    type ContextMenuCommandInteraction,
+    type Guild,
+    type Interaction,
+    type MessageComponentInteraction,
+    type ModalSubmitInteraction,
 } from "discord.js"
 
-import {
-    AutocompleteInteraction,
-    CommandHandler,
-    CommandHandlerFunction,
-    CommandHandlerInteraction,
-    ComponentInteraction,
-    ContextMenuInteraction,
-    ModalSubmitInteraction,
-    SlashCommandInteraction,
-} from "./CommandHandler"
+import { HOST_GUILD_ID } from "@Constants"
+import { CommandHandler } from "./CommandHandler"
 
-import { Permissions } from "./PermissionsManager"
-import type { ScrimsBot } from "./ScrimsBot"
+type CacheTypeReducer<UserInstall, AnyContext> = AnyContext extends true
+    ? UserInstall extends true
+        ? CacheType
+        : "cached" | undefined
+    : UserInstall extends true
+      ? "cached" | "raw"
+      : "cached"
 
-const commands = new Set()
-
-export function SlashCommand(
+const commands = new Set<Command>()
+export function SlashCommand<UserInstall extends boolean = false, AnyContext extends boolean = false>(
     command: CommandBase<
         SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder,
-        SlashCommandInteraction
+        UserInstall,
+        AnyContext,
+        ChatInputCommandInteraction<CacheTypeReducer<UserInstall, AnyContext>>
     >,
 ) {
     commands.add(command)
     return command
 }
 
-export function ContextMenu(command: ContextMenu) {
+export function ContextMenu<UserInstall extends boolean = false, AnyContext extends boolean = false>(
+    command: CommandBase<
+        ContextMenuCommandBuilder,
+        UserInstall,
+        AnyContext,
+        ContextMenuCommandInteraction<CacheTypeReducer<UserInstall, AnyContext>>
+    >,
+) {
     commands.add(command)
     return command
 }
 
-export function Component(command: Component) {
+export function Component<UserInstall extends boolean = false, AnyContext extends boolean = false>(
+    command: CommandBase<
+        string,
+        UserInstall,
+        AnyContext,
+        MessageComponentInteraction<CacheTypeReducer<UserInstall, AnyContext>>
+    >,
+) {
     commands.add(command)
     return command
 }
 
 export class CommandInstaller {
-    public readonly handler = new CommandHandler(this)
-
-    protected appCommands = new Collection<string, ApplicationCommand>()
-    protected commands: Set<Command> = commands as Set<Command>
-
-    protected readonly commandBuilders: CommandBuilder[] = []
-    protected readonly configurations: Record<string, CommandConfig> = {}
-
-    constructor(readonly bot: ScrimsBot) {
-        this.bot.on(Events.GuildCreate, () => this.update().catch(console.error))
+    static getCommandNames() {
+        return Array.of(...commands).map(({ builder }) => {
+            if (builder instanceof SlashCommandBuilder) return `/${builder.name}`
+            if (builder instanceof ContextMenuCommandBuilder)
+                return `${builder.name} (${ApplicationCommandType[builder.type]} Context)`
+            return `${builder} (Component)`
+        })
     }
 
-    async initialize() {
-        if (!this.bot.application) throw new TypeError("ClientApplication does not exist...")
-        this.installCommands()
-        this.bot.on(Events.InteractionCreate, this.handler.handler)
-        this.appCommands = await this.bot.application.commands.fetch({ withLocalizations: true })
-        await this.update()
+    private readonly handler = new CommandHandler()
+    private readonly globalCommands: CommandBuilder[] = []
+    private readonly guildCommands: Record<string, CommandBuilder[]> = {}
+
+    constructor(readonly bot: Client) {
+        commands.forEach((cmd) => this.installCommand(cmd))
+        this.bot
+            .on(Events.GuildCreate, (guild) => this.postGuildCommands(guild))
+            .on(Events.ClientReady, async (client) => {
+                await this.postCommands(client)
+                this.bot.on(Events.InteractionCreate, (i) => this.handler.handleInteraction(i))
+                console.log("[CommandInstaller] Commands posted. Now accepting interactions.")
+            })
     }
 
-    async update() {
-        await this.updateCommands()
+    private async postCommands(client: Client<true>) {
+        await Promise.all(
+            Array.from(client.guilds.cache.values())
+                .map((v) => this.postGuildCommands(v))
+                .concat(client.application.commands.set(this.globalCommands).catch(console.error)),
+        )
     }
 
-    add(command: Command) {
-        this.commands.add(command)
+    private async postGuildCommands(guild: Guild) {
+        return guild.commands.set(this.guildCommands[guild.id] ?? []).catch(console.error)
     }
 
-    protected installCommands() {
-        this.commands.forEach((cmd) => this.installCommand(cmd))
-        this.commands.clear()
-    }
-
-    protected commandInteractionHandler({
+    private getCommandCallback({
         handler,
         builder,
         handleAutocomplete,
         handleComponent,
         handleModalSubmit,
         mixedHandler,
-    }: Command): CommandHandlerFunction {
-        const component = typeof builder === "string"
-        return async (i) => {
-            if (i.type === InteractionType.ApplicationCommandAutocomplete) {
-                if (handleAutocomplete) await handleAutocomplete(i)
-            } else if (i.type === InteractionType.ModalSubmit) {
-                if (handleModalSubmit) await handleModalSubmit(i)
-            } else if (i.type === InteractionType.MessageComponent) {
-                if (handleComponent) await handleComponent(i)
+    }: Command) {
+        const isHandler: (i: Interaction) => boolean =
+            typeof builder === "string" ? (i) => i.isMessageComponent() : (i) => i.isChatInputCommand()
+
+        return async (i: Interaction) => {
+            if (isHandler(i)) {
+                await handler?.(i)
+            } else if (i.isMessageComponent()) {
+                await handleComponent?.(i)
+            } else if (i.isAutocomplete()) {
+                await handleAutocomplete?.(i)
+            } else if (i.isModalSubmit()) {
+                await handleModalSubmit?.(i)
             }
 
-            if (
-                component
-                    ? i.type === InteractionType.MessageComponent
-                    : i.type === InteractionType.ApplicationCommand
-            ) {
-                // @ts-expect-error trust me
-                if (handler) await handler(i)
-            }
-
-            if (mixedHandler) await mixedHandler(i)
+            await mixedHandler?.(i)
         }
     }
 
-    protected installCommand(command: Command) {
+    private installCommand(command: Command) {
         const { builder, config } = command
         if (typeof builder !== "string") {
-            // @ts-expect-error important so that we can tell if the command changed or not
-            builder.nsfw = false
-            // @ts-expect-error important so that we can tell if the command changed or not
-            builder.options?.filter((option) => !option.type).forEach((option) => (option.type = 1))
-
-            if (builder.dm_permission === undefined) builder.setDMPermission(!config?.forceGuild)
-            if (builder.default_member_permissions === undefined && config?.permissions)
+            if (config?.restricted) {
+                config.forceGuild = true
+                config.guilds = [HOST_GUILD_ID]
                 builder.setDefaultMemberPermissions("0")
+            } else if (config?.permission && builder.default_member_permissions === undefined) {
+                config.forceGuild = true
+                builder.setDefaultMemberPermissions("0")
+            }
 
-            this.commandBuilders.push(builder)
+            if (command.userInstall) {
+                builder.setIntegrationTypes(
+                    ApplicationIntegrationType.GuildInstall,
+                    ApplicationIntegrationType.UserInstall,
+                )
+            } else {
+                builder.setIntegrationTypes(ApplicationIntegrationType.GuildInstall)
+            }
+
+            if (command.anyContext) {
+                builder.setContexts(
+                    InteractionContextType.Guild,
+                    InteractionContextType.BotDM,
+                    InteractionContextType.PrivateChannel,
+                )
+            } else {
+                builder.setContexts(InteractionContextType.Guild)
+            }
+
+            if (config?.guilds) {
+                config.guilds.forEach((guild) => {
+                    if (!this.guildCommands[guild]?.push(builder)) {
+                        this.guildCommands[guild] = [builder]
+                    }
+                })
+            } else {
+                this.globalCommands.push(builder)
+            }
         }
 
         const id = typeof builder === "string" ? builder : builder.name
-        const handler = this.commandInteractionHandler(command)
-        this.handler.addHandler(id, handler)
-        this.configurations[id] = config ?? {}
-    }
-
-    getCommandBuilder(name: string) {
-        return this.commandBuilders.find((v) => v.name === name) ?? null
-    }
-
-    getCommandConfig(name: string) {
-        return this.configurations[name] ?? {}
-    }
-
-    async updateCommands() {
-        if (!this.bot.application) throw new TypeError("ClientApplication does not exist...")
-
-        // UPDATING
-        await Promise.all(this.appCommands.map((appCmd) => this.updateAppCommand(appCmd)))
-        await Promise.all(
-            this.commandBuilders.map((builder) => this.addAppCommand(builder, this.appCommands)),
-        )
-
-        for (const guild of this.bot.guilds.cache.values()) {
-            const commands = await guild.commands.fetch({ withLocalizations: true })
-            await Promise.all(commands.map((appCmd) => this.updateAppCommand(appCmd, guild.id)))
-            await Promise.all(
-                this.commandBuilders.map((builder) => this.addAppCommand(builder, commands, guild.id)),
-            )
-        }
-
-        // RELOADING
-        this.appCommands = await this.bot.application.commands.fetch({ withLocalizations: true })
-    }
-
-    isAllGuilds(guilds: string[]) {
-        return (
-            this.bot.guilds.cache.size === guilds.length &&
-            this.bot.guilds.cache.every((v) => guilds.includes(v.id))
-        )
-    }
-
-    getGuilds({ guilds }: CommandConfig = {}) {
-        if (guilds) return guilds
-        return Array.from(this.bot.guilds.cache.map((guild) => guild.id))
-    }
-
-    protected shouldInstall(guildId: string | undefined, guilds: string[]) {
-        if (process.env.NODE_ENV !== "production") return guildId !== undefined
-        return (
-            ((!guildId && this.isAllGuilds(guilds)) || (guildId && guilds.includes(guildId))) &&
-            !(this.isAllGuilds(guilds) && guildId)
-        )
-    }
-
-    getCommandJson(builder: CommandBuilder) {
-        const json = builder.toJSON()
-        if (json.default_member_permissions === undefined) json.default_member_permissions = null
-        return json
-    }
-
-    async updateAppCommand(appCmd: ApplicationCommand, guildId?: string) {
-        const config = this.getCommandConfig(appCmd.name)
-        const guilds = this.getGuilds(config)
-        const builder = this.getCommandBuilder(appCmd.name)
-
-        // @ts-expect-error important to correctly determine if a command changed or not
-        appCmd.options.filter((o) => o.type === 1 && !o.options).map((o) => (o.options = []))
-        if (appCmd.dmPermission === null) appCmd.dmPermission = builder?.dm_permission ?? null
-
-        if (appCmd) {
-            if (builder && this.shouldInstall(guildId, guilds)) {
-                if (!appCmd.equals(builder as ApplicationCommandData)) {
-                    console.log(
-                        `[CommandInstaller] Updating '${builder.name}' command ` +
-                            (guildId ? `in ${guildId}.` : "globally."),
-                    )
-
-                    await this.bot
-                        .application!.commands.edit(appCmd.id, this.getCommandJson(builder), guildId as any)
-                        .catch((error) =>
-                            console.error(`Unable to edit app command with id ${appCmd.id}!`, error),
-                        )
-                }
-            } else {
-                console.log(
-                    `[CommandInstaller] Deleting '${appCmd.name}' command ` +
-                        (guildId ? `in ${guildId}.` : "globally."),
-                )
-                await this.bot
-                    .application!.commands.delete(appCmd.id, guildId)
-                    .catch((error) =>
-                        console.error(`Unable to delete app command with id ${appCmd.id}!`, error),
-                    )
-            }
-        }
-    }
-
-    async addAppCommand(
-        builder: CommandBuilder,
-        commands: Collection<string, ApplicationCommand>,
-        guildId?: string,
-    ) {
-        const config = this.getCommandConfig(builder.name)
-        const guilds = this.getGuilds(config)
-
-        if (commands.find((cmd) => cmd.name === builder.name)) return false
-        if (!this.shouldInstall(guildId, guilds)) return false
-
-        console.log(
-            `[CommandInstaller] Creating '${builder.name}' command ` +
-                (guildId ? `in ${guildId}.` : "globaly."),
-        )
-
-        await this.bot
-            .application!.commands.create(this.getCommandJson(builder), guildId)
-            .catch((error) => console.error("Unable to create app command!", builder, error))
+        this.handler.addHandler(id, { callback: this.getCommandCallback(command), config })
     }
 }
 
 export interface CommandConfig {
-    permissions?: Permissions
+    permission?: string
+    restricted?: boolean
     guilds?: string[]
     forceGuild?: boolean
     defer?: "update" | "reply" | "ephemeral_reply"
 }
 
-export interface CommandBase<B, I> {
+export interface CommandBase<B, UserInstall, AnyContext, I> {
     builder: B
-    handler?: (interaction: I) => Promise<unknown>
-    handleComponent?: (interaction: ComponentInteraction) => Promise<unknown>
-    handleAutocomplete?: (interaction: AutocompleteInteraction) => Promise<unknown>
-    handleModalSubmit?: (interaction: ModalSubmitInteraction) => Promise<unknown>
-    mixedHandler?: (interaction: CommandHandlerInteraction) => Promise<unknown>
+    userInstall?: UserInstall
+    anyContext?: AnyContext
     config?: CommandConfig
+    handler?: (interaction: I) => Promise<unknown>
+    handleAutocomplete?: (
+        interaction: AutocompleteInteraction<CacheTypeReducer<UserInstall, AnyContext>>,
+    ) => Promise<unknown>
+    handleComponent?: (
+        interaction: MessageComponentInteraction<CacheTypeReducer<UserInstall, AnyContext>>,
+    ) => Promise<unknown>
+    handleModalSubmit?: (
+        interaction: ModalSubmitInteraction<CacheTypeReducer<UserInstall, AnyContext>>,
+    ) => Promise<unknown>
+    mixedHandler?: (interaction: any) => Promise<unknown>
 }
 
-export type ContextMenu = CommandBase<ContextMenuCommandBuilder, ContextMenuInteraction>
-export type SlashCommand = CommandBase<SlashCommandBuilder, SlashCommandInteraction>
-export type Component = CommandBase<string, ComponentInteraction>
-
-export type CommandBuilder = ContextMenuCommandBuilder | SlashCommandBuilder
-export type Command = ContextMenu | SlashCommand | Component
+export type Command = CommandBase<string | CommandBuilder, boolean, boolean, any>
+export type CommandBuilder =
+    | ContextMenuCommandBuilder
+    | SlashCommandBuilder
+    | SlashCommandOptionsOnlyBuilder
+    | SlashCommandSubcommandsOnlyBuilder

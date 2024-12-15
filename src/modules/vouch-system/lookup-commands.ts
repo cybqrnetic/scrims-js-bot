@@ -1,16 +1,21 @@
-import { ApplicationCommandOptionChoiceData, SlashCommandStringOption, User } from "discord.js"
+import {
+    ApplicationCommandOptionChoiceData,
+    ApplicationCommandType,
+    ApplicationIntegrationType,
+    InteractionContextType,
+    SlashCommandStringOption,
+    User,
+    type ContextMenuCommandType,
+} from "discord.js"
 
 import {
     ContextMenu,
-    ContextMenuInteraction,
     LocalizedContextMenuCommandBuilder,
     LocalizedError,
     LocalizedSlashCommandBuilder,
     RequestError,
     SlashCommand,
-    SlashCommandInteraction,
     TimeoutError,
-    UserContextMenuInteraction,
     UserError,
     UserProfile,
     request,
@@ -18,14 +23,13 @@ import {
 
 import { RANKS } from "@Constants"
 import { URLSearchParams } from "url"
-import { VouchCollection } from "./VouchCollection"
 import { VouchUtil } from "./VouchUtil"
 
 const Options = {
     User: "user",
     Username: "username",
     Ign: "ign",
-    ShowExpired: "show_expired",
+    ShowExpired: "show-expired",
     Rank: "rank",
 }
 
@@ -68,9 +72,11 @@ SlashCommand({
                 .setNameAndDescription("commands.vouches.expired_option"),
         ),
 
-    config: { defer: "reply" },
+    anyContext: true,
+    userInstall: true,
 
     async handler(interaction) {
+        await interaction.deferReply()
         let user: User
 
         const userInput = interaction.options.getUser(Options.User)
@@ -81,7 +87,7 @@ SlashCommand({
             user = userInput
         } else if (nameInput) {
             const userId = UserProfile.resolve(nameInput)?._id
-            if (!userId) throw new UserError(`User can't be resolved from ${userId}`)
+            if (!userId) throw new UserError(`Couldn't find Discord user with the name: '${nameInput}'`)
             user = await interaction.client.users.fetch(userId)
         } else if (ignInput) {
             const userId = await fetchUserId(ignInput)
@@ -94,7 +100,7 @@ SlashCommand({
 
         const showExpired = interaction.options.getBoolean(Options.ShowExpired) ?? undefined
         const rank = VouchUtil.determineVouchRank(user, interaction.options.getString(Options.Rank))
-        await finishVouchesInteraction(interaction, user, rank, showExpired)
+        await VouchUtil.finishVouchesInteraction(interaction, user, rank, showExpired)
     },
 
     async handleAutocomplete(interaction) {
@@ -109,49 +115,23 @@ SlashCommand({
 })
 
 ContextMenu({
-    builder: new LocalizedContextMenuCommandBuilder("commands.vouches.cm").setType(2),
+    builder: new LocalizedContextMenuCommandBuilder("commands.vouches.cm")
+        .setContexts(
+            InteractionContextType.Guild,
+            InteractionContextType.BotDM,
+            InteractionContextType.PrivateChannel,
+        )
+        .setIntegrationTypes(ApplicationIntegrationType.GuildInstall, ApplicationIntegrationType.UserInstall)
+        .setType(ApplicationCommandType.User as ContextMenuCommandType),
+
     config: { defer: "ephemeral_reply" },
     async handler(interaction) {
-        interaction = interaction as UserContextMenuInteraction
+        if (!interaction.isUserContextMenuCommand()) return
+
         const rank = VouchUtil.determineVouchRank(interaction.targetUser, null)
-        await finishVouchesInteraction(interaction, interaction.targetUser, rank)
+        await VouchUtil.finishVouchesInteraction(interaction, interaction.targetUser, rank)
     },
 })
-
-async function finishVouchesInteraction(
-    interaction: SlashCommandInteraction | ContextMenuInteraction,
-    user: User,
-    rank: string,
-    includeExpired?: boolean,
-) {
-    const vouches = await VouchCollection.fetch(user.id, rank)
-
-    if (includeExpired === undefined) {
-        includeExpired = !!interaction.client.permissions.hasPosition(user, rank)
-    }
-
-    await interaction.editReply(
-        vouches.toMessage(interaction.i18n, { includeExpired }, interaction.guildId!).setAllowedMentions(),
-    )
-
-    if (interaction.guild !== interaction.client.host) {
-        await interaction.client.host?.members
-            .fetch({ user: interaction.user, force: true })
-            .catch(() => null)
-    }
-
-    if (interaction.userHasPosition(`${rank} Council`)) {
-        if (vouches.getCovered().length)
-            await interaction
-                .followUp(
-                    vouches
-                        .toMessage(interaction.i18n, { onlyHidden: true }, interaction.guildId!)
-                        .setAllowedMentions()
-                        .setEphemeral(true),
-                )
-                .catch(console.error)
-    }
-}
 
 async function fetchUserId(ign: string) {
     const url = `https://api.scrims.network/v1/user?${new URLSearchParams({ username: ign })}`
@@ -162,7 +142,7 @@ async function fetchUserId(ign: string) {
         throw error
     })
 
-    const body = await resp.json()
+    const body: any = await resp.json()
     const data = body["user_data"]
     if (!data) throw new UserError(`Player by the name of '${ign}' couldn't be found!`)
     if (!data.discordId) throw new UserError(`${data.username} doesn't have their Discord account linked.`)

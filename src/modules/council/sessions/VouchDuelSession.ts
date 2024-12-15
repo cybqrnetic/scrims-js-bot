@@ -1,177 +1,279 @@
-import { RANKS, ROLE_APP_HUB } from "@Constants"
 import {
-    bold,
     ButtonBuilder,
     ButtonStyle,
     EmbedBuilder,
     Message,
+    bold,
     quote,
     subtext,
     userMention,
 } from "discord.js"
-import { Config, MessageOptionsBuilder, ScrimsBot, TimeUtil, UserProfile, Vouch } from "lib"
+
+import { RANKS, ROLE_APP_HUB } from "@Constants"
+import { Config } from "@module/config"
+import { Vouch } from "@module/vouch-system"
+import { BotListener, DiscordBot, MessageOptionsBuilder, PersistentData, TimeUtil } from "lib"
+import { CouncilSession } from "./CouncilSession"
 
 interface SessionCouncil {
     id: string
-    vouches: Vouch[]
-    joinedAt: Date
-    sessionTime?: number
+    vouches: Set<string>
+    devouches: Set<string>
+    joinedAt: number
+    sessionTime: number
+    lastVouch?: number
 }
 
+interface SessionData {
+    startedAt: number
+    rank: string
+    active?: [string, SessionCouncil][]
+    inactive?: [string, SessionCouncil][]
+    message?: string
+}
+
+function newCouncil(id: string, joinedAt = Date.now()): SessionCouncil {
+    return {
+        id,
+        vouches: new Set(),
+        devouches: new Set(),
+        joinedAt,
+        sessionTime: 0,
+    }
+}
+
+const INACTIVITY_THRESHOLD = Config.declareType("Council Sessions Inactivity Threshold")
+function getInactivityThreshold() {
+    const config = Config.getConfigValue(INACTIVITY_THRESHOLD, ROLE_APP_HUB)
+    if (config) {
+        const parsed = TimeUtil.parseDuration(config)
+        if (parsed) {
+            return parsed * 1000
+        }
+    }
+    return 30 * 60 * 1000
+}
+
+BotListener("initialized", () => VouchDuelSession.activeSessions.load())
+Vouch.onUpdate((vouch) => VouchDuelSession.addVouch(vouch))
+
 export class VouchDuelSession {
-    static readonly buttonIds = {
-        join: "JOIN_SESSION",
-        leave: "LEAVE_SESSION",
+    static readonly BUTTONS = {
+        Join: "JOIN_SESSION",
+        Leave: "LEAVE_SESSION",
     }
 
-    private static readonly channels = Config.declareTypes(
-        Object.fromEntries(Object.values(RANKS).map((rank) => [rank, `${rank} Session Channel`])),
+    static readonly CHANNELS = Config.declareTypes(
+        Object.fromEntries(Object.values(RANKS).map((rank) => [rank, `${rank} Council Sessions`])),
     )
-    private static readonly inactivityThreshold = 1000 * 60 * 30
 
-    private static readonly activeSessions = new Map<string, VouchDuelSession>()
+    static readonly councilSessions = new Map<string, VouchDuelSession>()
+    static readonly activeSessions = new PersistentData(
+        "VouchDuelSessions",
+        new Map<string, VouchDuelSession>(),
+        (data) => Array.from(data.entries()).map(([k, v]): [string, SessionData] => [k, v.toJson()]),
+        (from, data) => new Map(data.map(([k, v]) => [k, new VouchDuelSession(v)])),
+    )
 
-    private readonly activeCouncils = new Map<string, SessionCouncil>()
-    private readonly inactiveCouncils: SessionCouncil[] = []
-
-    private readonly startedAt = new Date()
-    private endedAt?: Date
-
-    private message?: Message
-
-    constructor(
-        councilId: string,
-        readonly rank: string,
-    ) {
-        VouchDuelSession.findSession(councilId, this.rank)?.removeCouncil(councilId)
-        this.activeCouncils.set(councilId, {
-            id: councilId,
-            vouches: [],
-            joinedAt: this.startedAt,
-        })
-
-        VouchDuelSession.activeSessions.set(this.startedAt.getTime().toString(), this)
-
-        this.sendMessage().catch(() => null)
-        this.scheduleActivityCheck().catch(() => null)
+    static async findSession(startedAt: string) {
+        const sessions = await this.activeSessions.get()
+        return sessions.get(startedAt)
     }
 
-    static findSession(startedAt: string): VouchDuelSession | undefined
-    static findSession(councilId: string, rank: string): VouchDuelSession | undefined
-    static findSession(param1: string, param2?: string): VouchDuelSession | undefined {
-        if (param2)
-            return [...this.activeSessions.values()].find(
-                (session) => session.activeCouncils.has(param1) && session.rank === param2,
-            )
-
-        return this.activeSessions.get(param1)
+    static async findCouncilSession(council: string) {
+        await this.activeSessions.get()
+        return this.councilSessions.get(council)
     }
 
     static async addVouch(vouch: Vouch) {
-        const session = this.findSession(vouch.executorId, vouch.position)
-        if (!session) return
-
-        const council = session.activeCouncils.get(vouch.executorId)
-        if (!council) return
-
-        council.vouches.push(vouch)
-        await session.updateMessage()
+        const session = await this.findCouncilSession(vouch.executorId)
+        if (session) await session.addVouch(vouch)
     }
 
-    async addCouncil(councilId: string) {
-        await VouchDuelSession.findSession(councilId, this.rank)?.removeCouncil(councilId)
+    static async create(council: string, rank: string) {
+        const sessions = await this.activeSessions.get()
+        const data = { startedAt: Date.now(), rank }
 
-        this.activeCouncils.set(councilId, {
-            id: councilId,
-            vouches: [],
-            joinedAt: new Date(),
-        })
-
-        await this.updateMessage()
+        const session = new VouchDuelSession(data, [council])
+        sessions.set(session.id, session)
+        return session
     }
 
-    async removeCouncil(councilId: string, timeDeduction = 0, updateMesssage = true) {
-        const council = this.activeCouncils.get(councilId)
-        if (!council) return this
+    public readonly startedAt: number
+    public readonly id: string
+    public readonly rank: string
 
-        const alreadyInactiveIndex = this.inactiveCouncils.findIndex((c) => c.id === councilId)
+    private readonly activeCouncils: Map<string, SessionCouncil>
+    private readonly inactiveCouncils: Map<string, SessionCouncil>
+    private readonly inactivityThreshold = getInactivityThreshold()
+    private readonly activityCheck: Timer
 
-        const previousSessionTime = this.inactiveCouncils[alreadyInactiveIndex]?.sessionTime ?? 0
-        const currentSessionTime = Math.max(
-            0,
-            new Date().getTime() - council.joinedAt.getTime() - timeDeduction,
-        )
-        council.sessionTime = previousSessionTime + currentSessionTime
+    private endedAt?: number
+    private message?: Promise<Message | void>
+    private messageId?: string
 
-        if (alreadyInactiveIndex === -1) this.inactiveCouncils.push(council)
-        else this.inactiveCouncils[alreadyInactiveIndex] = council
-        this.activeCouncils.delete(councilId)
+    protected constructor(data: SessionData, initialCouncil: string[] = []) {
+        this.startedAt = data.startedAt
+        this.id = this.startedAt.toString()
+        this.rank = data.rank
+        this.activeCouncils = new Map(data.active)
+        this.inactiveCouncils = new Map(data.inactive)
 
-        if (this.activeCouncils.size === 0) await this.endSession()
-        else if (updateMesssage) await this.updateMessage()
+        for (const council of initialCouncil) {
+            this.addCouncilNow(council)
+        }
+
+        for (const council of Array.from(this.activeCouncils.keys())) {
+            VouchDuelSession.councilSessions.set(council, this)
+        }
+
+        this.recoverMessage(data.message).catch(console.error)
+        this.activityCheck = setInterval(() => this.checkActivity(), 60 * 1000)
+        this.checkActivity()
     }
 
-    private async sendMessage() {
-        const channelId = Config.getConfigValue(VouchDuelSession.channels[this.rank], ROLE_APP_HUB)
-        if (!channelId) return
-
-        const channel = await ScrimsBot.INSTANCE?.channels.fetch(channelId).catch(() => null)
+    private async recoverMessage(messageId: string | undefined) {
+        const channel = await this.fetchChannel()
         if (!channel?.isSendable()) return
 
-        const message = await channel
-            .send(this.buildMessage([...this.activeCouncils.values()]))
-            .catch(() => undefined)
-        this.message = message
+        if (messageId) {
+            this.message = channel.messages.fetch(messageId).catch(() => {})
+            this.message.then((v) => this.updateMessage().catch(console.error))
+        } else {
+            this.message = channel.send(this.buildMessage()).catch(console.error)
+        }
+
+        this.message.then((v) => (this.messageId = v?.id))
     }
 
-    private async updateMessage() {
-        if (!this.message || !this.activeCouncils.size) return
-
-        const message = await this.message
-            .edit(this.buildMessage([...this.activeCouncils.values()], this.inactiveCouncils))
-            .catch(() => null)
-
-        if (message) this.message = message
-    }
-
-    private async scheduleActivityCheck() {
-        while (!this.endedAt) {
-            await sleep(VouchDuelSession.inactivityThreshold)
-            const now = new Date().getTime()
-
-            const inactiveCouncils = [...this.activeCouncils.values()].filter((council) =>
-                council.vouches.every(
-                    (vouch) => vouch.givenAt.getTime() <= now - VouchDuelSession.inactivityThreshold,
-                ),
-            )
-
-            for (const { id } of inactiveCouncils) {
-                await this.removeCouncil(id, VouchDuelSession.inactivityThreshold, false).catch(() => null)
-            }
-
-            if (inactiveCouncils.length > 0 && this.activeCouncils.size > 0)
-                await this.updateMessage().catch(() => null)
+    protected toJson(): SessionData {
+        return {
+            startedAt: this.startedAt,
+            rank: this.rank,
+            active: Array.from(this.activeCouncils.entries()),
+            inactive: Array.from(this.inactiveCouncils.entries()),
+            message: this.messageId,
         }
     }
 
-    private async endSession() {
-        this.endedAt = new Date()
-        VouchDuelSession.activeSessions.delete(this.startedAt.getTime().toString())
+    async addCouncil(councilId: string) {
+        if (this.activeCouncils.has(councilId)) return
 
-        if (this.message) await this.message.edit(this.buildMessage(this.inactiveCouncils)).catch(() => null)
-
-        await Promise.all(
-            this.inactiveCouncils.map((council) =>
-                UserProfile.updateOne(
-                    { _id: council.id },
-                    { $inc: { councilSessionTime: council.sessionTime ?? 0 } },
-                ).catch(() => null),
-            ),
-        )
+        this.addCouncilNow(councilId)
+        await this.updateMessage()
     }
 
-    private buildMessage(primaryCouncil: SessionCouncil[], secondaryCouncils?: SessionCouncil[]) {
-        const now = new Date().getTime()
+    private addCouncilNow(councilId: string) {
+        VouchDuelSession.councilSessions.get(councilId)?.removeCouncil(councilId).catch(console.error)
+
+        const previous = this.inactiveCouncils.get(councilId)
+        this.inactiveCouncils.delete(councilId)
+
+        if (previous) {
+            previous.joinedAt = Date.now()
+            this.activeCouncils.set(councilId, previous)
+        } else {
+            this.activeCouncils.set(councilId, newCouncil(councilId))
+        }
+
+        VouchDuelSession.councilSessions.set(councilId, this)
+    }
+
+    async removeCouncil(councilId: string) {
+        const council = this.activeCouncils.get(councilId)
+        if (!council) return
+
+        this.removeCouncilNow(council)
+
+        if (this.activeCouncils.size === 0) await this.endSession()
+        else await this.updateMessage()
+    }
+
+    private removeCouncilNow(council: SessionCouncil) {
+        if (council.lastVouch) {
+            if (council.lastVouch > council.joinedAt)
+                council.sessionTime += council.lastVouch - council.joinedAt
+            this.inactiveCouncils.set(council.id, council)
+        }
+
+        this.activeCouncils.delete(council.id)
+        VouchDuelSession.councilSessions.delete(council.id)
+    }
+
+    async addVouch(vouch: Vouch) {
+        const council = this.activeCouncils.get(vouch.executorId)
+        if (!council) return
+
+        if (vouch.isPositive()) {
+            council.devouches.delete(vouch.userId)
+            council.vouches.add(vouch.userId)
+        } else {
+            council.vouches.delete(vouch.userId)
+            council.devouches.add(vouch.userId)
+        }
+
+        council.lastVouch = Date.now()
+        await this.updateMessage()
+    }
+
+    private async fetchChannel() {
+        await Config.cache.initialized()
+        const channelId = Config.getConfigValue(VouchDuelSession.CHANNELS[this.rank]!, ROLE_APP_HUB)
+        if (!channelId) return
+
+        return DiscordBot.getInstance()
+            .channels.fetch(channelId)
+            .catch(() => undefined)
+    }
+
+    private async updateMessage() {
+        const message = await this.message
+        await message?.edit(this.buildMessage()).catch(console.error)
+    }
+
+    private checkActivity() {
+        const now = Date.now()
+        for (const council of this.activeCouncils.values()) {
+            const afk = now - (council.lastVouch ?? council.joinedAt)
+            if (afk >= this.inactivityThreshold) {
+                this.removeCouncilNow(council)
+            }
+        }
+
+        if (this.activeCouncils.size === 0) this.endSession().catch(console.error)
+        else this.updateMessage().catch(console.error)
+    }
+
+    private async endSession() {
+        this.endedAt = Date.now()
+        clearInterval(this.activityCheck)
+        VouchDuelSession.activeSessions.get().then((v) => v.delete(this.id))
+
+        for (const council of this.activeCouncils.values()) {
+            this.removeCouncilNow(council)
+        }
+
+        CouncilSession.insertMany(
+            Array.from(this.inactiveCouncils.values())
+                .filter((v) => v.sessionTime > 0)
+                .map((v) => ({
+                    council: v.id,
+                    rank: this.rank,
+                    date: this.startedAt,
+                    time: v.sessionTime,
+                    vouches: v.vouches.size,
+                    devouches: v.devouches.size,
+                })),
+        ).catch(console.error)
+
+        await this.updateMessage().catch(console.error)
+    }
+
+    private buildMessage() {
+        const primaryCouncil = this.endedAt ? this.inactiveCouncils : this.activeCouncils
+        const secondaryCouncils = this.endedAt ? undefined : this.inactiveCouncils
+
+        const now = Date.now()
         const messageBuilder = new MessageOptionsBuilder()
 
         if (!this.endedAt) {
@@ -179,29 +281,25 @@ export class VouchDuelSession {
                 new ButtonBuilder()
                     .setLabel("Join Session")
                     .setStyle(ButtonStyle.Primary)
-                    .setCustomId(`${VouchDuelSession.buttonIds.join}/${this.startedAt.getTime()}`),
+                    .setCustomId(`${VouchDuelSession.BUTTONS.Join}/${this.id}`),
                 new ButtonBuilder()
                     .setLabel("Leave Session")
                     .setStyle(ButtonStyle.Danger)
-                    .setCustomId(`${VouchDuelSession.buttonIds.leave}/${this.startedAt.getTime()}`),
+                    .setCustomId(`${VouchDuelSession.BUTTONS.Leave}/${this.id}`),
             )
         }
 
         const createCouncilField = (council: SessionCouncil) => {
-            const positiveVouches = council.vouches.filter((v) => v.worth === 1).length
-            const negativeVouches = council.vouches.filter((v) => v.worth === -1).length
-            const sessionTimeString = TimeUtil.stringifyTimeDelta(
-                council.sessionTime || now - council.joinedAt.getTime(),
-            )
+            const time =
+                (this.activeCouncils.has(council.id) ? now - council.joinedAt : 0) + council.sessionTime
+            const sessionTimeString = TimeUtil.stringifyTimeDelta(time, 2, false, "just joined")
 
+            const separator = bold(" | ")
             return quote(
                 userMention(council.id) +
-                    bold(" | ") +
-                    `✅ ${positiveVouches}` +
-                    bold(" | ") +
-                    `⛔ ${negativeVouches}` +
-                    bold(" | ") +
-                    `⏳ ${sessionTimeString}`,
+                    `${separator}✅ ${council.vouches.size}` +
+                    `${separator}⛔ ${council.devouches.size}` +
+                    `${separator}⏳ ${sessionTimeString}`,
             )
         }
 
@@ -210,16 +308,18 @@ export class VouchDuelSession {
         const primaryEmbed = new EmbedBuilder()
             .setTitle(`${this.rank} Vouch Duel Session`)
             .setColor(this.endedAt ? null : "Green")
-            .setDescription(primaryCouncil.map(createCouncilField).join("\n\n") + legend)
+            .setDescription(Array.from(primaryCouncil.values()).map(createCouncilField).join("\n\n") + legend)
             .setFooter({ text: `${this.endedAt ? "Ended at" : "Active Councils"}` })
-            .setTimestamp(this.endedAt || null)
+            .setTimestamp(this.endedAt ?? null)
 
         messageBuilder.addEmbeds(primaryEmbed)
 
-        if (secondaryCouncils?.length) {
+        if (secondaryCouncils?.size) {
             const secondaryEmbed = new EmbedBuilder()
                 .setColor("Red")
-                .setDescription(secondaryCouncils.map(createCouncilField).join("\n\n") + legend)
+                .setDescription(
+                    Array.from(secondaryCouncils.values()).map(createCouncilField).join("\n\n") + legend,
+                )
                 .setFooter({ text: "Inactive Councils" })
 
             messageBuilder.addEmbeds(secondaryEmbed)

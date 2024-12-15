@@ -18,17 +18,17 @@ import {
 import {
     APICache,
     BotModule,
-    Config,
     DiscordUtil,
-    DynamicallyConfiguredCollection,
     LocalizedError,
     MessageFloater,
     MessageOptionsBuilder,
     MessageReactionData,
-    Suggestion,
 } from "lib"
 
-import { Colors, Positions } from "@Constants"
+import { Colors } from "@Constants"
+import { Config, DynamicallyConfiguredCollection } from "@module/config"
+import { OnlinePositions, Positions } from "@module/positions"
+import { Suggestion } from "./Suggestion"
 import onReactionUpdate from "./reactions"
 
 export interface MessageRating {
@@ -96,21 +96,19 @@ export class SuggestionsModule extends BotModule {
     }
 
     async verifyCreate(user: User) {
-        const blacklisted = this.bot.permissions.hasPosition(user, Positions.SuggestionsBlacklisted)
-        if (blacklisted)
-            throw new LocalizedError(
-                "suggestions.blacklisted",
-                await blacklisted.expiration().then((v) => v && time(v, "R")),
-            )
+        const blacklisted = OnlinePositions.hasPosition(user, Positions.SuggestionsBlacklisted)
+        if (blacklisted) {
+            throw new LocalizedError("suggestions.blacklisted")
+        }
 
-        if (this.bot.permissions.hasPermissions(user, { positionLevel: Positions.TrialSupport })) return true
-
-        const previous = await Suggestion.findOne({ creatorId: user.id }).sort({ createdAt: -1 })
-        if (previous && previous.createdAt.valueOf() + COOLDOWN > Date.now())
-            throw new LocalizedError(
-                "on_cooldown",
-                time(Math.floor((previous.createdAt.valueOf() + COOLDOWN) / 1000), "R"),
-            )
+        if (!user.hasPermission("suggestions.bypassCooldown")) {
+            const previous = await Suggestion.findOne({ creatorId: user.id }).sort({ createdAt: -1 })
+            if (previous && previous.createdAt.valueOf() + COOLDOWN > Date.now())
+                throw new LocalizedError(
+                    "on_cooldown",
+                    time(Math.floor((previous.createdAt.valueOf() + COOLDOWN) / 1000), "R"),
+                )
+        }
 
         return true
     }
@@ -118,7 +116,7 @@ export class SuggestionsModule extends BotModule {
     async onMessageCreate(message: Message) {
         if (message.inGuild() && message.type === MessageType.ThreadCreated)
             if (
-                CHANNEL_CONFIGS.map((key) => this.bot.getConfigValue(key, message.guildId)).includes(
+                CHANNEL_CONFIGS.map((key) => Config.getConfigValue(key, message.guildId)).includes(
                     message.channelId,
                 )
             )
@@ -138,7 +136,7 @@ export class SuggestionsModule extends BotModule {
         if (suggestion) {
             const rating = this.getMessageRating(message as Message<true>)
             await Suggestion.deleteOne({ messageId: message.id })
-            await this.logRemove(suggestion, executor, `${rating}`, message)
+            await this.logRemove(suggestion, executor, `${rating}`)
         }
     }
 
@@ -150,7 +148,7 @@ export class SuggestionsModule extends BotModule {
     }
 
     getVoteConst(guildId: string) {
-        const voteConst = this.bot.getConfigValue(ConfigKeys.VoteConst, guildId)
+        const voteConst = Config.getConfigValue(ConfigKeys.VoteConst, guildId)
         const number = parseInt(voteConst!)
         if (!isNaN(number) && number > 0) return number
         return null
@@ -162,7 +160,7 @@ export class SuggestionsModule extends BotModule {
                 [ConfigKeys.Upvote, "👍"],
                 [ConfigKeys.Downvote, "👎"],
             ] as const
-        ).map(([key, def]) => guild.emojis.resolve(this.bot.getConfigValue(key, guild.id)!) ?? def)
+        ).map(([key, def]) => guild.emojis.resolve(Config.getConfigValue(key, guild.id)!) ?? def)
     }
 
     getMessageRating(message: Message<true>): MessageRating {
@@ -222,11 +220,13 @@ export class SuggestionsModule extends BotModule {
 
     async deleteAllOldMessages() {
         await Promise.all(
-            CHANNEL_CONFIGS.map((key) => Object.values(this.bot.getConfig(key)))
+            CHANNEL_CONFIGS.map((key) => Object.values(Config.getConfig(key)))
                 .flat()
                 .map(async ({ guildId, value }) => {
-                    if (this.bot.guilds.cache.has(guildId))
-                        await this.deleteOldMessages(await this.bot.channels.fetch(value).catch(() => null))
+                    const guild = this.bot.guilds.cache.get(guildId)
+                    if (guild) {
+                        await this.deleteOldMessages(await guild.channels.fetch(value).catch(() => null))
+                    }
                 }),
         )
     }
@@ -248,17 +248,12 @@ export class SuggestionsModule extends BotModule {
         }
     }
 
-    async logRemove(
-        suggestion: Suggestion,
-        executor: User | null,
-        rating: string,
-        message?: Message | PartialMessage,
-    ) {
+    async logRemove(suggestion: Suggestion, executor: User | null, rating: string) {
         const executorIsCreator = executor?.id === suggestion.creatorId
         const msg = executorIsCreator
             ? `Removed their own suggestion with ${rating}.`
             : `Removed a suggestion with ${rating}.`
-        await this.bot.buildSendLogMessages(ConfigKeys.Log, [suggestion.guildId], (guild) =>
+        await Config.buildSendLogMessages(ConfigKeys.Log, [suggestion.guildId], (guild) =>
             new MessageOptionsBuilder()
                 .addEmbeds((e) =>
                     e
@@ -277,10 +272,10 @@ export class SuggestionsModule extends BotModule {
         )
     }
 
-    async logCreate(suggestion: Suggestion, message: Message) {
+    async logCreate(suggestion: Suggestion) {
         const count = await Suggestion.countDocuments({ creatorId: suggestion.creatorId })
         const msg = `Created their ${count}. suggestion.`
-        await this.bot.buildSendLogMessages(ConfigKeys.Log, [suggestion.guildId], (guild) =>
+        await Config.buildSendLogMessages(ConfigKeys.Log, [suggestion.guildId], (guild) =>
             new MessageOptionsBuilder()
                 .addEmbeds((e) =>
                     e
@@ -299,7 +294,7 @@ export class SuggestionsModule extends BotModule {
 
     async logDetach(suggestion: Suggestion, executor: User, imageURL: string) {
         const msg = `Removed the image from a suggestion created by ${userMention(suggestion.creatorId)}!`
-        await this.bot.buildSendLogMessages(ConfigKeys.Log, [suggestion.guildId], (guild) =>
+        await Config.buildSendLogMessages(ConfigKeys.Log, [suggestion.guildId], (guild) =>
             new MessageOptionsBuilder()
                 .addEmbeds((e) =>
                     e

@@ -91,24 +91,23 @@ export class MessageOptionsBuilder {
 
     createMultipleEmbeds<T>(
         items: T[],
-        getEmbedCall: (items: T[], index: number, containers: T[][]) => EmbedBuilder,
+        getEmbedCall: (items: T[], index: number, groups: T[][]) => EmbedBuilder,
     ) {
-        const containers = Array.from(new Array(Math.ceil(items.length / 25)).keys())
-        if (containers.length > 10) throw new TypeError("There can't be more than 10 embeds!")
+        let groups: T[][] = Array.from({ length: Math.ceil(items.length / 25) })
+        if (groups.length > 10) throw new TypeError("There can't be more than 10 embeds!")
 
-        const containerSize = Math.floor(items.length / containers.length)
-        const overflow = items.length % containerSize
-        const embedData = containers.map((_, i) => items.slice(i * containerSize, (i + 1) * containerSize))
+        const groupSize = Math.floor(items.length / groups.length)
+        groups = groups.map((_, i) =>
+            items.slice(i * groupSize, i === groups.length - 1 ? items.length : (i + 1) * groupSize),
+        )
 
-        const getEmbed = (items: T[], idx: number, containers: T[][]) => {
-            const embed = getEmbedCall(items, idx, containers)
-            if (!embed.data.footer && containers.length > 1)
-                embed.setFooter({ text: `Page ${idx + 1}/${containers.length}` })
-            return embed
-        }
-
-        const lastIdx = embedData.length - 1
-        if (overflow > 0) embedData[lastIdx] = embedData[lastIdx]!.concat(items.slice(-overflow))
-        return this.addEmbeds(...embedData.map((items, idx, containers) => getEmbed(items, idx, containers)))
+        return this.addEmbeds(
+            ...groups.map((items, idx, groups) => {
+                const embed = getEmbedCall(items, idx, groups)
+                if (!embed.data.footer && groups.length > 1)
+                    embed.setFooter({ text: `Page ${idx + 1}/${groups.length}` })
+                return embed
+            }),
+        )
     }
 }

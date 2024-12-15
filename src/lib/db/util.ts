@@ -13,6 +13,7 @@ import MongooseAutopopulate from "mongoose-autopopulate"
 import { randomUUID } from "node:crypto"
 import "reflect-metadata"
 
+import mongooseLong from "mongoose-long"
 import { DocumentCache } from "./DocumentCache"
 import { DocumentWatcher } from "./DocumentWatcher"
 
@@ -93,15 +94,32 @@ export function getSchemaFromClass<EnforcedDocType>(schemaClass: Class<EnforcedD
     return new mongoose.Schema<EnforcedDocType>(metadata.properties, {
         methods: metadata.methods,
         statics: metadata.statics,
+        _id: !!metadata.collection,
     })
 }
+
+const models = new Set<string>()
+const reloadCacheFunctions = new Array<() => Promise<unknown>>()
 
 export function modelSchema<TSchema extends Schema, SchemaClass extends object>(
     schema: TSchema,
     schemaClass: SchemaClass,
 ) {
     const metadata = Reflect.getMetadata("mongodb:schema", schemaClass)
-    return model(metadata.name, schema, metadata.collection) as SchemaModel<typeof schema, SchemaClass>
+    const val = model(metadata.name, schema, metadata.collection) as SchemaModel<typeof schema, SchemaClass>
+    val.on("error", console.error)
+    models.add(metadata.name)
+    return val
+}
+
+export class DB {
+    static getModels() {
+        return Array.from(models)
+    }
+
+    static async reloadCache() {
+        await Promise.all(reloadCacheFunctions.map((v) => v()))
+    }
 }
 
 /**
@@ -135,16 +153,11 @@ function rejectHandler(
         if (err instanceof Error) {
             const start = err.stack?.split("\n")[0] ?? "MongooseError: Query failed"
             err.stack = [start, ...filteredTrace].join("\n")
-            throw err
-        } else if (onRejected) {
-            onRejected(err)
         }
-    }
-}
 
-const reloadCacheFunctions = new Array<() => Promise<unknown>>()
-export async function reloadCache() {
-    await Promise.all(reloadCacheFunctions.map((v) => v()))
+        if (onRejected) onRejected(err)
+        else throw err
+    }
 }
 
 export function modelSchemaWithCache<TSchema extends Schema, SchemaClass extends object>(
@@ -153,7 +166,7 @@ export function modelSchemaWithCache<TSchema extends Schema, SchemaClass extends
 ): CachedModel<TSchema, SchemaClass> {
     const cache = new DocumentCache()
 
-    if (process.env.NODE_ENV !== "production") {
+    if (process.env["NODE_ENV"] !== "production") {
         // fallback to fetching all data every operation to keep the cache synced
         // if not being run on a Mongo replica set
         schema.post(
@@ -177,9 +190,9 @@ export function modelSchemaWithCache<TSchema extends Schema, SchemaClass extends
 
     async function reloadCache() {
         return cachedModel.find().then((docs) => {
-            const newKeys = docs.map((v) => v.id) as string[]
+            const newKeys = new Set(docs.map((v) => v.id as string))
             Array.from(cache.keys())
-                .filter((key) => !newKeys.includes(key))
+                .filter((key) => !newKeys.has(key))
                 .forEach((key) => cache.delete(key))
 
             docs.forEach((doc) => {
@@ -187,7 +200,7 @@ export function modelSchemaWithCache<TSchema extends Schema, SchemaClass extends
                 if (!existing || JSON.stringify(existing) !== JSON.stringify(doc)) cache.set(doc.id!, doc)
             })
 
-            cache._triggerReloaded()
+            cache._setInitialized()
         })
     }
 
@@ -196,22 +209,15 @@ export function modelSchemaWithCache<TSchema extends Schema, SchemaClass extends
     Object.defineProperty(cachedModel, "reloadCache", { value: reloadCache })
     reloadCacheFunctions.push(reloadCache)
 
-    if (process.env.NODE_ENV === "production") {
+    if (process.env["NODE_ENV"] === "production") {
         // production environment uses a Mongo replica set
         cachedModel
             .watcher()
-            .on("delete", (id) => {
-                cache.delete((id as any).toString())
-                cache._triggerReloaded()
-            })
-            .on("insert", (doc) => {
-                cache.set(doc.id!, doc)
-                cache._triggerReloaded()
-            })
+            .on("delete", (id) => cache.delete((id as any).toString()))
+            .on("insert", (doc) => cache.set(doc.id!, doc))
             .on("update", (_, __, fullDoc) => {
                 if (fullDoc) {
                     cache.set(fullDoc.id!, fullDoc)
-                    cache._triggerReloaded()
                 }
             })
     }
@@ -220,39 +226,51 @@ export function modelSchemaWithCache<TSchema extends Schema, SchemaClass extends
     return cachedModel as CachedModel<TSchema, SchemaClass>
 }
 
+interface SchemaMetadata {
+    name?: string
+    collection?: string
+    methods: Record<string, unknown>
+    statics: Record<string, unknown>
+    properties: Record<string, SchemaDefinitionProperty>
+}
+
+function getSchemaMetadata(target: Function) {
+    const existing = Reflect.getMetadata("mongodb:schema", target)
+    if (existing) return existing as SchemaMetadata
+
+    const metadata: SchemaMetadata = { methods: {}, statics: {}, properties: {} }
+
+    const descriptors = Object.getOwnPropertyDescriptors(target.prototype)
+    for (const [propName, descriptor] of Object.entries(descriptors)) {
+        if (typeof descriptor.value === "function" && propName !== "constructor") {
+            metadata.methods[propName] = descriptor.value
+        }
+    }
+
+    const staticDescriptors = Object.getOwnPropertyDescriptors(target)
+    for (const [propName, descriptor] of Object.entries(staticDescriptors)) {
+        if (descriptor.writable) {
+            metadata.statics[propName] = descriptor.value
+        }
+    }
+
+    Reflect.defineMetadata("mongodb:schema", metadata, target)
+    return metadata
+}
+
 export function Document(name: string, collection: string): ClassDecorator {
     return (target) => {
-        const metadata = Reflect.getMetadata("mongodb:schema", target) || {}
+        const metadata = getSchemaMetadata(target)
         metadata.name = name
         metadata.collection = collection
-        if (!metadata.methods) metadata.methods = {}
-        if (!metadata.statics) metadata.statics = {}
-
-        const descriptors = Object.getOwnPropertyDescriptors(target.prototype)
-        for (const [propName, descriptor] of Object.entries(descriptors)) {
-            if (typeof descriptor.value === "function" && propName !== "constructor") {
-                metadata.methods[propName] = descriptor.value
-            }
-        }
-
-        const staticDescriptors = Object.getOwnPropertyDescriptors(target)
-        for (const [propName, descriptor] of Object.entries(staticDescriptors)) {
-            if (typeof descriptor.value === "function") {
-                metadata.statics[propName] = descriptor.value
-            }
-        }
-
-        Reflect.defineMetadata("mongodb:schema", metadata, target)
     }
 }
 
 export function Prop(schemaDefinition: SchemaDefinitionProperty): PropertyDecorator {
     return (target, prop) => {
         if (typeof prop === "string") {
-            const metadata = Reflect.getMetadata("mongodb:schema", target.constructor) || {}
-            if (!metadata.properties) metadata.properties = {}
+            const metadata = getSchemaMetadata(target.constructor)
             metadata.properties[prop] = schemaDefinition
-            Reflect.defineMetadata("mongodb:schema", metadata, target.constructor)
         }
     }
 }
@@ -267,6 +285,7 @@ export function UuidProp({ required }: { required: boolean }) {
 
 /** Use to save Discord IDs as Longs but read them as strings */
 export function DiscordIdProp({ required }: { required: boolean }) {
+    mongooseLong(mongoose)
     return Prop({
         type: mongoose.Schema.Types.Long,
         required,
@@ -275,6 +294,7 @@ export function DiscordIdProp({ required }: { required: boolean }) {
 }
 
 export function DiscordIdArrayProp({ required }: { required: boolean }) {
+    mongooseLong(mongoose)
     return Prop({
         type: [mongoose.Schema.Types.Long],
         required,

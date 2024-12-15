@@ -22,7 +22,7 @@ export class MojangClient {
 
         await this.waitForThrottlingOrAbort()
         return request(`https://${server}/${path.join("/")}`, options)
-            .then((v) => v.json())
+            .then((v) => v.json() as Promise<any>)
             .catch((error) => this.onError(error))
     }
 

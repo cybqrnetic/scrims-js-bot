@@ -1,8 +1,11 @@
-import { EmbedField, Role, User, userMention } from "discord.js"
-import { DateTime } from "luxon"
+import { EmbedField, Role, User, userMention, type CommandInteraction } from "discord.js"
+import { I18n, UserError, UserProfile } from "lib"
 
 import { RANKS } from "@Constants"
-import { I18n, ScrimsBot, UserError, UserProfile, Vouch } from "lib"
+import { OnlinePositions } from "@module/positions"
+import { OfflinePositions } from "@module/sticky-roles"
+import { Vouch } from "./Vouch"
+import { VouchCollection } from "./VouchCollection"
 
 export class VouchUtil {
     static toEmbedField(vouch: Vouch, i18n: I18n, councilRole?: Role, idx?: number) {
@@ -51,7 +54,7 @@ export class VouchUtil {
 
         let previous = null
         for (const rank of Object.values(RANKS).reverse().concat("Member")) {
-            if (rank === "Member" || ScrimsBot.INSTANCE?.permissions.hasPosition(user, rank)) {
+            if (rank === "Member" || OfflinePositions.hasPosition(user, rank)) {
                 return this.checkVouchPermissions(user, previous ?? rank, council)
             }
             previous = rank
@@ -61,15 +64,15 @@ export class VouchUtil {
     }
 
     static checkVouchPermissions(user: User, rank: string, council?: User) {
-        if (council && !ScrimsBot.INSTANCE?.permissions.hasPosition(council, `${rank} Council`))
+        if (council && !council.hasPermission(`council.${rank.toLowerCase()}.vouch`))
             throw new UserError(`You are missing the required permission to give ${user} a ${rank} vouch.`)
         return rank
     }
 
     static determineDemoteRank(user: User | UserProfile, council: User) {
         for (const rank of Object.values(RANKS).reverse()) {
-            if (ScrimsBot.INSTANCE?.permissions.hasPosition(user, rank)) {
-                if (!ScrimsBot.INSTANCE?.permissions.hasPosition(council, `${rank} Head`))
+            if (OfflinePositions.hasPosition(user, rank)) {
+                if (!council.hasPermission(`council.${rank.toLowerCase()}.demote`))
                     throw new UserError(
                         `You are missing the required permission to demote ${user} from ${rank}.`,
                     )
@@ -79,14 +82,36 @@ export class VouchUtil {
         throw new UserError(`You can't demote ${user} since they only have the default rank of member.`)
     }
 
-    static async removeSimilarVouches(vouch: Vouch) {
-        await Vouch.deleteMany({
-            userId: vouch.userId,
-            executorId: vouch.executorId,
-            position: vouch.position,
-            givenAt: { $lte: DateTime.now().plus({ days: 7 }).toJSDate() },
-            _id: { $ne: vouch._id },
-            ...(vouch.isVoteOutcome() && { worth: vouch.worth }),
-        })
+    static async finishVouchesInteraction(
+        interaction: CommandInteraction,
+        user: User,
+        rank: string,
+        includeExpired?: boolean,
+    ) {
+        const guildId = interaction.guildId ?? undefined
+        const [vouches] = await Promise.all([
+            VouchCollection.fetch(user.id, rank),
+            interaction.client.host?.members.fetch({ user: interaction.user.id, force: true }),
+        ])
+
+        if (includeExpired === undefined) {
+            includeExpired = OnlinePositions.hasPosition(interaction.user, rank)
+        }
+
+        await interaction.editReply(
+            vouches.toMessage(interaction.i18n, { includeExpired }, guildId).setAllowedMentions(),
+        )
+
+        if (OnlinePositions.hasPosition(interaction.user, `${rank} Council`)) {
+            if (vouches.getCovered().length)
+                await interaction
+                    .followUp(
+                        vouches
+                            .toMessage(interaction.i18n, { onlyHidden: true }, guildId)
+                            .setAllowedMentions()
+                            .setEphemeral(true),
+                    )
+                    .catch(console.error)
+        }
     }
 }

@@ -30,13 +30,13 @@ export class TextUtil {
     static reduceArray(arr: string[], charLimit: number, start = "") {
         return arr
             .reduce<[string, string]>(
-                ([pv, am], cv, i) => {
+                ([pv, am], cv, i): [string, string] => {
                     const val = [pv, cv].join("\n")
                     const andMore = `\n*...and ${arr.length - i} more*`
                     if (val.length + andMore.length > charLimit) return [pv, am || andMore]
                     return [val, am]
                 },
-                [start, ""]
+                [start, ""],
             )
             .join("")
     }
@@ -105,7 +105,7 @@ export class TextUtil {
         else
             return stringifyObj(
                 Object.entries(obj),
-                ([key, value]) => `${inlineCode("•")} ${bold(`${key}:`)} ${inlineCode(String(value))}`
+                ([key, value]) => `${inlineCode("•")} ${bold(`${key}:`)} ${inlineCode(String(value))}`,
             )
     }
 }

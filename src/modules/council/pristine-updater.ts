@@ -1,15 +1,16 @@
 import { Events, GuildMember } from "discord.js"
-import { BotListener, PositionRole, ScrimsBot } from "lib"
+import { BotListener } from "lib"
 
 import { HOST_GUILD_ID, RANKS } from "@Constants"
+import { OnlinePositions, PositionRole } from "@module/positions"
 
 BotListener(Events.ClientReady, (bot) => {
-    PositionRole.cache.initialized.await().then(() => {
+    PositionRole.cache.initialized().then(() => {
         bot.host?.members.cache.forEach((m) => givePristineIfPrime(m).catch(console.error))
     })
 })
 
-BotListener(Events.GuildMemberUpdate, (bot, oldMember, newMember) => {
+BotListener(Events.GuildMemberUpdate, (_bot, oldMember, newMember) => {
     if (oldMember.guild.id === HOST_GUILD_ID) {
         if (!oldMember.roles.cache.equals(newMember.roles.cache)) {
             givePristineIfPrime(newMember).catch(console.error)
@@ -18,7 +19,7 @@ BotListener(Events.GuildMemberUpdate, (bot, oldMember, newMember) => {
 })
 
 async function givePristineIfPrime(member: GuildMember) {
-    if (ScrimsBot.INSTANCE?.permissions.hasPosition(member, RANKS.Prime)) {
+    if (OnlinePositions.hasPosition(member, RANKS.Prime)) {
         const roles = PositionRole.getPermittedRoles(RANKS.Pristine, HOST_GUILD_ID)
         await Promise.all(
             roles

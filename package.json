@@ -4,27 +4,28 @@
     "description": "Bridge Scrims Bot made with js",
     "author": "Bridge Scrims Developer Team",
     "license": "MIT",
+    "main": "./src/index",
+    "type": "module",
+    "scripts": {
+        "start": "echo \"Use start:external or start:internal\" && exit 1",
+        "start:external": "bun . external",
+        "start:internal": "bun . internal",
+        "test": "cross-env TEST=true run-p start:external start:internal"
+    },
     "dependencies": {
         "ascii-table3": "^0.9.0",
-        "axios": "^1.7.2",
+        "axios": "^1.7.7",
         "discord-html-transcripts": "^3.2.0",
-        "discord.js": "^14.15.2",
-        "glob": "^10.4.1",
-        "luxon": "^3.4.4",
+        "discord.js": "^14.16.3",
+        "glob": "^11.0.0",
+        "luxon": "^3.5.0",
         "module-alias": "^2.2.3",
-        "mongodb": "5.8.1",
-        "mongoose": "^8.4.0",
+        "mongoose": "^8.8.2",
         "mongoose-autopopulate": "^1.1.0",
         "mongoose-long": "^0.8.0",
-        "rate-limiter-flexible": "^5.0.3",
-        "redis": "^4.6.14",
+        "rate-limiter-flexible": "^5.0.4",
+        "redis": "^4.7.0",
         "reflect-metadata": "^0.2.2"
-    },
-    "main": "./dist/index.js",
-    "scripts": {
-        "dev": "npx tsc --watch",
-        "build": "npx tsc",
-        "test": "cross-env PUBLIC_BOT=true node . test && node . test"
     },
     "homepage": "https://github.com/bridge-scrims/scrims-js-bot#readme",
     "repository": {
@@ -32,14 +33,16 @@
         "url": "git+https://github.com/bridge-scrims/scrims-js-bot.git"
     },
     "devDependencies": {
+        "@types/bun": "^1.1.13",
         "@types/luxon": "^3.4.2",
         "@types/module-alias": "^2.0.4",
-        "@types/node": "^20.12.12",
-        "@typescript-eslint/eslint-plugin": "^7.10.0",
-        "@typescript-eslint/parser": "^7.10.0",
+        "@types/node": "^22.9.3",
+        "@typescript-eslint/eslint-plugin": "^8.15.0",
+        "@typescript-eslint/parser": "^8.15.0",
+        "npm-run-all": "^4.1.5",
         "cross-env": "^7.0.3",
-        "eslint": "^8.57.0",
-        "prettier": "^3.2.5",
-        "typescript": "^5.4.5"
+        "eslint": "^9.15.0",
+        "prettier": "^3.3.3",
+        "typescript": "^5.7.2"
     }
 }

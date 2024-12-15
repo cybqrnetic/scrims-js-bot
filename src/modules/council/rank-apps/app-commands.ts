@@ -1,54 +1,75 @@
-import { TimestampStyles, inlineCode, userMention } from "discord.js"
+import {
+    InteractionContextType,
+    TimestampStyles,
+    userMention,
+    type ChatInputCommandInteraction,
+    type MessageComponentInteraction,
+    type User,
+} from "discord.js"
 import { DateTime } from "luxon"
 
 import {
-    ComponentInteraction,
+    DiscordBot,
     LocalizedError,
     LocalizedSlashCommandBuilder,
     MessageOptionsBuilder,
-    PositionRole,
-    ScrimsBot,
     SlashCommand,
-    SlashCommandInteraction,
     UserError,
-    Vouch,
 } from "lib"
 
-import { COUNCIL_HEAD_PERMISSIONS, HOST_GUILD_ID } from "@Constants"
-
+import { HOST_GUILD_ID } from "@Constants"
+import { PositionRole } from "@module/positions"
 import { TicketManager } from "@module/tickets"
-import { AutoPromoteHandler } from "@module/vouch-system/AutoPromoteHandler"
-import { LogUtil } from "@module/vouch-system/LogUtil"
-import { VouchUtil } from "@module/vouch-system/VouchUtil"
+import { Vouch } from "@module/vouch-system"
+import { LogUtil } from "../vouches/LogUtil"
 import { RankAppTicketManager } from "./RankApplications"
 
-function fetchHostMember(resolvable: string) {
-    const member =
-        ScrimsBot.INSTANCE!.host!.members.resolve(resolvable) ??
-        ScrimsBot.INSTANCE!.host!.members.cache.find(
-            (m) => m.user.username.toLowerCase() === resolvable.toLowerCase(),
-        )
-
+function fetchHostMember(memberId: string) {
+    const member = DiscordBot.getInstance().host?.members.cache.get(memberId)
     if (!member)
         throw new UserError(
-            `Can't complete this action since ${inlineCode(resolvable)} is not a Bridge Scrims member.`,
+            `Can't complete this action since ${userMention(memberId)} is not a Bridge Scrims member.`,
         )
 
     return member
 }
 
+async function createVoteRecord(
+    userId: string,
+    position: string,
+    worth: number,
+    comment: string,
+    executor: User,
+) {
+    const filter = { userId, position, worth }
+    const vouch = await Vouch.findOneAndUpdate(
+        {
+            givenAt: { $lte: DateTime.now().plus({ days: 7 }).toJSDate() },
+            executorId: { $exists: false },
+            ...filter,
+        },
+        { ...filter, comment, givenAt: new Date() },
+        { upsert: true, new: true },
+    )
+    LogUtil.logCreate(vouch!, executor).catch(console.error)
+}
+
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder("commands.accept_app").setDMPermission(false),
-    config: { permissions: COUNCIL_HEAD_PERMISSIONS, defer: "ephemeral_reply" },
+    builder: new LocalizedSlashCommandBuilder("commands.accept_app")
+        .setContexts(InteractionContextType.Guild)
+        .setDefaultMemberPermissions("0"),
+    config: { defer: "ephemeral_reply" },
     handler: handleAccept,
 })
 
-export async function handleAccept(interaction: ComponentInteraction | SlashCommandInteraction) {
+export async function handleAccept(
+    interaction: MessageComponentInteraction<"cached"> | ChatInputCommandInteraction<"cached">,
+) {
     const { ticket, ticketManager } = await TicketManager.findTicket(interaction)
     if (!(ticketManager instanceof RankAppTicketManager))
         throw new UserError("This command can only be used in rank application channels!")
 
-    if (!interaction.userHasPosition(`${ticketManager.rank} Head`))
+    if (!interaction.user.hasPermission(`council.${ticketManager.rank.toLowerCase()}.evaluateVote`))
         throw new LocalizedError("command_handler.missing_permissions")
 
     const member = fetchHostMember(ticket.userId)
@@ -59,21 +80,8 @@ export async function handleAccept(interaction: ComponentInteraction | SlashComm
         ),
     )
 
-    const vouch = await Vouch.create({
-        comment: "won vote",
-        position: ticketManager.rank,
-        userId: ticket.userId,
-        worth: 1,
-    }).catch(console.error)
-
-    if (vouch) {
-        LogUtil.logCreate(vouch, interaction.user).catch(console.error)
-        await VouchUtil.removeSimilarVouches(vouch).catch((err) =>
-            console.error("Failed to remove similar vouches!", err),
-        )
-    }
-
-    AutoPromoteHandler.announcePromotion(member.user, ticketManager.rank)
+    await createVoteRecord(ticket.userId, ticketManager.rank, 1, "won vote", interaction.user)
+    LogUtil.announcePromotion(member.user, ticketManager.rank)
 
     await interaction.return(
         new MessageOptionsBuilder()
@@ -85,32 +93,28 @@ export async function handleAccept(interaction: ComponentInteraction | SlashComm
     await interaction.followUp(
         new MessageOptionsBuilder().setContent("This channel will now be archived...").setEphemeral(true),
     )
-    await ticketManager.closeTicket(ticket, interaction.user, "App Accepted")
+    await ticketManager.closeTicket(ticket.id, interaction.user.id, "App Accepted")
 }
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder("commands.deny_app").setDMPermission(false),
-    config: { permissions: COUNCIL_HEAD_PERMISSIONS, defer: "ephemeral_reply" },
+    builder: new LocalizedSlashCommandBuilder("commands.deny_app")
+        .setContexts(InteractionContextType.Guild)
+        .setDefaultMemberPermissions("0"),
+    config: { defer: "ephemeral_reply" },
     handler: handleDeny,
 })
 
-export async function handleDeny(interaction: SlashCommandInteraction | ComponentInteraction) {
+export async function handleDeny(
+    interaction: MessageComponentInteraction<"cached"> | ChatInputCommandInteraction<"cached">,
+) {
     const { ticket, ticketManager } = await TicketManager.findTicket(interaction)
     if (!(ticketManager instanceof RankAppTicketManager))
         throw new UserError("This command can only be used in rank application channels!")
 
-    if (!interaction.userHasPosition(`${ticketManager.rank} Head`))
+    if (!interaction.user.hasPermission(`council.${ticketManager.rank.toLowerCase()}.evaluateVote`))
         throw new LocalizedError("command_handler.missing_permissions")
 
-    const vouch = await Vouch.create({
-        comment: "lost vote",
-        userId: ticket.userId,
-        position: ticketManager.rank,
-        worth: -1,
-    })
-
-    LogUtil.logCreate(vouch, interaction.user).catch(console.error)
-    await VouchUtil.removeSimilarVouches(vouch).catch(console.error)
+    await createVoteRecord(ticket.userId, ticketManager.rank, -1, "lost vote", interaction.user)
 
     const cooldown = ticketManager.options.cooldown
     const user = ticket.user()
@@ -137,5 +141,5 @@ export async function handleDeny(interaction: SlashCommandInteraction | Componen
     await interaction.followUp(
         new MessageOptionsBuilder().setContent("This channel will now be archived...").setEphemeral(true),
     )
-    await ticketManager.closeTicket(ticket, interaction.user, "App Denied")
+    await ticketManager.closeTicket(ticket.id, interaction.user.id, "App Denied")
 }
