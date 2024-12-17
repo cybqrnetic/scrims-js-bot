@@ -239,7 +239,7 @@ async function addVouch(interaction: ChatInputCommandInteraction, worth: number)
 
     const vouch = await Vouch.findOneAndUpdate(
         { givenAt: { $lte: DateTime.now().plus({ days: 7 }).toJSDate() }, ...filter },
-        { ...filter, worth, comment, givenAt: new Date() },
+        { ...filter, worth, givenAt: new Date(), ...(comment ? { comment } : { $unset: { comment: "" } }) },
         { upsert: true, new: true },
     )
 
