@@ -106,7 +106,7 @@ export class VouchDuelSession {
     private readonly activeCouncils: Map<string, SessionCouncil>
     private readonly inactiveCouncils: Map<string, SessionCouncil>
     private readonly inactivityThreshold = getInactivityThreshold()
-    private readonly activityCheck: Timer
+    private readonly activityCheck: NodeJS.Timeout
 
     private endedAt?: number
     private message?: Promise<Message | void>

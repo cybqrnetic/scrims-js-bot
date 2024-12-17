@@ -81,10 +81,10 @@ export class CommandInstaller {
     private readonly guildCommands: Record<string, CommandBuilder[]> = {}
 
     constructor(readonly bot: Client) {
-        commands.forEach((cmd) => this.installCommand(cmd))
         this.bot
             .on(Events.GuildCreate, (guild) => this.postGuildCommands(guild))
             .on(Events.ClientReady, async (client) => {
+                commands.forEach((cmd) => this.installCommand(cmd))
                 await this.postCommands(client)
                 this.bot.on(Events.InteractionCreate, (i) => this.handler.handleInteraction(i))
                 console.log("[CommandInstaller] Commands posted. Now accepting interactions.")
@@ -112,7 +112,7 @@ export class CommandInstaller {
         mixedHandler,
     }: Command) {
         const isHandler: (i: Interaction) => boolean =
-            typeof builder === "string" ? (i) => i.isMessageComponent() : (i) => i.isChatInputCommand()
+            typeof builder === "string" ? (i) => i.isMessageComponent() : (i) => i.isCommand()
 
         return async (i: Interaction) => {
             if (isHandler(i)) {

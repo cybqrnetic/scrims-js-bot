@@ -5,7 +5,7 @@ export class StatusChannel {
     protected id: string
     protected channelDeleteCall
     protected timeoutEnd
-    protected waitTimer?: Timer
+    protected waitTimer?: NodeJS.Timeout
 
     constructor(protected channel: GuildChannel) {
         this.id = channel.id

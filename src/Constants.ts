@@ -1,5 +1,8 @@
+export { default as Emojis } from "./assets/emojis.json" with { type: "json" }
+export { default as Links } from "./assets/links.json" with { type: "json" }
+
 import { Colors as DiscordColors } from "discord.js"
-import ThisColors from "./assets/colors.json"
+import ThisColors from "./assets/colors.json" with { type: "json" }
 
 Object.entries(ThisColors).forEach(([k, v]) =>
     Object.defineProperty(DiscordColors, k, { value: parseInt(v), configurable: true }),
@@ -15,9 +18,6 @@ export const RANKS = {
     Private: "Private",
     Premium: "Premium",
 }
-
-export { default as Emojis } from "./assets/emojis.json"
-export { default as Links } from "./assets/links.json"
 
 export const ASSETS = process.cwd() + "/src/assets/"
 export const TEST = process.env["TEST"]?.toLowerCase() === "true"

@@ -37,7 +37,6 @@ ContextMenu({
 
     async handler(interaction) {
         if (!interaction.isUserContextMenuCommand()) return
-
         await execute(interaction, interaction.targetUser)
     },
 })

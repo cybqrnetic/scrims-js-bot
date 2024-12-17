@@ -55,6 +55,6 @@ export class DocumentCache<T> extends Map<string, T> {
     }
 
     _setInitialized() {
-        this.promise.resolve()
+        this.promise.resolve(null)
     }
 }

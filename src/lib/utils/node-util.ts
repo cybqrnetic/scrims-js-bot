@@ -20,10 +20,10 @@ Date.prototype.toSeconds = function () {
 
 global.sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
-console.debug = function (...args: unknown[]) {
-    if (process.env.NODE_ENV !== "production") console.log(...args)
-}
-
-console.debugError = function (...args: unknown[]) {
-    if (process.env.NODE_ENV !== "production") console.error(...args)
+if (process.env["NODE_ENV"] !== "production") {
+    console.debug = console.log
+    console.debugError = console.error
+} else {
+    console.debug = () => {}
+    console.debugError = () => {}
 }

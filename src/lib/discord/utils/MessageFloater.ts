@@ -18,7 +18,7 @@ export class MessageFloater {
     protected getMessageCall
     protected msgCreateHandler
     protected channelDeleteHandler
-    protected resendTimeout?: Timer
+    protected resendTimeout?: NodeJS.Timeout
 
     constructor(message: Message, getMessageCall: GetMessageCall) {
         this.getMessageCall = getMessageCall

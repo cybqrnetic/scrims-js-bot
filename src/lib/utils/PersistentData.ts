@@ -1,4 +1,4 @@
-import type { BunFile } from "bun"
+import fs from "fs/promises"
 
 interface Vault {
     from: number
@@ -12,7 +12,7 @@ export class PersistentData<T, D> {
         return Promise.all(instances.map((v) => v.save().catch(console.error)))
     }
 
-    private readonly file: BunFile
+    private readonly file: string
     private promise: Promise<D>
     private loading = false
     private resolve?: (value: D) => unknown
@@ -24,7 +24,7 @@ export class PersistentData<T, D> {
         private readonly encoder: (data: D) => T,
         private readonly loader: (from: Date, data: T) => D,
     ) {
-        this.file = Bun.file(`${process.cwd()}/data/${name}.json`)
+        this.file = `${process.cwd()}/data/${name}.json`
         this.promise = new Promise((resolve) => (this.resolve = resolve))
         instances.push(this)
     }
@@ -33,12 +33,12 @@ export class PersistentData<T, D> {
         if (!this.data) return
 
         const vault: Vault = { from: Date.now(), data: this.encoder(this.data) }
-        await Bun.write(this.file, ExtendedJSON.stringify(vault))
+        await fs.writeFile(this.file, ExtendedJSON.stringify(vault))
     }
 
     protected async loadPromise() {
         try {
-            const vault: Vault = ExtendedJSON.parse(await this.file.text())
+            const vault: Vault = ExtendedJSON.parse(await fs.readFile(this.file, "utf8"))
             this.data = this.loader(new Date(vault.from), vault.data as T)
         } catch (error: any) {
             if (error?.code !== "ENOENT") console.error(error)

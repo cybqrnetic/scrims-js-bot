@@ -1,22 +1,24 @@
-import type { BunFile } from "bun"
+import fs from "fs/promises"
 import { globSync } from "glob"
 
-const FILES = "/**/*.ts"
+const FILES = "/**/*.js"
 
 export class ModuleLoader {
-    private readonly cache: BunFile
+    private readonly cache: string
     private readonly cachedModules: Promise<boolean>
     private readonly modules: string[] = []
 
     constructor(command: string) {
-        this.cache = Bun.file(`node_modules/.${command}_modules`)
+        this.cache = `dist/.${command}_modules`
         this.cachedModules =
             process.env["NODE_ENV"] === "production"
-                ? this.cache
-                      .json()
-                      .catch(() => false)
-                      .then((cached: string[]) => {
-                          cached.forEach((path) => this.loadNow(path))
+                ? fs
+                      .readFile(this.cache, "utf8")
+                      .catch(() => null)
+                      .then(async (data) => {
+                          if (data == null) return false
+                          const cached = JSON.parse(data) as string[]
+                          await Promise.all(cached.map((path) => this.loadNow(path)))
                           return true
                       })
                 : Promise.resolve(false)
@@ -24,19 +26,19 @@ export class ModuleLoader {
 
     async load(dir: string, exclude: string[] = []) {
         if (!(await this.cachedModules)) {
-            for (const path of globSync(`${dir}${FILES}`, {
-                cwd: __dirname,
+            const paths = globSync(`${dir}${FILES}`, {
+                cwd: `${process.cwd()}/dist/`,
                 ignore: exclude.map((v) => v + FILES),
-            })) {
-                this.loadNow(path)
-            }
-            await Bun.write(this.cache, JSON.stringify(this.modules)).catch(console.error)
+            })
+
+            await Promise.all(paths.map((v) => this.loadNow(v)))
+            await fs.writeFile(this.cache, JSON.stringify(this.modules)).catch(console.error)
         }
     }
 
-    private loadNow(path: string) {
+    private async loadNow(path: string) {
         this.modules.push(path)
-        require(`./${path}`)
+        const res = await import(`./${path}`)
     }
 
     getLoaded() {

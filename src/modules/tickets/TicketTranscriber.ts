@@ -13,6 +13,7 @@ import {
 } from "discord.js"
 
 import discordTranscripts, { ExportReturnType } from "discord-html-transcripts"
+import fs from "fs/promises"
 import { DiscordBot, DiscordUtil, TextUtil, request } from "lib"
 import path from "path"
 
@@ -24,19 +25,10 @@ export interface TicketTranscriberOptions {
     dmUsers?: boolean
 }
 
-DiscordBot.useBot((bot) => {
-    Object.defineProperty(TicketTranscriber, "bot", { value: bot })
-})
-
 Config.declareTypes(["Attachment Locking Channel"])
 
 export default class TicketTranscriber {
-    private static readonly bot: DiscordBot
     constructor(protected readonly options: TicketTranscriberOptions = {}) {}
-
-    protected get bot() {
-        return TicketTranscriber.bot
-    }
 
     protected async lockAttachment(attachment: Attachment, guild: Guild, msg?: string) {
         try {
@@ -75,9 +67,9 @@ export default class TicketTranscriber {
         }
 
         const file = path.join(".", "transcripts", ticket.id!)
-        await Bun.write(file, transcriptContent)
+        await fs.writeFile(file, transcriptContent)
 
-        return process.env.NODE_ENV === "production"
+        return process.env["NODE_ENV"] === "production"
             ? `https://transcripts.${process.env["DOMAIN"]}/${ticket.id}`
             : path.resolve(file)
     }
@@ -95,7 +87,7 @@ export default class TicketTranscriber {
     }
 
     getUserMessageEmbed(ticket: Ticket) {
-        const guild = this.bot.guilds.cache.get(ticket.guildId)
+        const guild = DiscordBot.getInstance().guilds.cache.get(ticket.guildId)
         return new EmbedBuilder()
             .setColor(Colors.ScrimsRed)
             .setTitle(`${ticket.type} Ticket Transcript`)
@@ -116,7 +108,7 @@ export default class TicketTranscriber {
             .setTitle(`${ticket.type} Ticket Transcript`)
             .setDescription(
                 `\`•\` Created by ${userMention(ticket.userId)} ${time(ticket.createdAt, "R")}` +
-                    `\n\`•\` Closed by ${ticket.closerId ? userMention(ticket.closerId) : this.bot?.user}` +
+                    `\n\`•\` Closed by ${ticket.closerId ? userMention(ticket.closerId) : DiscordBot.getInstance().user}` +
                     (ticket.closeReason ? ` (${ticket.closeReason})` : "") +
                     `\n\`•\` Duration: ${TextUtil.stringifyTimeDelta(
                         (Date.now() - ticket.createdAt.valueOf()) / 1000,

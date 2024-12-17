@@ -1,16 +1,19 @@
 {
     "name": "scrims-bot-js",
-    "version": "4.0.0",
-    "description": "Bridge Scrims Bot made with js",
+    "version": "5.0.0",
+    "description": "Main Bridge Scrims Bot",
     "author": "Bridge Scrims Developer Team",
     "license": "MIT",
-    "main": "./src/index",
+    "private": true,
+    "main": "./dist/index",
     "type": "module",
     "scripts": {
+        "build": "tsc && tsc-alias",
+        "dev": "concurrently \"tsc -w\" \"tsc-alias -w\"",
         "start": "echo \"Use start:external or start:internal\" && exit 1",
-        "start:external": "bun . external",
-        "start:internal": "bun . internal",
-        "test": "cross-env TEST=true run-p start:external start:internal"
+        "start:external": "node . external",
+        "start:internal": "node . internal",
+        "test": "cross-env TEST=true run-p start:*"
     },
     "dependencies": {
         "ascii-table3": "^0.9.0",
@@ -27,22 +30,18 @@
         "redis": "^4.7.0",
         "reflect-metadata": "^0.2.2"
     },
-    "homepage": "https://github.com/bridge-scrims/scrims-js-bot#readme",
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/bridge-scrims/scrims-js-bot.git"
-    },
     "devDependencies": {
-        "@types/bun": "^1.1.13",
         "@types/luxon": "^3.4.2",
         "@types/module-alias": "^2.0.4",
         "@types/node": "^22.9.3",
         "@typescript-eslint/eslint-plugin": "^8.15.0",
         "@typescript-eslint/parser": "^8.15.0",
-        "npm-run-all": "^4.1.5",
+        "concurrently": "^9.1.0",
         "cross-env": "^7.0.3",
         "eslint": "^9.15.0",
+        "npm-run-all": "^4.1.5",
         "prettier": "^3.3.3",
+        "tsc-alias": "^1.8.10",
         "typescript": "^5.7.2"
     }
 }

@@ -38,16 +38,16 @@ if (!entrypoint) {
 
 I18n.loadLocales(ASSETS + "lang")
 
-const modules = new ModuleLoader(command)
-for (const include of entrypoint.include ?? []) {
-    await modules.load(include, entrypoint.exclude)
-}
-
 const intents = [GatewayIntentBits.DirectMessages]
 if (entrypoint.intents) intents.push(...entrypoint.intents)
 
 const presence = resolvePresence()
 const bot = new DiscordBot({ intents, presence })
+
+const modules = new ModuleLoader(command)
+for (const include of entrypoint.include ?? []) {
+    await modules.load(include, entrypoint.exclude)
+}
 
 process.on("SIGTERM", () => shutdown(0))
 process.on("SIGINT", () => shutdown(0))

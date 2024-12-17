@@ -49,11 +49,6 @@ export interface TicketManagerConfig {
     creatorPermissions?: PermissionResolvable
 }
 
-DiscordBot.useBot((bot) => {
-    Object.values(TicketManager.managers).forEach((m) => Object.defineProperty(m, "bot", { value: bot }))
-    Object.values(TicketManager.managers).forEach((m) => m.__addListeners())
-})
-
 const persistentTimeouts = new PersistentData(
     "TicketCloseTimeouts",
     new Map<string, Set<CloseTimeout>>(),
@@ -93,19 +88,20 @@ export class TicketManager {
         return { ticket: ticket as Ticket<Extras>, ticketManager }
     }
 
-    private readonly bot!: DiscordBot
+    private readonly bot: DiscordBot
     private readonly transcriber?: TicketTranscriber
     private readonly guildConfig
 
     private readonly timeouts: Promise<Set<CloseTimeout>>
     private readonly timeoutIndex = new Map<string, Set<CloseTimeout>>()
-    private readonly timeoutTimers = new Map<CloseTimeout, Timer>()
+    private readonly timeoutTimers = new Map<CloseTimeout, NodeJS.Timeout>()
     private ticketChannels = new Set<string>()
 
     constructor(
         readonly type: string,
         readonly options: TicketManagerConfig = {},
     ) {
+        this.bot = DiscordBot.getInstance()
         this.guildConfig = Config.declareTypes({ Category: `Tickets ${this.type} Category` })
         Config.declareType(`${this.type} Transcripts Channel`)
 
@@ -129,6 +125,7 @@ export class TicketManager {
         })
 
         TicketManager.ticketManagers[type] = this
+        this.__addListeners()
     }
 
     private ticketShouldExist(ticket: Ticket) {

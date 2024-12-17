@@ -1,5 +1,6 @@
 import { ExportReturnType, createTranscript } from "discord-html-transcripts"
 import { SlashCommandBuilder, channelMention } from "discord.js"
+import fs from "fs/promises"
 import { SlashCommand, UserError } from "lib"
 import { DateTime } from "luxon"
 import path from "path"
@@ -49,10 +50,10 @@ SlashCommand({
         const filename = `${channel.name}-${datetime.toFormat("yyyyMMddHHmmss")}`
 
         const file = path.join(".", "transcripts", filename)
-        await Bun.write(file, transcriptContent)
+        await fs.writeFile(file, transcriptContent)
 
         const link =
-            process.env.NODE_ENV === "production"
+            process.env["NODE_ENV"] === "production"
                 ? `https://transcripts.${process.env["DOMAIN"]}/${encodeURIComponent(filename)}`
                 : path.resolve(file)
 
