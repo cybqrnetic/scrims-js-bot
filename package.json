@@ -23,7 +23,7 @@
         "glob": "^11.0.0",
         "luxon": "^3.5.0",
         "module-alias": "^2.2.3",
-        "mongoose": "^8.8.2",
+        "mongoose": "^8.9.2",
         "mongoose-autopopulate": "^1.1.0",
         "mongoose-long": "^0.8.0",
         "rate-limiter-flexible": "^5.0.4",
