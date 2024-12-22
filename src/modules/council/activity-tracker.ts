@@ -181,8 +181,8 @@ export class ActivityTracker extends BotModule {
     }
 
     private getBiweeklyStart() {
-        const current = DateTime.now().startOf("week")
-        const week = current.diff(DateTime.fromSeconds(0), "weeks").weeks
+        const current = DateTime.now().startOf("week").set({ hour: 12 })
+        const week = Math.floor(current.diff(DateTime.fromSeconds(0), "weeks").weeks)
         return current.minus({ weeks: week % 2 })
     }
 

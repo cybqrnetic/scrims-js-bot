@@ -38,7 +38,7 @@ export class ModuleLoader {
 
     private async loadNow(path: string) {
         this.modules.push(path)
-        const res = await import(`./${path}`)
+        await import(`./${path}`)
     }
 
     getLoaded() {
