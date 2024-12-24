@@ -129,7 +129,7 @@ Component({
         if (!(ticketManager instanceof RankAppTicketManager))
             throw new UserError(`This interaction is not available in this channel.`)
 
-        if (!interaction.user.hasPermission(`council.${ticketManager.rank.toLowerCase()}.evaluateVote`))
+        if (!interaction.user.hasPermission(`council.${ticketManager.rank.toLowerCase()}.vote`))
             throw new LocalizedError("command_handler.missing_permissions")
 
         const vote = parseFloat(interaction.args.shift()!)
