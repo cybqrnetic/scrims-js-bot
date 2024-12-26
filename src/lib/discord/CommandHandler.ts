@@ -37,9 +37,10 @@ export class CommandHandler {
                 interaction.subCommandName = name[1] ?? null
             } else {
                 interaction.args = []
-                interaction.subCommandName = interaction.isChatInputCommand()
-                    ? interaction.options.getSubcommand(false)
-                    : null
+                interaction.subCommandName =
+                    interaction.isChatInputCommand() || interaction.isAutocomplete()
+                        ? interaction.options.getSubcommand(false)
+                        : null
             }
 
             const { callback, config } = this.handlers[interaction.commandName] ?? {}
@@ -81,7 +82,7 @@ export class CommandHandler {
         if (!(error instanceof UserError) && !(error instanceof LocalizedError)) {
             console.error("Unexpected error while handling a command!", {
                 command: interaction.path,
-                args: interaction.args,
+                customId: interaction.customId,
                 type: interaction.type,
                 user: interaction.user.id,
                 channel: interaction.channelId,
@@ -141,6 +142,7 @@ declare module "discord.js" {
         client: DiscordBot<true>
         path: string
         args: string[]
+        customId?: string
         commandName: string
         subCommandName: string | null
         commandConfig?: CommandConfig
