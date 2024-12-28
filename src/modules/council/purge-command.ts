@@ -52,7 +52,7 @@ SlashCommand({
         await interaction.showModal(
             new ModalBuilder()
                 .setTitle("Council Purge")
-                .setCustomId("PURGE")
+                .setCustomId(interaction.commandName)
                 .addComponents(
                     new ActionRowBuilder<TextInputBuilder>().addComponents(reason),
                     new ActionRowBuilder<TextInputBuilder>().addComponents(users),
