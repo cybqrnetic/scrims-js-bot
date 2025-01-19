@@ -63,6 +63,22 @@
                 "description": "The identifier of the message you would like to send."
             }
         },
+        "mirror": {
+            "name": "mirror",
+            "description": "Used to mirror a custom message.",
+            "channel_option": {
+                "name": "channel",
+                "description": "The channel to send / edit the message in. (Default: Current Channel)"
+            },
+            "ping_option": {
+                "name": "ping-roles",
+                "description": "If mentioned roles should be pinged in the message."
+            },
+            "old_messageId_option": {
+                "name": "old-message-id",
+                "description": "If you want to edit an existing message."
+            }
+        },
         "position_roles": {
             "name": "position-roles",
             "description": "Set up meaningful roles for the application.",
