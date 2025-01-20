@@ -70,6 +70,6 @@ SlashCommand({
             allowedMentions: { parse: pingRoles ? ["everyone", "roles", "users"] : ["users"] },
         })
 
-        await interaction.editReply(`Message "Sent"! ${message.url}`)
+        await interaction.editReply(`Message Sent! ${message.url}`)
     },
 })
