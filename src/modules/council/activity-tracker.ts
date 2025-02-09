@@ -137,7 +137,7 @@ export class ActivityTracker extends BotModule {
                 .setDescription(
                     council.size
                         ? councilActivity
-                              .sort((a, b) => b.activityScore - a.activityScore)
+                              .sort((a, b) => Number(BigInt(a.id) - BigInt(b.id)))
                               .map((council) =>
                                   quote(
                                       [
