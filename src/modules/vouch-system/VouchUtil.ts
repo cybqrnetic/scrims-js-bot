@@ -102,16 +102,29 @@ export class VouchUtil {
             vouches.toMessage(interaction.i18n, { includeExpired }, guildId).setAllowedMentions(),
         )
 
+        if (!vouches.getCovered().length) return
+
         if (OnlinePositions.hasPosition(interaction.user, `${rank} Council`)) {
-            if (vouches.getCovered().length)
-                await interaction
-                    .followUp(
-                        vouches
-                            .toMessage(interaction.i18n, { onlyHidden: true }, guildId)
-                            .setAllowedMentions()
-                            .setEphemeral(true),
-                    )
-                    .catch(console.error)
+            return await interaction
+                .followUp(
+                    vouches
+                        .toMessage(interaction.i18n, { onlyHidden: true }, guildId)
+                        .setAllowedMentions()
+                        .setEphemeral(true),
+                )
+                .catch(console.error)
+        }
+
+        if (interaction.user.id === user.id) {
+            vouches.vouches.forEach((v) => (v.comment = undefined))
+            await interaction
+                .followUp(
+                    vouches
+                        .toMessage(interaction.i18n, { onlyHidden: true }, guildId)
+                        .setAllowedMentions()
+                        .setEphemeral(true),
+                )
+                .catch(console.error)
         }
     }
 }

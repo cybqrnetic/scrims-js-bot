@@ -49,7 +49,7 @@ class VouchSchema {
     worth!: number
 
     @Prop({ type: String, required: false })
-    comment!: string
+    comment?: string
 
     user() {
         return DiscordBot.INSTANCE?.users.cache.get(this.userId)
