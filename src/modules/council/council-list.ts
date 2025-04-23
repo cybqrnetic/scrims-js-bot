@@ -18,6 +18,8 @@ for (const rank of Object.values(RANKS)) {
     Config.declareType(`${rank} Council List Message`)
 }
 
+Config.declareType(`Do Not DM Role`)
+
 export class CouncilListFeature extends BotModule {
     protected async onReady() {
         // Run every :00, :10, :20, :30, :40, :50
@@ -76,7 +78,7 @@ export class CouncilListFeature extends BotModule {
         )
 
         embed.setDescription(content.join("\n") || "None")
-        if (content.length) embed.setFooter({ text: "Council IGN | Discord | Local Time +/- 10 mins" })
+        if (content.length) embed.setFooter({ text: "Council IGN | Discord | DM Status | Local Time +/- 10 mins" })
 
         return new MessageOptionsBuilder().addEmbeds(embed)
     }
@@ -84,11 +86,13 @@ export class CouncilListFeature extends BotModule {
     async buildCouncilInfo(member: GuildMember) {
         const profile = UserProfile.cache.get(member.id)
         const currentTime = profile?.getCurrentTime()
+        const doNotDmRole = Config.getConfigValue("Do Not DM Role", member.guild.id)
         return (
             `\`•\` ` +
             [
                 await profile?.fetchMCUsername(),
                 member.toString(),
+                doNotDmRole && member.roles.cache.has(doNotDmRole) ? "🔴" : "🟢",
                 currentTime &&
                     currentTime.set({ minute: Math.round(currentTime.minute / 10) * 10 }).toFormat("h:mm a") +
                         ` (GMT${profile?.getUTCOffset()})`,
