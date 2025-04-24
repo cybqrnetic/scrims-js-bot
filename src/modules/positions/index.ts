@@ -33,7 +33,7 @@ export class OnlinePositions {
 
     static getMembersWithPosition(position: string, guildId = HOST_GUILD_ID) {
         const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
-        const members = DiscordBot.getInstance().host?.members.cache ?? new Collection()
+        const members = DiscordBot.getInstance().guilds.cache.get(guildId)?.members.cache ?? new Collection()
         return members.filter((m) => hasRoles(m.id, guildId, roles))
     }
 }
