@@ -60,8 +60,8 @@ export class CouncilListFeature extends BotModule {
     async buildMessage(guild: Guild, role: string) {
         const embed = new EmbedBuilder().setTitle(`${role} Council List`)
 
-        const councilHead = OnlinePositions.getMembersWithPosition(`${role} Head`)
-        const council = OnlinePositions.getMembersWithPosition(`${role} Council`).subtract(councilHead)
+        const councilHead = OnlinePositions.getMembersWithPosition(`${role} Head`, guild.id)
+        const council = OnlinePositions.getMembersWithPosition(`${role} Council`, guild.id).subtract(councilHead)
 
         const councilRole = PositionRole.getRoles(`${role} Council`, guild.id)[0]
         if (councilRole) embed.setColor(councilRole.color)
