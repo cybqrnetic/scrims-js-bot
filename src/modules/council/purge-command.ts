@@ -18,14 +18,25 @@ import { DateTime } from "luxon"
 
 import { Config } from "@module/config"
 import { LogUtil } from "@module/council/vouches/LogUtil"
+import { OnlinePositions } from "@module/positions"
 import { OfflinePositions } from "@module/sticky-roles"
+import { SubscriptionFeaturePermissions } from "@module/Subscriptions"
 import { Vouch } from "@module/vouch-system"
 import { VouchUtil } from "@module/vouch-system/VouchUtil"
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder("commands.purge").setDefaultMemberPermissions("0"),
+    builder: new LocalizedSlashCommandBuilder("commands.purge")
+        .addBooleanOption((option) =>
+            option
+                .setName("inactivity-purge")
+                .setDescription("If this is an inactivity purge, immune players won't get purged.")
+                .setRequired(true),
+        )
+        .setDefaultMemberPermissions("0"),
 
     async handler(interaction) {
+        const isInactivityPurge = interaction.options.getBoolean("inactivity-purge", true)
+
         const reason = new TextInputBuilder()
             .setLabel("Reason")
             .setCustomId("reason")
@@ -52,7 +63,7 @@ SlashCommand({
         await interaction.showModal(
             new ModalBuilder()
                 .setTitle("Council Purge")
-                .setCustomId(interaction.commandName)
+                .setCustomId(`${interaction.commandName}/${isInactivityPurge}`)
                 .addComponents(
                     new ActionRowBuilder<TextInputBuilder>().addComponents(reason),
                     new ActionRowBuilder<TextInputBuilder>().addComponents(users),
@@ -64,10 +75,22 @@ SlashCommand({
     async handleModalSubmit(interaction) {
         await interaction.deferReply({ ephemeral: true })
 
+        const isInactivityPurge = interaction.args.pop()! === "true"
         const components = interaction.components.map((v) => v.components).flat()
         const reason = components.find((v) => v.customId === "reason")!.value
-        const users = components.find((v) => v.customId === "users")!.value.split("\n")
         const rank = components.find((v) => v.customId === "rank")?.value.toLowerCase()
+
+        const users = components
+            .find((v) => v.customId === "users")!
+            .value.split("\n")
+            .filter((v) => {
+                const member = interaction.guild.members.resolve(v)
+                const isCouncil = member && OnlinePositions.hasPosition(member, `${rank} Council`)
+                const isImmune =
+                    isInactivityPurge && member?.hasPermission(SubscriptionFeaturePermissions.PurgeImmunity)
+
+                return !isCouncil && !isImmune
+            })
 
         const resolved = new Set<UserProfile>()
         let purged = 0
