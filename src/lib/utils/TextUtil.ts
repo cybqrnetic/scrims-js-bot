@@ -103,4 +103,14 @@ export class TextUtil {
                 ([key, value]) => `${inlineCode("•")} ${bold(`${key}:`)} ${inlineCode(String(value))}`,
             )
     }
+
+    static getEmojis(text: string) {
+        const emojisRegex = /\p{Emoji_Presentation}|\p{Emoji}\uFE0F/gu
+        return text.match(emojisRegex) || []
+    }
+
+    static getFirstEmoji(text: string) {
+        const emojiRegex = /\p{Emoji_Presentation}|\p{Emoji}\uFE0F/u
+        return text.match(emojiRegex)?.[0]
+    }
 }

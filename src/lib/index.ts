@@ -1,6 +1,7 @@
 export * from "./apis/Cache"
 export * from "./apis/Challonge"
 export * from "./apis/Mojang"
+export * from "./apis/Profanity"
 export * from "./apis/request"
 export * from "./apis/ScrimsNetwork"
 

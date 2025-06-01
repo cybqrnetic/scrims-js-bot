@@ -247,6 +247,58 @@
                 "name": "keep_channel",
                 "description": "If the channel should NOT be deleted. (Default: False)"
             }
+        },
+        "join": {
+            "name": "join",
+            "description": "Use this command to get moved to a full voice channel.",
+            "channel_option": {
+                "name": "channel",
+                "description": "The channel to join."
+            }
+        },
+        "pin": {
+            "name": "pin",
+            "description": "Use this command to pin a message.",
+            "message_option": {
+                "name": "message-link",
+                "description": "The link to the message you want to pin."
+            }
+        },
+        "unpin": {
+            "name": "unpin",
+            "description": "Use this command to unpin a message.",
+            "message_option": {
+                "name": "message-link",
+                "description": "The link to the message you want to unpin."
+            }
+        },
+        "custom_role": {
+            "name": "custom-role",
+            "description": "Use this command to manage your custom role.",
+            "create": {
+                "name": "create",
+                "description": "Create or edit your custom role.",
+                "name_option": {
+                    "name": "role-name",
+                    "description": "The name of your custom role."
+                },
+                "color_option": {
+                    "name": "role-color",
+                    "description": "The hex color of your custom role."
+                },
+                "image_option": {
+                    "name": "role-image",
+                    "description": "The image of your custom role. (Cannot be used with emoji)"
+                },
+                "emoji_option": {
+                    "name": "role-emoji",
+                    "description": "The unicode emoji of your custom role. (Cannot be used with image)"
+                }
+            },
+            "remove": {
+                "name": "remove",
+                "description": "Remove your custom role."
+            }
         }
     },
     "party": {

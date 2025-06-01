@@ -20,4 +20,9 @@ export class ColorUtil {
 
         return values.map((v) => Math.round(v * 255)) as [number, number, number]
     }
+
+    static parseHex(str: string) {
+        if (str.startsWith("#")) str = str.slice(1)
+        return Math.max(Math.min(parseInt(str, 16), 0xffffff), 0)
+    }
 }
