@@ -87,7 +87,7 @@ class UserProfileClass {
     @Prop({ type: Object, required: false })
     ranked?: Record<string, Partial<RankedStats>>
 
-    toString() {
+    mention() {
         return userMention(this._id)
     }
 }
@@ -116,6 +116,6 @@ DB.addStartupTask(async () => {
         .on("delete", (id) => clearCache(id as Types.Long))
 
     await UserProfile.watcher().initialized()
-    const profiles = await UserProfile.find({}, { username: true })
+    const profiles = await UserProfile.find({}, { username: 1 })
     profiles.forEach(updateCache)
 })

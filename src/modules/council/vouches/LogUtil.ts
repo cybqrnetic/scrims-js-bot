@@ -4,7 +4,6 @@ import { bot, DiscordUtil, I18n, MessageOptionsBuilder } from "lib"
 import { Colors, Emojis, RANKS } from "@Constants"
 import { Config } from "@module/config"
 import { PositionRole } from "@module/positions"
-import { UserProfile } from "@module/profiler"
 import { Vouch, VouchUtil } from "@module/vouch-system"
 
 Object.values(RANKS).forEach((rank) => {
@@ -84,7 +83,7 @@ export class LogUtil {
         })
     }
 
-    static logDemotion(user: string | User | UserProfile, rank: string, executor: User) {
+    static logDemotion(user: string | User, rank: string, executor: User) {
         const mention = typeof user === "string" ? userMention(user) : user.toString()
         Config.buildSendLogMessages("Positions Log Channel", null, () => {
             return new MessageOptionsBuilder().setContent(
