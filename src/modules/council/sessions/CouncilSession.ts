@@ -1,4 +1,6 @@
-import { DiscordIdProp, Document, Prop, SchemaDocument, getSchemaFromClass, modelSchema } from "lib"
+import { DocumentType, Prop } from "@typegoose/typegoose"
+import { Document, modelClass } from "lib"
+import { Types } from "mongoose"
 
 @Document("CouncilSession", "councilsessions")
 class Prototype {
@@ -8,7 +10,7 @@ class Prototype {
     @Prop({ type: String, required: true })
     rank!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     council!: string
 
     @Prop({ type: Number, required: true })
@@ -21,6 +23,5 @@ class Prototype {
     devouches!: number
 }
 
-const schema = getSchemaFromClass(Prototype)
-export const CouncilSession = modelSchema(schema, Prototype)
-export type CouncilSession = SchemaDocument<typeof schema>
+export const CouncilSession = modelClass(Prototype)
+export type CouncilSession = DocumentType<Prototype>

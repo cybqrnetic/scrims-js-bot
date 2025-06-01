@@ -8,19 +8,11 @@ import {
     userMention,
     type ChatInputCommandInteraction,
 } from "discord.js"
-
-import {
-    Component,
-    LocalizedSlashCommandBuilder,
-    MessageOptionsBuilder,
-    ScrimsNetwork,
-    SlashCommand,
-    UserError,
-} from "lib"
+import { Component, MessageOptionsBuilder, ScrimsNetwork, SlashCommand, UserError } from "lib"
+import { DateTime } from "luxon"
 
 import { RANKS } from "@Constants"
 import { Vouch, VouchCollection, VouchUtil } from "@module/vouch-system"
-import { DateTime } from "luxon"
 import { LogUtil } from "./LogUtil"
 
 const Options = {
@@ -34,23 +26,23 @@ function buildRankOption(command: string) {
     return new SlashCommandStringOption()
         .setRequired(false)
         .setName(Options.Rank)
-        .setNameAndDescription(`commands.${command}.rank_option`)
+        .setLocalizations(`commands.${command}.rank_option`)
         .setChoices(...Object.values(RANKS).map((v) => ({ name: v, value: v })))
 }
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder("commands.remove_vouch")
+    builder: new SlashCommandBuilder()
+        .setLocalizations("commands.remove_vouch")
         .addUserOption((option) =>
             option
                 .setRequired(true)
                 .setName(Options.User)
-                .setNameAndDescription("commands.remove_vouch.user_option"),
+                .setLocalizations("commands.remove_vouch.user_option"),
         )
         .addStringOption(buildRankOption("remove_vouch"))
-        .setDefaultMemberPermissions("0")
-        .setContexts(InteractionContextType.Guild),
+        .setDefaultMemberPermissions("0"),
 
-    config: { defer: "ephemeral_reply" },
+    config: { defer: "EphemeralReply" },
 
     async handler(interaction) {
         const user = interaction.options.getUser(Options.User, true)
@@ -59,7 +51,7 @@ SlashCommand({
             throw new UserError(`You don't have permissions to manage ${rank} vouches!`)
 
         const vouches = await VouchCollection.fetch(user.id, rank)
-        await interaction.editReply(vouches.toRemoveMessage(interaction.i18n, interaction.guildId!))
+        await interaction.editReply(vouches.toRemoveMessage(interaction.i18n, interaction.guildId))
     },
 })
 
@@ -83,7 +75,7 @@ SlashCommand({
         .setDefaultMemberPermissions("0")
         .setContexts(InteractionContextType.Guild),
 
-    config: { defer: "ephemeral_reply" },
+    config: { defer: "EphemeralReply" },
 
     async handler(interaction) {
         const user = interaction.options.getUser(Options.User, true)
@@ -113,7 +105,7 @@ SlashCommand({
 
 Component({
     builder: "PURGE_VOUCHES",
-    config: { defer: "ephemeral_reply" },
+    config: { defer: "EphemeralReply" },
     async handler(interaction) {
         const userId = interaction.args.shift()!
         const rank = interaction.args.shift()!
@@ -129,7 +121,7 @@ Component({
 
 Component({
     builder: "REMOVE_VOUCH",
-    config: { defer: "update" },
+    config: { defer: "Update" },
     async handler(interaction) {
         if (!interaction.isStringSelectMenu()) return
 
@@ -140,26 +132,24 @@ Component({
         VouchUtil.checkVouchPermissions(user, rank, interaction.user)
 
         const vouch = await Vouch.findOneAndDelete({ _id: interaction.values[0] })
-        if (vouch) LogUtil.logDelete(vouch, interaction.user).catch(console.error)
+        if (vouch) LogUtil.logDelete(vouch, interaction.user)
 
         const vouches = await VouchCollection.fetch(user.id, rank)
-        await interaction.editReply(vouches.toRemoveMessage(interaction.i18n, interaction.guildId!))
+        await interaction.editReply(vouches.toRemoveMessage(interaction.i18n, interaction.guildId))
     },
 })
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder("commands.vouch")
+    builder: new SlashCommandBuilder()
+        .setLocalizations("commands.vouch")
         .addUserOption((option) =>
-            option
-                .setRequired(false)
-                .setName(Options.User)
-                .setNameAndDescription("commands.vouch.user_option"),
+            option.setRequired(false).setName(Options.User).setLocalizations("commands.vouch.user_option"),
         )
         .addStringOption((option) =>
             option
                 .setRequired(false)
                 .setName(Options.Ign)
-                .setNameAndDescription("commands.vouch.ign_option")
+                .setLocalizations("commands.vouch.ign_option")
                 .setMinLength(3)
                 .setMaxLength(16),
         )
@@ -167,32 +157,29 @@ SlashCommand({
             option
                 .setRequired(false)
                 .setName(Options.Comment)
-                .setNameAndDescription("commands.vouch.comment_option")
+                .setLocalizations("commands.vouch.comment_option")
                 .setMaxLength(500),
         )
-        .setDefaultMemberPermissions("0")
-        .setContexts(InteractionContextType.Guild),
+        .setDefaultMemberPermissions("0"),
+
+    config: { defer: "EphemeralReply" },
 
     async handler(interaction) {
-        await interaction.deferReply({ ephemeral: true })
         await addVouch(interaction, 1)
     },
 })
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder()
-        .setNameAndDescription("commands.devouch")
+    builder: new SlashCommandBuilder()
+        .setLocalizations("commands.devouch")
         .addUserOption((option) =>
-            option
-                .setRequired(false)
-                .setName(Options.User)
-                .setNameAndDescription("commands.devouch.user_option"),
+            option.setRequired(false).setName(Options.User).setLocalizations("commands.devouch.user_option"),
         )
         .addStringOption((option) =>
             option
                 .setRequired(false)
                 .setName(Options.Ign)
-                .setNameAndDescription("commands.devouch.ign_option")
+                .setLocalizations("commands.devouch.ign_option")
                 .setMinLength(3)
                 .setMaxLength(16),
         )
@@ -200,19 +187,19 @@ SlashCommand({
             option
                 .setRequired(false)
                 .setName(Options.Comment)
-                .setNameAndDescription("commands.devouch.comment_option")
+                .setLocalizations("commands.devouch.comment_option")
                 .setMaxLength(500),
         )
-        .setDefaultMemberPermissions("0")
-        .setContexts(InteractionContextType.Guild),
+        .setDefaultMemberPermissions("0"),
+
+    config: { defer: "EphemeralReply" },
 
     async handler(interaction) {
-        await interaction.deferReply({ ephemeral: true })
         await addVouch(interaction, -1)
     },
 })
 
-async function addVouch(interaction: ChatInputCommandInteraction, worth: number) {
+async function addVouch(interaction: ChatInputCommandInteraction<"cached">, worth: number) {
     let user = interaction.options.getUser(Options.User)
     if (!user) {
         const ign = interaction.options.getString(Options.Ign)
@@ -244,7 +231,7 @@ async function addVouch(interaction: ChatInputCommandInteraction, worth: number)
     )
 
     Vouch.emitUpdate(vouch)
-    LogUtil.logCreate(vouch!).catch(console.error)
+    LogUtil.logCreate(vouch)
 
     if (worth > 0) {
         await user

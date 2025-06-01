@@ -1,5 +1,5 @@
-import { EmbedField, StringSelectMenuBuilder, userMention } from "discord.js"
-import { ColorUtil, DiscordBot, I18n, LocalizedError, MessageOptionsBuilder, TextUtil, TimeUtil } from "lib"
+import { StringSelectMenuBuilder, userMention } from "discord.js"
+import { bot, ColorUtil, I18n, LocalizedError, MessageOptionsBuilder, TextUtil, TimeUtil } from "lib"
 
 import { PositionRole } from "@module/positions"
 import { Vouch } from "./Vouch"
@@ -27,7 +27,7 @@ export class VouchCollection {
     }
 
     get user() {
-        return DiscordBot.INSTANCE?.users?.resolve(this.userId) ?? null
+        return bot.users.resolve(this.userId)
     }
 
     get size() {
@@ -99,12 +99,12 @@ export class VouchCollection {
                     "vouches.expired",
                     `${expired.length}`,
                     TimeUtil.stringifyTimeDelta(Vouch.getExpiration(this.position)),
-                ) as EmbedField,
+                ),
             )
 
         const mention = userMention(this.userId)
         if (embedFields.length === 0)
-            return new LocalizedError("vouches.none", mention, this.position).toMessagePayload(i18n)
+            return new LocalizedError("vouches.none", mention, this.position).toMessage(i18n)
 
         const color = ColorUtil.hsvToRgb((120 / vouches.length) * positive.length || 0, 1, 1)
         return new MessageOptionsBuilder().createMultipleEmbeds(embedFields, (fields) =>
@@ -128,7 +128,7 @@ export class VouchCollection {
 
         const options = this.vouches.map((v, i) => ({
             label: TextUtil.limitText(VouchUtil.toString(v, i18n, i + 1).replace(/\*/g, ""), 100, "..."),
-            value: v.id!,
+            value: v._id,
         }))
 
         Array.from(new Array(Math.ceil(options.length / 25)).keys())

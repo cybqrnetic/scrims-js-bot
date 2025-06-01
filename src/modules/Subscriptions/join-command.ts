@@ -1,18 +1,20 @@
-import { ChannelType, InteractionContextType, PermissionFlagsBits } from "discord.js"
-import { LocalizedSlashCommandBuilder, SlashCommand, UserError } from "lib"
+import { ChannelType, InteractionContextType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js"
+import { SlashCommand, UserError } from "lib"
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder()
-        .setNameAndDescription("commands.join")
+    builder: new SlashCommandBuilder()
+        .setLocalizations("commands.join")
         .addChannelOption((option) =>
             option
-                .setNameAndDescription("commands.join.channel_option")
+                .setLocalizations("commands.join.channel_option")
                 .addChannelTypes(ChannelType.GuildVoice)
                 .setRequired(true),
         )
         .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions("0"),
-    config: { defer: "ephemeral_reply", permission: "commands.join" },
+
+    config: { defer: "EphemeralReply", permission: "commands.join" },
+
     async handler(interaction) {
         const channel = interaction.options.getChannel<ChannelType.GuildVoice>("channel", true)
         if (!channel.permissionsFor(interaction.member).has(PermissionFlagsBits.Connect)) {

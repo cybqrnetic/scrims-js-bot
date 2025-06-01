@@ -12,12 +12,19 @@ export class ScrimsNetwork {
             throw error
         })
 
-        const body: any = await resp.json()
+        const body = (await resp.json()) as UserResponse
         const data = body["user_data"]
         if (!data) throw new UserError(`Player by the name of '${ign}' couldn't be found!`)
         if (!data.discordId)
             throw new UserError(`${data.username} doesn't have their Discord account linked.`)
 
         return data.discordId
+    }
+}
+
+interface UserResponse {
+    user_data: {
+        username: string
+        discordId: string
     }
 }

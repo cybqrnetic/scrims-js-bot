@@ -1,23 +1,24 @@
-import { DiscordIdProp, Document, getSchemaFromClass, modelSchema, Prop, SchemaDocument } from "lib"
+import { DocumentType, Prop } from "@typegoose/typegoose"
+import { Document, modelClass } from "lib"
+import { Types } from "mongoose"
 
 @Document("PinnedMessage", "pinnedmessages")
 class PinnedMessageSchema {
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     _id!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     channelId!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     guildId!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     userId!: string
 
     @Prop({ type: String, required: true })
     url!: string
 }
 
-const schema = getSchemaFromClass(PinnedMessageSchema)
-export const PinnedMessage = modelSchema(schema, PinnedMessageSchema)
-export type PinnedMessage = SchemaDocument<typeof schema>
+export const PinnedMessage = modelClass(PinnedMessageSchema)
+export type PinnedMessage = DocumentType<PinnedMessageSchema>

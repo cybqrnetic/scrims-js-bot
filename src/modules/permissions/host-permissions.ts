@@ -1,6 +1,6 @@
-import { HOST_GUILD_ID } from "@Constants"
+import { MAIN_GUILD_ID } from "@Constants"
 import { Events, GuildMember, User, type PartialGuildMember } from "discord.js"
-import { BotListener, DiscordBot } from "lib"
+import { BotListener, getMainGuild } from "lib"
 import { RolePermissions } from "./RolePermissions"
 
 const ADMIN = "ADMIN"
@@ -28,7 +28,7 @@ GuildMember.prototype.hasPermission = function (permission: string) {
 }
 
 function getRoles(member: GuildMember | PartialGuildMember) {
-    // @ts-expect-error
+    // @ts-expect-error the getter on member.roles.cache is very inefficient
     return member._roles as string[]
 }
 
@@ -40,19 +40,19 @@ RolePermissions.cache.on("add", () => recalculate())
 RolePermissions.cache.on("delete", () => recalculate())
 
 BotListener(Events.GuildMemberAdd, (_bot, member) => {
-    if (member.guild.id === HOST_GUILD_ID) {
+    if (member.guild.id === MAIN_GUILD_ID) {
         recalculateMember(member)
     }
 })
 
 BotListener(Events.GuildMemberRemove, (_bot, member) => {
-    if (member.guild.id === HOST_GUILD_ID) {
+    if (member.guild.id === MAIN_GUILD_ID) {
         memberPermissions.delete(member.id)
     }
 })
 
 BotListener(Events.GuildMemberUpdate, (_bot, old, member) => {
-    if (member.guild.id === HOST_GUILD_ID) {
+    if (member.guild.id === MAIN_GUILD_ID) {
         if (
             isAdmin(old) !== isAdmin(member) ||
             JSON.stringify(getRoles(old)) !== JSON.stringify(getRoles(member))
@@ -65,7 +65,7 @@ BotListener(Events.GuildMemberUpdate, (_bot, old, member) => {
 BotListener("initialized", () => recalculate())
 
 function recalculate() {
-    const members = DiscordBot.getInstance().host?.members.cache.values()
+    const members = getMainGuild()?.members.cache.values()
     if (members) {
         memberPermissions.clear()
         for (const member of Array.from(members)) {

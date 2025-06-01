@@ -4,10 +4,10 @@ import { VouchDuelSession } from "./VouchDuelSession"
 
 Component({
     builder: VouchDuelSession.BUTTONS.Join,
-    config: { defer: "ephemeral_reply" },
+    config: { defer: "EphemeralReply" },
     async handler(interaction: MessageComponentInteraction<"cached">) {
         const startedAt = interaction.args.shift()!
-        const session = await VouchDuelSession.findSession(startedAt)
+        const session = VouchDuelSession.findSession(startedAt)
         if (!session) throw new UserError("This session expired.")
 
         if (!interaction.user.hasPermission(`council.${session.rank.toLowerCase()}.vouchDuels`)) {
@@ -21,10 +21,10 @@ Component({
 
 Component({
     builder: VouchDuelSession.BUTTONS.Leave,
-    config: { defer: "ephemeral_reply" },
+    config: { defer: "EphemeralReply" },
     async handler(interaction: MessageComponentInteraction<"cached">) {
         const startedAt = interaction.args.shift()!
-        const session = await VouchDuelSession.findSession(startedAt)
+        const session = VouchDuelSession.findSession(startedAt)
         if (!session) throw new UserError("This session expired.")
 
         await session.removeCouncil(interaction.member.id)

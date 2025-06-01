@@ -1,6 +1,6 @@
 import { AlignmentEnum, AsciiTable3 } from "ascii-table3"
-import { SlashCommandBuilder } from "discord.js"
-import { MessageOptionsBuilder, SlashCommand, TimeUtil, UserError } from "lib"
+import { codeBlock, SlashCommandBuilder } from "discord.js"
+import { SlashCommand, TimeUtil, UserError } from "lib"
 
 import { OnlinePositions, Positions } from "@module/positions"
 import { Ticket } from "@module/tickets"
@@ -23,7 +23,7 @@ SlashCommand({
         ),
 
     config: {
-        defer: "ephemeral_reply",
+        defer: "EphemeralReply",
         permission: "support.evaluation",
         restricted: true,
     },
@@ -46,8 +46,9 @@ SlashCommand({
             .setHeading("User", "Tickets Closed")
             .setAligns([AlignmentEnum.CENTER, AlignmentEnum.CENTER, AlignmentEnum.CENTER])
             .addRowMatrix(support.map((m) => [m.user.tag, tickets.filter((t) => t.closerId === m.id).length]))
+            .toString()
 
-        await interaction.editReply(new MessageOptionsBuilder().setContent("```\n" + stats + "```"))
+        await interaction.editReply({ content: codeBlock(stats) })
     },
 })
 

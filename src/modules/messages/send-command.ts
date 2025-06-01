@@ -1,5 +1,5 @@
-import { GuildBasedChannel, InteractionContextType } from "discord.js"
-import { LocalizedError, LocalizedSlashCommandBuilder, SlashCommand } from "lib"
+import { MessageFlags, SlashCommandBuilder } from "discord.js"
+import { LocalizedError, SlashCommand } from "lib"
 import { messages } from "."
 
 const Options = {
@@ -7,23 +7,22 @@ const Options = {
 }
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder()
+    builder: new SlashCommandBuilder()
         .addStringOption((o) =>
             o
-                .setNameAndDescription("commands.send.message_option")
+                .setLocalizations("commands.send.message_option")
                 .setName(Options.Message)
                 .setAutocomplete(true)
                 .setRequired(true),
         )
-        .setNameAndDescription("commands.send")
-        .setDefaultMemberPermissions("0")
-        .setContexts(InteractionContextType.Guild),
+        .setLocalizations("commands.send")
+        .setDefaultMemberPermissions("0"),
 
     async handleAutocomplete(interaction) {
         const focused = interaction.options.getFocused().toLowerCase()
         await interaction.respond(
             messages
-                .getNames(interaction.member!, interaction.channel as GuildBasedChannel)
+                .getNames(interaction.member)
                 .filter((name) => name.toLowerCase().includes(focused))
                 .map((name) => ({ name, value: name }))
                 .slice(0, 25),
@@ -33,15 +32,13 @@ SlashCommand({
     async handler(interaction) {
         if (!interaction.channel?.isSendable()) return
 
-        await interaction.deferReply({ ephemeral: true })
         const messageId = interaction.options.getString(Options.Message, true)
-        const message = await messages.get(
-            messageId,
-            interaction.member!,
-            interaction.channel as GuildBasedChannel,
-        )
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral })
+
+        const message = await messages.get(messageId, interaction.member)
         if (!message) throw new LocalizedError("bot_message_missing", messageId)
+
         await interaction.channel.send(message)
-        await interaction.editReply({ content: "The message was sent." })
+        await interaction.editReply({ content: "Message was sent." })
     },
 })

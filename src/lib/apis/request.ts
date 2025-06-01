@@ -1,9 +1,9 @@
 export interface RequestOptions extends RequestInit {
-    signal?: never | null
+    signal?: never
     headers?: Record<string, string>
     /** number in seconds */
     timeout?: number
-    urlParams?: Record<string, any>
+    urlParams?: Record<string, string>
 }
 
 export class RequestError extends Error {
@@ -43,7 +43,7 @@ export async function request(url: string, options: RequestOptions = {}): Promis
 
     return fetch(url, { ...options, signal: controller.signal })
         .catch(requestError)
-        .then(async (resp) => {
+        .then((resp) => {
             clearTimeout(timeoutId)
             if (!resp.ok) {
                 throw new HTTPError(`${resp.status} Response`, resp)

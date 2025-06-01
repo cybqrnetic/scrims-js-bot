@@ -1,6 +1,17 @@
-import { bold, EmbedBuilder, GuildMember, quote, subtext, userMention } from "discord.js"
+import {
+    APIContainerComponent,
+    APITextDisplayComponent,
+    bold,
+    ContainerComponent,
+    GuildMember,
+    MessageFlags,
+    quote,
+    TextDisplayComponent,
+    userMention,
+} from "discord.js"
 import { BotModule, MessageOptionsBuilder, TimeUtil } from "lib"
 import { DateTime } from "luxon"
+import { Types } from "mongoose"
 
 import { RANKS, ROLE_APP_HUB } from "@Constants"
 import { Config } from "@module/config"
@@ -31,13 +42,13 @@ export class ActivityTracker extends BotModule {
         Object.fromEntries(Object.values(RANKS).map((rank) => [rank, `${rank} Council Activity Channel`])),
     )
 
-    async onReady() {
+    onReady() {
         Vouch.onUpdate((vouch) => this.sendActivityLeaderboard(vouch.position))
         CouncilSession.watcher().on("insert", (session) => this.sendActivityLeaderboard(session.rank))
-        Promise.all([Config.cache.initialized(), PositionRole.cache.initialized()]).then(() => {
-            this.sendActivityLeaderboards()
+        void Promise.all([Config.cache.initialized(), PositionRole.cache.initialized()]).then(() => {
+            void this.sendActivityLeaderboards()
             for (const rank of Object.values(RANKS)) {
-                Config.onCache("add", ActivityTracker.CHANNELS[rank]!, (v) =>
+                Config.onCache("add", ActivityTracker.CHANNELS[rank]!, () =>
                     this.sendActivityLeaderboard(rank).catch(console.error),
                 )
             }
@@ -60,13 +71,19 @@ export class ActivityTracker extends BotModule {
         if (!channel?.isSendable()) return
 
         const message = await this.buildMessage(rank)
+        const newText = (message.components[0] as APIContainerComponent)
+            .components[0] as APITextDisplayComponent
 
         const existingId = Config.getConfigValue(ActivityTracker.MESSAGES[rank]!, ROLE_APP_HUB)
         if (existingId) {
             const existing = await channel.messages.fetch(existingId).catch(() => null)
+            const existingText = (existing?.components[0] as ContainerComponent)
+                ?.components[0] as TextDisplayComponent
+
             if (
                 existing &&
-                existing.embeds[0]?.timestamp?.slice(0, 10) === message.embeds[0]?.timestamp?.slice(0, 10)
+                existing.flags.has(MessageFlags.IsComponentsV2) &&
+                existingText.content.slice(-16) === newText.content.slice(-16)
             ) {
                 await existing.edit(message)
                 return
@@ -92,7 +109,7 @@ export class ActivityTracker extends BotModule {
                 executorId: { $exists: true },
                 givenAt: { $gt: cutoff.toJSDate() },
             }),
-            CouncilSession.aggregate([
+            CouncilSession.aggregate<SessionAggregate>([
                 {
                     $match: {
                         rank,
@@ -131,32 +148,26 @@ export class ActivityTracker extends BotModule {
             ),
         )
 
-        return new MessageOptionsBuilder().addEmbeds(
-            new EmbedBuilder()
-                .setTitle(`${rank} Council Activity`)
-                .setDescription(
-                    council.size
-                        ? councilActivity
-                              .sort((a, b) => b.activityScore - a.activityScore)
-                              .map((council) =>
-                                  quote(
-                                      [
-                                          userMention(council.id),
-                                          `✅ ${council.vouches}`,
-                                          `⛔ ${council.devouches}`,
-                                          `⏳ ${TimeUtil.stringifyTimeDelta(council.sessionTime)}`,
-                                          `📊 ${council.activityScore.toFixed(2)}`,
-                                      ].join(bold(" | ")),
-                                  ),
-                              )
-                              .join("\n\n") +
-                              "\n\n" +
-                              subtext("Discord | Vouches | Devouches | Session Time | Activity Score")
-                        : "None",
-                )
-                .setFooter({ text: "Measured Since" })
-                .setTimestamp(cutoff.toJSDate())
-                .setColor(councilRole?.color ?? null),
+        return new MessageOptionsBuilder().setContainerContent(
+            `## ${rank} Council Activity\n` +
+                (council.size
+                    ? councilActivity
+                          .sort((a, b) => b.activityScore - a.activityScore)
+                          .map((council) =>
+                              quote(
+                                  [
+                                      userMention(council.id),
+                                      `✅ ${council.vouches}`,
+                                      `⛔ ${council.devouches}`,
+                                      `⏳ ${TimeUtil.stringifyTimeDelta(council.sessionTime)}`,
+                                      `📊 ${council.activityScore.toFixed(2)}`,
+                                  ].join(bold(" | ")),
+                              ),
+                          )
+                          .join("\n\n") + "\n\nDiscord | Vouches | Devouches | Session Time | Activity Score"
+                    : "None") +
+                `\n-# Measured Since ${cutoff.toDiscord("d")}`,
+            councilRole?.color,
         )
     }
 
@@ -207,3 +218,8 @@ export class ActivityTracker extends BotModule {
 }
 
 export default ActivityTracker.getInstance()
+
+interface SessionAggregate {
+    _id: Types.Long
+    time: number
+}

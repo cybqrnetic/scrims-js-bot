@@ -34,7 +34,7 @@ export class ClipsEvalFeature extends BotModule {
         this.bot.on(Events.MessageUpdate, (_oldMsg, newMsg) => this.filterLinks(newMsg))
     }
 
-    async onReady() {
+    onReady() {
         this.scheduleWeekDividerMessage()
     }
 

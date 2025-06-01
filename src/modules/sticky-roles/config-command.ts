@@ -1,4 +1,4 @@
-import { Events, Role, SlashCommandBuilder } from "discord.js"
+import { Events, MessageFlags, Role, SlashCommandBuilder } from "discord.js"
 import { BotListener, SlashCommand } from "lib"
 
 import { TransientRole } from "@module/sticky-roles"
@@ -39,7 +39,7 @@ SlashCommand({
                 TransientRole.cache.delete(role.id)
             } else {
                 const created = await TransientRole.create({ _id: role.id })
-                TransientRole.cache.set(created.id, created)
+                TransientRole.cache.set(created._id, created)
             }
         }
 
@@ -49,15 +49,15 @@ SlashCommand({
             .sort((a, b) => b.comparePositionTo(a))
 
         if (!roles.length) {
-            return interaction.reply({
+            await interaction.reply({
                 content: "There are currently no transient roles configured.",
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
+            })
+        } else {
+            await interaction.reply({
+                content: `## Transient Roles\n${roles.map((v) => `- ${v}`).join("\n")}`,
+                flags: MessageFlags.Ephemeral,
             })
         }
-
-        await interaction.reply({
-            content: `## Transient Roles\n${roles.map((v) => `- ${v}`).join("\n")}`,
-            ephemeral: true,
-        })
     },
 })

@@ -1,17 +1,18 @@
-import { DiscordIdProp, Document, getSchemaFromClass, modelSchema, SchemaDocument } from "lib"
+import { DocumentType, Prop } from "@typegoose/typegoose"
+import { Document, modelClass } from "lib"
+import { Types } from "mongoose"
 
 @Document("CustomRole", "customroles")
 class CustomRoleSchema {
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     _id!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     userId!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     guildId!: string
 }
 
-const schema = getSchemaFromClass(CustomRoleSchema)
-export const CustomRole = modelSchema(schema, CustomRoleSchema)
-export type CustomRole = SchemaDocument<typeof schema>
+export const CustomRole = modelClass(CustomRoleSchema)
+export type CustomRole = DocumentType<CustomRoleSchema>

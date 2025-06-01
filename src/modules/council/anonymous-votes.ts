@@ -2,7 +2,6 @@ import {
     ButtonBuilder,
     ButtonStyle,
     GuildTextBasedChannel,
-    InteractionContextType,
     PermissionFlagsBits,
     SlashCommandBuilder,
     User,
@@ -15,11 +14,11 @@ import { Config } from "@module/config"
 
 const EXPIRATION = 30 * 24 * 60 * 60
 
-const VOTE_EMOJIS: Record<string, string> = {
+const VOTE_EMOJIS = record({
     "1": ":white_check_mark:",
     "0": ":raised_back_of_hand:",
     "-1": ":no_entry:",
-}
+})
 
 const voteChannels = new Map<string, string>()
 
@@ -37,10 +36,9 @@ SlashCommand({
         .addStringOption((option) =>
             option.setName("title").setDescription("Title of the vote").setMaxLength(100).setRequired(true),
         )
-        .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions("0"),
 
-    config: { defer: "ephemeral_reply" },
+    config: { defer: "EphemeralReply" },
 
     async handler(interaction) {
         const title = interaction.options.getString("title", true)
@@ -84,17 +82,16 @@ Component({
         if (rank && !interaction.user.hasPermission(`council.${rank.toLowerCase()}.vote`))
             throw new UserError(`You are not allow to participate in ${rank} votes.`)
 
-        const res = await Promise.all([
+        const [vote] = await Promise.all([
             redis.hGetAll(key),
             redis.hSet(key, interaction.member.id, val),
             redis.expire(key, EXPIRATION),
         ])
 
-        const vote = res[0]
         vote[interaction.member.id] = val
 
         const count = Object.keys(vote).filter((id) => interaction.client.users.cache.has(id)).length
-        await interaction.update(getVoteMessage(vote["title"]!, count))
+        await interaction.update(getVoteMessage(vote["title"] as string, count))
     },
 })
 
@@ -102,9 +99,7 @@ Component({
     builder: "VOTE_EVALUATE",
     async handler(interaction) {
         const key = `vote:${interaction.message.id}`
-        const res = await Promise.all([redis.hGetAll(key), redis.expire(key, EXPIRATION)])
-
-        const vote = res[0]
+        const [vote] = await Promise.all([redis.hGetAll(key), redis.expire(key, EXPIRATION)])
         if (Object.keys(vote).length === 0) throw new UserError("This vote expired.")
 
         const rank = voteChannels.get(interaction.channelId)
@@ -121,8 +116,8 @@ Component({
         Object.entries(vote).forEach(([id, v]) => {
             const user = interaction.client.users.cache.get(id)
             if (user) {
-                votes.push([user, v])
-                voteValues.push(parseFloat(v))
+                votes.push([user, v as string])
+                voteValues.push(parseFloat(v as string))
             }
         })
 
@@ -131,7 +126,7 @@ Component({
                 .addEmbeds((embed) =>
                     embed
                         .setAuthor({ name: "Anonymous Vote Eval" })
-                        .setTitle(vote["title"]!)
+                        .setTitle(vote["title"] as string)
                         .setColor(ColorUtil.hsvToRgb(getVotesValue(voteValues) * 60 + 60, 1, 1))
                         .setDescription(
                             votes.map(([user, v]) => `${VOTE_EMOJIS[v]} **-** ${user}`).join("\n") ||

@@ -1,12 +1,9 @@
-import { GuildBasedChannel, GuildMember } from "discord.js"
-import { BotModule, LocalizedError, MessageOptionsBuilder } from "lib"
+import { GuildMember } from "discord.js"
+import { BotModule, I18n, LocalizedError, MessageOptionsBuilder } from "lib"
 
 export interface MessageBuilderOptions {
     name: string
-    builder: (
-        builder: MessageOptionsBuilder,
-        member: GuildMember,
-    ) => Promise<MessageOptionsBuilder> | MessageOptionsBuilder
+    builder: (i18n: I18n, member: GuildMember) => Promise<MessageOptionsBuilder> | MessageOptionsBuilder
     permission?: string
 }
 
@@ -20,18 +17,18 @@ export class BotMessageManager extends BotModule {
         builders.add(builder)
     }
 
-    getNames(member: GuildMember, _channel: GuildBasedChannel) {
+    getNames(member: GuildMember) {
         return Array.from(builders)
             .filter((v) => this.hasPermission(member, v))
             .map((v) => v.name)
     }
 
-    async get(name: string, member: GuildMember, _channel: GuildBasedChannel) {
+    async get(name: string, member: GuildMember) {
         const builder = Array.from(builders).find((v) => v.name === name)
         if (!builder) return null
 
         if (!this.hasPermission(member, builder)) throw new LocalizedError("missing_permissions")
-        return builder.builder(new MessageOptionsBuilder(), member)
+        return builder.builder(member.guild.i18n(), member)
     }
 
     protected hasPermission(member: GuildMember, builder: MessageBuilderOptions) {

@@ -1,35 +1,30 @@
-import { PositionRole, Positions } from "@module/positions"
 import {
     ChatInputCommandInteraction,
     Events,
     GuildPremiumTier,
     InteractionContextType,
+    SlashCommandBuilder,
     SlashCommandSubcommandBuilder,
 } from "discord.js"
-import { BotListener, ColorUtil, LocalizedSlashCommandBuilder, SlashCommand, TextUtil, UserError } from "lib"
-import { Profanity } from "../../lib/apis/Profanity"
+
+import { PositionRole, Positions } from "@module/positions"
+import { BotListener, ColorUtil, Profanity, SlashCommand, TextUtil, UserError } from "lib"
 import { CustomRole } from "./CustomRole"
 
-const SubCmdHandlers: Record<
-    string,
-    (interaction: ChatInputCommandInteraction<"cached">) => Promise<unknown>
-> = {
-    create: onCreateSubcommand,
-    // Might wanna add this later: just pass undefined instead of null or default values for the options.
-    // edit: (interaction) => onCreateSubcommand(interaction, true),
-    remove: onRemoveSubcommand,
-}
-
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder()
-        .setNameAndDescription("commands.custom_role")
+    builder: new SlashCommandBuilder()
+        .setLocalizations("commands.custom_role")
         .addSubcommand(buildCreateSubcommand())
-        .addSubcommand((sub) => sub.setNameAndDescription("commands.custom_role.remove"))
+        .addSubcommand((sub) => sub.setLocalizations("commands.custom_role.remove"))
         .setDefaultMemberPermissions("0")
         .setContexts(InteractionContextType.Guild),
-    config: { defer: "ephemeral_reply", permission: "commands.custom_role" },
-    async handler(interaction) {
-        await SubCmdHandlers[interaction.subCommandName!]?.(interaction)
+
+    config: { defer: "EphemeralReply", permission: "commands.custom_role" },
+    subHandlers: {
+        create: onCreateSubcommand,
+        // Might wanna add this later: just pass undefined instead of null or default values for the options.
+        // edit: (interaction) => onCreateSubcommand(interaction, true),
+        remove: onRemoveSubcommand,
     },
 })
 
@@ -108,7 +103,7 @@ async function onCreateSubcommand(interaction: ChatInputCommandInteraction<"cach
         }
     } else {
         // Should be right under the lowest trial support role
-        const trialSupportRoles = PositionRole.getRoles(Positions.TrialSupport, interaction.guildId!)
+        const trialSupportRoles = PositionRole.getRoles(Positions.TrialSupport, interaction.guildId)
         const customRolePosition = Math.min(...trialSupportRoles.map((role) => role.position))
 
         const role = await interaction.guild.roles.create({
@@ -151,18 +146,18 @@ async function onRemoveSubcommand(interaction: ChatInputCommandInteraction<"cach
 
 function buildCreateSubcommand() {
     return new SlashCommandSubcommandBuilder()
-        .setNameAndDescription("commands.custom_role.create")
+        .setLocalizations("commands.custom_role.create")
         .addStringOption((option) =>
-            option.setNameAndDescription("commands.custom_role.create.name_option").setRequired(false),
+            option.setLocalizations("commands.custom_role.create.name_option").setRequired(false),
         )
         .addStringOption((option) =>
-            option.setNameAndDescription("commands.custom_role.create.color_option").setRequired(false),
+            option.setLocalizations("commands.custom_role.create.color_option").setRequired(false),
         )
         .addAttachmentOption((option) =>
-            option.setNameAndDescription("commands.custom_role.create.image_option").setRequired(false),
+            option.setLocalizations("commands.custom_role.create.image_option").setRequired(false),
         )
         .addStringOption((option) =>
-            option.setNameAndDescription("commands.custom_role.create.emoji_option").setRequired(false),
+            option.setLocalizations("commands.custom_role.create.emoji_option").setRequired(false),
         )
 }
 
@@ -172,8 +167,8 @@ BotListener(Events.GuildMemberRemove, async (_bot, member) => {
         userId: member.id,
     })
 
-    if (!customRole) return
-
-    await member.guild.roles.delete(customRole._id).catch(() => null)
-    await customRole.deleteOne()
+    if (customRole) {
+        await member.guild.roles.delete(customRole._id).catch(() => null)
+        await customRole.deleteOne()
+    }
 })

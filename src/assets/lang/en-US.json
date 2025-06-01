@@ -2,27 +2,10 @@
     "unexpected_error": {
         "title": "Whoopsie!",
         "apology": "Sorry for the inconvenience. Feel free to try again later.",
-        "reported": "This incident was reported to the developers.",
-        "discord": {
-            "title": "${unexpected_error.title}",
-            "description": "It seems we're currently having trouble communicating with Discord. ${unexpected_error.apology}",
-            "footer": { "text": "${unexpected_error.reported}" }
-        },
-        "database": {
-            "title": "${unexpected_error.title}",
-            "description": "It looks like there is currently a problem with our database. ${unexpected_error.apology}",
-            "footer": { "text": "${unexpected_error.reported}" }
-        },
-        "unknown": {
-            "title": "${unexpected_error.title}",
-            "description": "Unfortunately your command could not be handled due to something unexpected going wrong. ${unexpected_error.apology}",
-            "footer": { "text": "${unexpected_error.reported}" }
-        },
-        "overflow": {
-            "title": "${unexpected_error.title}",
-            "description": "It looks like Discord can't handle the amount of awesomeness I am trying to send you. ${unexpected_error.apology}",
-            "footer": { "text": "${unexpected_error.reported}" }
-        }
+        "footer": "This incident was reported to the developers.",
+        "discord": "It seems we're currently having trouble communicating with Discord.",
+        "database": "It looks like there is currently a problem with our database.",
+        "unknown": "Unfortunately your command could not be handled due to something unexpected going wrong."
     },
     "type_error": {
         "position": {
@@ -141,7 +124,7 @@
                 "description": "What rank to show vouches for. (Default: Next Rank)"
             },
             "expired_option": {
-                "name": "show_expired",
+                "name": "show-expired",
                 "description": "If expired vouches should also be showed. (Default: False)"
             }
         },

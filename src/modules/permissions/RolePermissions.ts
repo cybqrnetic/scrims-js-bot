@@ -1,18 +1,19 @@
-import { DiscordBot, Document, Prop, SchemaDocument, getSchemaFromClass, modelSchemaWithCache } from "lib"
+import { DocumentType, Prop } from "@typegoose/typegoose"
+import { Document, getMainGuild, modelClassCached } from "lib"
+import { Types } from "mongoose"
 
 @Document("RolePermissions", "permissions")
-class RolePermissionsSchema {
-    @Prop({ type: String, required: true })
+class RolePermissionsClass {
+    @Prop({ type: Types.Long, required: true })
     _id!: string
 
     @Prop({ type: [String], required: true })
     permissions!: string[]
 
     role() {
-        return DiscordBot.getInstance().host?.roles.cache.get(this._id)
+        return getMainGuild()?.roles.cache.get(this._id)
     }
 }
 
-const schema = getSchemaFromClass(RolePermissionsSchema)
-export const RolePermissions = modelSchemaWithCache(schema, RolePermissionsSchema)
-export type RolePermissions = SchemaDocument<typeof schema>
+export const RolePermissions = modelClassCached(RolePermissionsClass)
+export type RolePermissions = DocumentType<RolePermissionsClass>

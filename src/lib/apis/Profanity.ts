@@ -1,5 +1,6 @@
 import { LocalizedError } from "../utils/LocalizedError"
 import { request, RequestError, TimeoutError } from "./request"
+
 export class Profanity {
     static async isProfanity(message: string): Promise<boolean> {
         const url = "https://vector.profanity.dev"
@@ -13,7 +14,11 @@ export class Profanity {
             throw error
         })
 
-        const body = await resp.json()
+        const body = (await resp.json()) as ProfanityResponse
         return body.isProfanity
     }
+}
+
+interface ProfanityResponse {
+    isProfanity: boolean
 }

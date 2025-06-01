@@ -1,7 +1,8 @@
-import { RANKS } from "@Constants"
+import { MAIN_GUILD_ID, RANKS } from "@Constants"
+import { membersFetched } from "@module/member-fetcher"
 import { PositionRole } from "@module/positions"
 import { AuditLogEvent, Events, GuildMember } from "discord.js"
-import { AuditedRoleUpdate, BotModule } from "lib"
+import { auditedEvents, AuditedRoleUpdate, BotModule, getMainGuild } from "lib"
 
 const SubscriptionFeaturePositions = PositionRole.declarePositions({
     ColoredRole: "Colored Role",
@@ -24,26 +25,23 @@ const ROLE_SYNC_REASON = "Subscription Role Sync"
 
 class SubscriptionModule extends BotModule {
     protected addListeners() {
-        this.bot.auditedEvents.on(AuditLogEvent.MemberRoleUpdate, (action) =>
-            this.onRolesChange(action).catch(console.error),
-        )
-        this.bot.on(Events.GuildMemberAdd, (member) =>
-            this.enforceRoleDependencies(member).catch(console.error),
-        )
+        auditedEvents.on(AuditLogEvent.MemberRoleUpdate, (action) => this.onRolesChange(action))
+        this.bot.on(Events.GuildMemberAdd, (member) => this.enforceRoleDependencies(member))
     }
 
     async onInitialized() {
-        this.syncEveryone().catch(console.error)
-        setInterval(() => this.syncEveryone(), 20 * 60 * 1000)
+        await this.syncEveryone().catch(console.error)
+        setInterval(() => this.syncEveryone().catch(console.error), 20 * 60 * 1000)
     }
 
     async syncEveryone() {
-        if (!this.bot.host) return
-
-        const everyone = await this.bot.host.members.fetch().catch(console.error)
-        if (!everyone) return
-
-        await Promise.all(everyone.map((user) => this.enforceRoleDependencies(user).catch(console.error)))
+        await membersFetched()
+        const guild = getMainGuild()
+        if (guild) {
+            await Promise.all(
+                guild.members.cache.map((user) => this.enforceRoleDependencies(user).catch(console.error)),
+            )
+        }
     }
 
     async onRolesChange({ reason, member }: AuditedRoleUpdate) {
@@ -53,7 +51,7 @@ class SubscriptionModule extends BotModule {
     }
 
     async enforceRoleDependencies(member: GuildMember) {
-        if (member.guild.id !== this.bot.hostGuildId) return
+        if (member.guild.id !== MAIN_GUILD_ID) return
 
         const rolesToGive = new Set<string>()
         const rolesToRemove = new Set<string>()

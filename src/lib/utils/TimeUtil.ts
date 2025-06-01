@@ -16,10 +16,17 @@ const NAMED_UNITS = [
 ]
 
 export class TimeUtil {
-    static execRemove(regexp: RegExp, mutableContent: [string]) {
-        const match = regexp.exec(mutableContent[0])
-        const found = match?.shift()
-        if (found) mutableContent[0] = mutableContent[0].replace(found, "")
+    static removeMatch(content: string | [string], match: RegExpExecArray) {
+        if (typeof content === "object") {
+            content[0] = content[0].slice(0, match.index) + content[0].slice(match.index + match[0].length)
+        }
+    }
+
+    static execRemove(regexp: RegExp, content: [string]) {
+        const match = regexp.exec(content[0])
+        if (match) {
+            content[0] = content[0].slice(0, match.index) + content[0].slice(match.index + match[0].length)
+        }
         return match
     }
 
@@ -28,16 +35,15 @@ export class TimeUtil {
      * @returns duration in seconds
      */
     static parseDuration(content: string | [string]) {
-        const mutContent: [string] = !Array.isArray(content) ? [content] : content
-        const seconds = Array.from(
-            mutContent[0].matchAll(/(?:\s|^)([-|+]?\d+|a |an ) *(month|s|m|h|d|w|y)\S*( ago)?/gi),
-        ).reduce((secs, [match, val, unit, negate]) => {
-            mutContent[0] = mutContent[0].replace(match, "")
+        const value = typeof content === "object" ? content[0] : content
+        const matches = value.matchAll(/(?:\s|^)([-|+]?\d+|a |an ) *(month|s|m|h|d|w|y)\S*( ago)?/gi)
+        const seconds = Array.from(matches).reduce((secs, match) => {
+            this.removeMatch(content, match)
+
+            const [, val, unit, negate] = match
             return secs + (parseInt(val!) || 1) * UNITS[unit!.toLowerCase()]! * (negate ? -1 : 1)
         }, 0)
 
-        if (Math.abs(seconds) > Number.MAX_SAFE_INTEGER)
-            return Number.MAX_SAFE_INTEGER * (seconds < 0 ? -1 : 1)
         return seconds
     }
 
@@ -49,13 +55,13 @@ export class TimeUtil {
         if (typeof content !== "object") content = [content]
         if (this.execRemove(/(\s|^)(now|rn)(\s|$)/i, content)) return DateTime.now()
 
-        const match = this.execRemove(/(?:\s|^)(\d{1,2})(:\d{1,2})? *(a.?m.?|p.?m.?|\s|$)/i, content)
+        const match = this.execRemove(/(?:\s|^)(\d{1,2})(:\d{1,2})?\s*(a.?m.?|p.?m.?|\s|$)/i, content)
         if (!match) return null
 
         // eslint-disable-next-line prefer-const
-        let [hour, minute] = [match[0], match[1]?.slice(1)].map((v) => parseInt(v!) || 0) as [number, number]
-        if (match[2]?.toLowerCase()?.includes("p") && hour >= 1 && hour <= 11) hour += 12
-        if (match[2]?.toLowerCase()?.includes("a") && hour === 12) hour = 24
+        let [hour, minute] = [match[1], match[2]?.slice(1)].map((v) => parseInt(v!) || 0) as [number, number]
+        if (match[3]?.toLowerCase()?.includes("p") && hour >= 1 && hour <= 11) hour += 12
+        if (match[3]?.toLowerCase()?.includes("a") && hour === 12) hour = 24
 
         return DateTime.now().set({ hour, minute }).minus({ minutes: offset })
     }
@@ -74,8 +80,8 @@ export class TimeUtil {
         const match = this.execRemove(/(\d{1,2})([.|/])(\d{1,2})?[.|/]?(\d{2,4})?/i, content)
         if (!match) return null
 
-        let [day, month, year] = [match[0], match[2], match[3]].map((v) => parseInt(v!))
-        if (match[1] === "/") [day, month] = [month, day]
+        let [day, month, year] = [match[1], match[3], match[4]].map((v) => parseInt(v!))
+        if (match[2] === "/") [day, month] = [month, day]
 
         if (!month) month = today.month
         if (!year) year = today.year
@@ -84,7 +90,7 @@ export class TimeUtil {
         return today.set({ year, month, day }).minus({ minutes: offset })
     }
 
-    static extractOffset(content: string) {
+    static parseOffset(content: string) {
         const time = this.parseTime(content)
         if (!time) return null
 
@@ -103,9 +109,8 @@ export class TimeUtil {
     /**
      * @param delta number in milliseconds
      * @param precision the amount of units to show
-     * @param bind whether to use binding words/letters like "and" & ","
      */
-    static stringifyTimeDelta(delta: number, precision = 2, bind = false, def = "less than a second") {
+    static stringifyTimeDelta(delta: number, precision = 2, def = "less than a second") {
         const parts = []
         for (const unit of NAMED_UNITS) {
             const count = Math.floor(delta / unit.value)
@@ -117,18 +122,15 @@ export class TimeUtil {
         }
 
         if (!parts.length) return def
-        return bind ? parts.slice(0, -1).join(", ") + " and " + parts.slice(-1)[0] : parts.join(" ")
+        return parts.join(" ")
     }
 
     static stringifyOffset(offset: number | undefined | null) {
         if (!offset) return `±00:00`
-        return (
-            (offset < 0 ? "-" : "+") +
-            `${Math.abs(Math.floor(offset / 60))
-                .toString()
-                .padStart(2, "0")}:${Math.abs(offset % 60)
-                .toString()
-                .padStart(2, "0")}`
-        )
+
+        const prefix = offset < 0 ? "-" : "+"
+        const hours = `${Math.abs(Math.floor(offset / 60))}`.padStart(2, "0")
+        const mins = `${Math.abs(offset % 60)}`.padStart(2, "0")
+        return `${prefix}${hours}:${mins}`
     }
 }

@@ -1,20 +1,27 @@
-import { ActionRowBuilder, channelMention, ModalBuilder, TextInputBuilder, TextInputStyle } from "discord.js"
-import { LocalizedSlashCommandBuilder, SlashCommand, UserError } from "lib"
+import {
+    ActionRowBuilder,
+    channelMention,
+    MessageFlags,
+    ModalBuilder,
+    SlashCommandBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+} from "discord.js"
+import { SlashCommand, UserError } from "lib"
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder()
-        .setNameAndDescription("commands.mirror")
+    builder: new SlashCommandBuilder()
+        .setLocalizations("commands.mirror")
         .addChannelOption((option) =>
-            option.setNameAndDescription("commands.mirror.channel_option").setRequired(false),
+            option.setLocalizations("commands.mirror.channel_option").setRequired(false),
         )
         .addBooleanOption((option) =>
-            option.setNameAndDescription("commands.mirror.ping_option").setRequired(false),
+            option.setLocalizations("commands.mirror.ping_option").setRequired(false),
         )
         .addStringOption((option) =>
-            option.setNameAndDescription("commands.mirror.old_messageId_option").setRequired(false),
+            option.setLocalizations("commands.mirror.old_messageId_option").setRequired(false),
         )
         .setDefaultMemberPermissions("0"),
-    config: { forceGuild: true },
 
     async handler(interaction) {
         const channelId = interaction.options.getChannel("channel")?.id ?? interaction.channelId
@@ -39,7 +46,7 @@ SlashCommand({
     },
 
     async handleModalSubmit(interaction) {
-        await interaction.deferReply({ ephemeral: true })
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral })
 
         const channelId = interaction.args.shift()!
         const pingRoles = interaction.args.shift()! === "true"
@@ -67,7 +74,7 @@ SlashCommand({
 
         const message = await channel.send({
             content,
-            allowedMentions: { parse: pingRoles ? ["everyone", "roles", "users"] : ["users"] },
+            allowedMentions: { parse: pingRoles ? ["roles", "users"] : ["users"] },
         })
 
         await interaction.editReply(`Message Sent! ${message.url}`)

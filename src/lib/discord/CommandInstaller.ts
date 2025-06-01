@@ -1,7 +1,7 @@
 import {
     ApplicationCommandType,
     ApplicationIntegrationType,
-    ChatInputCommandInteraction,
+    CacheType,
     ContextMenuCommandBuilder,
     Events,
     InteractionContextType,
@@ -9,74 +9,19 @@ import {
     SlashCommandOptionsOnlyBuilder,
     SlashCommandSubcommandsOnlyBuilder,
     type AutocompleteInteraction,
-    type CacheType,
     type Client,
-    type ContextMenuCommandInteraction,
     type Guild,
     type Interaction,
     type MessageComponentInteraction,
     type ModalSubmitInteraction,
 } from "discord.js"
 
-import { HOST_GUILD_ID } from "@Constants"
+import { MAIN_GUILD_ID } from "."
 import { CommandHandler } from "./CommandHandler"
 
-type CacheTypeReducer<UserInstall, AnyContext> = AnyContext extends true
-    ? UserInstall extends true
-        ? CacheType
-        : "cached" | undefined
-    : UserInstall extends true
-      ? "cached" | "raw"
-      : "cached"
-
-const commands = new Set<Command>()
-export function SlashCommand<UserInstall extends boolean = false, AnyContext extends boolean = false>(
-    command: CommandBase<
-        SlashCommandBuilder | SlashCommandOptionsOnlyBuilder | SlashCommandSubcommandsOnlyBuilder,
-        UserInstall,
-        AnyContext,
-        ChatInputCommandInteraction<CacheTypeReducer<UserInstall, AnyContext>>
-    >,
-) {
-    commands.add(command)
-    return command
-}
-
-export function ContextMenu<UserInstall extends boolean = false, AnyContext extends boolean = false>(
-    command: CommandBase<
-        ContextMenuCommandBuilder,
-        UserInstall,
-        AnyContext,
-        ContextMenuCommandInteraction<CacheTypeReducer<UserInstall, AnyContext>>
-    >,
-) {
-    commands.add(command)
-    return command
-}
-
-export function Component<UserInstall extends boolean = false, AnyContext extends boolean = false>(
-    command: CommandBase<
-        string,
-        UserInstall,
-        AnyContext,
-        MessageComponentInteraction<CacheTypeReducer<UserInstall, AnyContext>>
-    >,
-) {
-    commands.add(command)
-    return command
-}
-
 export class CommandInstaller {
-    static getCommandNames() {
-        return Array.of(...commands).map(({ builder }) => {
-            if (builder instanceof SlashCommandBuilder) return `/${builder.name}`
-            if (builder instanceof ContextMenuCommandBuilder)
-                return `${builder.name} (${ApplicationCommandType[builder.type]} Context)`
-            return `${builder} (Component)`
-        })
-    }
-
     private readonly handler = new CommandHandler()
+    private readonly components: string[] = []
     private readonly globalCommands: CommandBuilder[] = []
     private readonly guildCommands: Record<string, CommandBuilder[]> = {}
 
@@ -84,10 +29,9 @@ export class CommandInstaller {
         this.bot
             .on(Events.GuildCreate, (guild) => this.postGuildCommands(guild))
             .on(Events.ClientReady, async (client) => {
-                commands.forEach((cmd) => this.installCommand(cmd))
-                await this.postCommands(client)
                 this.bot.on(Events.InteractionCreate, (i) => this.handler.handleInteraction(i))
-                console.log("[CommandInstaller] Commands posted. Now accepting interactions.")
+                await this.postCommands(client)
+                console.log("[CommandInstaller] Commands posted.")
             })
     }
 
@@ -100,14 +44,19 @@ export class CommandInstaller {
     }
 
     private async postGuildCommands(guild: Guild) {
-        return guild.commands.set(this.guildCommands[guild.id] ?? []).catch(console.error)
+        const commands = this.guildCommands[guild.id] ?? []
+        if (process.env["NODE_ENV"] !== "production") commands.push(...this.globalCommands)
+
+        return guild.commands.set(commands).catch(console.error)
     }
 
     private getCommandCallback({
-        handler,
         builder,
+        handler,
+        subHandlers,
         handleAutocomplete,
         handleComponent,
+        componentHandlers,
         handleModalSubmit,
         mixedHandler,
     }: Command) {
@@ -117,8 +66,12 @@ export class CommandInstaller {
         return async (i: Interaction) => {
             if (isHandler(i)) {
                 await handler?.(i)
-            } else if (i.isMessageComponent()) {
+                await subHandlers?.[i.subCommandName!]?.(i)
+            }
+
+            if (i.isMessageComponent()) {
                 await handleComponent?.(i)
+                await componentHandlers?.[i.args.shift()!]?.(i)
             } else if (i.isAutocomplete()) {
                 await handleAutocomplete?.(i)
             } else if (i.isModalSubmit()) {
@@ -129,15 +82,17 @@ export class CommandInstaller {
         }
     }
 
-    private installCommand(command: Command) {
+    public add(command: Command) {
         const { builder, config } = command
-        if (typeof builder !== "string") {
+        if (typeof builder === "string") {
+            this.components.push(builder)
+        } else {
             if (config?.restricted) {
-                config.forceGuild = true
-                config.guilds = [HOST_GUILD_ID]
+                command.anyContext = false
+                command.userInstall = false
+                config.guilds = [MAIN_GUILD_ID]
                 builder.setDefaultMemberPermissions("0")
             } else if (config?.permission && builder.default_member_permissions === undefined) {
-                config.forceGuild = true
                 builder.setDefaultMemberPermissions("0")
             }
 
@@ -174,35 +129,55 @@ export class CommandInstaller {
         const id = typeof builder === "string" ? builder : builder.name
         this.handler.addHandler(id, { callback: this.getCommandCallback(command), config })
     }
+
+    public getRegistered() {
+        return Array.from(new Set(this.globalCommands.concat(...Object.values(this.guildCommands))))
+            .map((builder) => {
+                if (builder instanceof ContextMenuCommandBuilder)
+                    return `${builder.name} (${ApplicationCommandType[builder.type]} Context)`
+                return `/${builder.name}`
+            })
+            .concat(this.components.map((name) => `${name} (Component)`))
+    }
 }
 
 export interface CommandConfig {
     permission?: string
     restricted?: boolean
     guilds?: string[]
-    forceGuild?: boolean
-    defer?: "update" | "reply" | "ephemeral_reply"
+    defer?: "Update" | "Reply" | "EphemeralReply"
 }
+
+export type CacheTypeReducer<UserInstall, AnyContext> = AnyContext extends true
+    ? UserInstall extends true
+        ? CacheType
+        : "cached" | undefined
+    : UserInstall extends true
+      ? "cached" | "raw"
+      : "cached"
+
+type ComponentHandler<I, C> = (i: MessageComponentInteraction<CacheTypeReducer<I, C>>) => unknown
 
 export interface CommandBase<B, UserInstall, AnyContext, I> {
     builder: B
     userInstall?: UserInstall
     anyContext?: AnyContext
     config?: CommandConfig
-    handler?: (interaction: I) => Promise<unknown>
+    handler?: (interaction: I) => unknown
+    subHandlers?: Record<string, (interaction: I) => unknown>
     handleAutocomplete?: (
         interaction: AutocompleteInteraction<CacheTypeReducer<UserInstall, AnyContext>>,
-    ) => Promise<unknown>
-    handleComponent?: (
-        interaction: MessageComponentInteraction<CacheTypeReducer<UserInstall, AnyContext>>,
-    ) => Promise<unknown>
+    ) => unknown
+    handleComponent?: ComponentHandler<UserInstall, AnyContext>
+    componentHandlers?: Record<string, ComponentHandler<UserInstall, AnyContext>>
     handleModalSubmit?: (
         interaction: ModalSubmitInteraction<CacheTypeReducer<UserInstall, AnyContext>>,
-    ) => Promise<unknown>
-    mixedHandler?: (interaction: any) => Promise<unknown>
+    ) => unknown
+    mixedHandler?: (interaction: Interaction) => unknown
 }
 
-export type Command = CommandBase<string | CommandBuilder, boolean, boolean, any>
+export type Command = CommandBase<string | CommandBuilder, boolean, boolean, unknown>
+
 export type CommandBuilder =
     | ContextMenuCommandBuilder
     | SlashCommandBuilder

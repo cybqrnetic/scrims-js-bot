@@ -1,6 +1,6 @@
 export class ColorUtil {
     /**
-     * If s = v = 1 than h = 120 is green and h = 0 is red
+     * If s = v = 1 then h = 120 is green and h = 0 is red
      */
     static hsvToRgb(h: number, s: number, v: number) {
         const i = Math.floor((h / 360) * 6)

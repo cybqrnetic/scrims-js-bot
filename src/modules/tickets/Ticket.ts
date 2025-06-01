@@ -1,50 +1,60 @@
-import {
-    DiscordBot,
-    DiscordIdProp,
-    Document,
-    Prop,
-    SchemaDocument,
-    getSchemaFromClass,
-    modelSchema,
-} from "lib"
+import { DocumentType, getModelForClass, Prop } from "@typegoose/typegoose"
+import { bot, Document } from "lib"
+import { Types } from "mongoose"
+
+export class CloseTimeout {
+    @Prop({ type: Types.Long, required: true })
+    messageId!: string
+
+    @Prop({ required: true })
+    timestamp!: Date
+
+    @Prop({ type: Types.Long, required: true })
+    closerId!: string
+
+    @Prop({ required: false })
+    reason?: string
+}
 
 @Document("Ticket", "tickets")
-class TicketSchema {
-    @DiscordIdProp({ required: true })
+class TicketClass {
+    @Prop({ type: Types.Long, required: true })
     userId!: string
 
-    @Prop({ type: String, required: true })
+    @Prop({ required: true })
     type!: string
 
     @Prop({ type: String, default: "open" })
     status!: "open" | "closed" | "deleted"
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     guildId!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     channelId!: string
 
-    @Prop({ type: Date, default: Date.now })
+    @Prop({ default: Date.now })
     createdAt!: Date
 
-    @Prop({ type: Date, required: false })
+    @Prop()
     deletedAt?: Date
 
-    @DiscordIdProp({ required: false })
+    @Prop({ type: Types.Long })
     closerId?: string
 
-    @Prop({ type: String, required: false })
+    @Prop()
     closeReason?: string
 
-    @Prop({ type: Object, required: false })
-    extras?: unknown
+    @Prop({ type: CloseTimeout, _id: false })
+    closeTimeouts?: CloseTimeout[]
+
+    @Prop()
+    extras?: object
 
     user() {
-        return DiscordBot.INSTANCE?.users.resolve(this.userId)
+        return bot.users.resolve(this.userId)
     }
 }
 
-const schema = getSchemaFromClass(TicketSchema)
-export const Ticket = modelSchema(schema, TicketSchema)
-export type Ticket<Extras extends object = any> = SchemaDocument<typeof schema> & { extras?: Extras }
+export const Ticket = getModelForClass(TicketClass)
+export type Ticket<Extras extends object = object> = DocumentType<TicketClass> & { extras?: Extras }

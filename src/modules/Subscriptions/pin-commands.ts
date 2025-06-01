@@ -1,21 +1,19 @@
 import { Config } from "@module/config"
-import { Events, InteractionContextType } from "discord.js"
-import { BotListener, LocalizedSlashCommandBuilder, SlashCommand, UserError } from "lib"
+import { Events, InteractionContextType, SlashCommandBuilder } from "discord.js"
+import { BotListener, SlashCommand, UserError } from "lib"
 import { PinnedMessage } from "./PinnedMessage"
 
 const INVALID_LINK_ERROR = new UserError("Invalid Message Link", "Please provide a valid message link.")
 const MAX_PINNED_MESSAGES = Config.declareType("Max Pinned Messages")
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder()
-        .setNameAndDescription("commands.pin")
-        .addStringOption((option) =>
-            option.setNameAndDescription("commands.pin.message_option").setRequired(true),
-        )
+    builder: new SlashCommandBuilder()
+        .setLocalizations("commands.pin")
+        .addStringOption((option) => option.setLocalizations("commands.pin.message_option").setRequired(true))
         .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions("0"),
 
-    config: { defer: "ephemeral_reply", permission: "commands.pin" },
+    config: { defer: "EphemeralReply", permission: "commands.pin" },
 
     async handler(interaction) {
         const pinnedAmount = await PinnedMessage.countDocuments({
@@ -74,15 +72,16 @@ SlashCommand({
 })
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder()
-        .setNameAndDescription("commands.unpin")
+    builder: new SlashCommandBuilder()
+        .setLocalizations("commands.unpin")
         .addStringOption((option) =>
-            option.setNameAndDescription("commands.unpin.message_option").setRequired(true),
+            option.setLocalizations("commands.unpin.message_option").setRequired(true),
         )
         .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions("0"),
 
-    config: { defer: "ephemeral_reply", permission: "commands.pin" },
+    config: { defer: "EphemeralReply", permission: "commands.pin" },
+
     async handleAutocomplete(interaction) {
         const userId = interaction.user.id
         const guildId = interaction.guild.id

@@ -29,7 +29,7 @@ SlashCommand({
                 .setRequired(false),
         ),
 
-    config: { defer: "ephemeral_reply", permission: "commands.archive" },
+    config: { defer: "EphemeralReply", permission: "commands.archive" },
 
     async handler(interaction) {
         const channel = interaction.options.getChannel(Options.Channel) ?? interaction.channel
@@ -55,7 +55,7 @@ SlashCommand({
         const link =
             process.env["NODE_ENV"] === "production"
                 ? `https://transcripts.${process.env["DOMAIN"]}/${encodeURIComponent(filename)}`
-                : path.resolve(file)
+                : encodeURI(path.resolve(file))
 
         const message = {
             content: `Successfully archived ${channelMention(channel.id)}!\n[Link to transcript](${link})`,

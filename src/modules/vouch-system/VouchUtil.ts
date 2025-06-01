@@ -1,14 +1,15 @@
 import { EmbedField, Role, User, userMention, type CommandInteraction } from "discord.js"
-import { I18n, UserError, UserProfile } from "lib"
+import { getMainGuild, I18n, UserError } from "lib"
 
 import { RANKS } from "@Constants"
 import { OnlinePositions } from "@module/positions"
+import { UserProfile } from "@module/profiler"
 import { OfflinePositions } from "@module/sticky-roles"
 import { Vouch } from "./Vouch"
 import { VouchCollection } from "./VouchCollection"
 
 export class VouchUtil {
-    static toEmbedField(vouch: Vouch, i18n: I18n, councilRole?: Role, idx?: number) {
+    static toEmbedField(vouch: Vouch, i18n: I18n, councilRole?: Role, idx?: number): EmbedField {
         const givenAt = vouch.givenAt.toDiscord("D")
 
         if (vouch.executorId) {
@@ -20,7 +21,7 @@ export class VouchUtil {
                 vouch.executor()?.username ?? UserProfile.getUsername(vouch.executorId) ?? "Unknown User",
                 givenAt,
                 idx || undefined,
-            ) as EmbedField
+            )
         }
 
         return i18n.getObject(
@@ -29,7 +30,7 @@ export class VouchUtil {
             vouch.comment,
             givenAt,
             idx || undefined,
-        ) as EmbedField
+        )
     }
 
     static toString(vouch: Vouch, i18n: I18n, idx?: number) {
@@ -69,17 +70,18 @@ export class VouchUtil {
         return rank
     }
 
-    static determineDemoteRank(user: User | UserProfile, council: User) {
+    static determineDemoteRank(user: User | string, council: User) {
+        const mention = typeof user === "string" ? userMention(user) : user.toString()
         for (const rank of Object.values(RANKS).reverse()) {
             if (OfflinePositions.hasPosition(user, rank)) {
                 if (!council.hasPermission(`council.${rank.toLowerCase()}.demote`))
                     throw new UserError(
-                        `You are missing the required permission to demote ${user} from ${rank}.`,
+                        `You are missing the required permission to demote ${mention} from ${rank}.`,
                     )
                 return rank
             }
         }
-        throw new UserError(`You can't demote ${user} since they only have the default rank of member.`)
+        throw new UserError(`You can't demote ${mention} since they only have the default rank of member.`)
     }
 
     static async finishVouchesInteraction(
@@ -91,7 +93,7 @@ export class VouchUtil {
         const guildId = interaction.guildId ?? undefined
         const [vouches] = await Promise.all([
             VouchCollection.fetch(user.id, rank),
-            interaction.client.host?.members.fetch({ user: interaction.user.id, force: true }),
+            getMainGuild()?.members.fetch({ user: interaction.user.id, force: true }),
         ])
 
         if (includeExpired === undefined) {
@@ -104,27 +106,17 @@ export class VouchUtil {
 
         if (!vouches.getCovered().length) return
 
-        if (OnlinePositions.hasPosition(interaction.user, `${rank} Council`)) {
-            return await interaction
-                .followUp(
-                    vouches
-                        .toMessage(interaction.i18n, { onlyHidden: true }, guildId)
-                        .setAllowedMentions()
-                        .setEphemeral(true),
-                )
-                .catch(console.error)
-        }
-
         if (interaction.user.id === user.id) {
             vouches.vouches.forEach((v) => (v.comment = undefined))
-            await interaction
-                .followUp(
-                    vouches
-                        .toMessage(interaction.i18n, { onlyHidden: true }, guildId)
-                        .setAllowedMentions()
-                        .setEphemeral(true),
-                )
-                .catch(console.error)
+        } else if (!OnlinePositions.hasPosition(interaction.user, `${rank} Council`)) {
+            return
         }
+
+        await interaction.followUp(
+            vouches
+                .toMessage(interaction.i18n, { onlyHidden: true }, guildId)
+                .setAllowedMentions()
+                .setEphemeral(true),
+        )
     }
 }

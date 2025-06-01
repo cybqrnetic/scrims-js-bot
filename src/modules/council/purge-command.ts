@@ -1,31 +1,30 @@
 import {
     ActionRowBuilder,
+    MessageFlags,
     ModalBuilder,
+    SlashCommandBuilder,
     TextInputBuilder,
     TextInputStyle,
     bold,
     inlineCode,
+    userMention,
     type BaseInteraction,
 } from "discord.js"
-import {
-    LocalizedSlashCommandBuilder,
-    MessageOptionsBuilder,
-    SlashCommand,
-    UserError,
-    UserProfile,
-} from "lib"
+import { MessageOptionsBuilder, SlashCommand, UserError } from "lib"
 import { DateTime } from "luxon"
 
 import { Config } from "@module/config"
 import { LogUtil } from "@module/council/vouches/LogUtil"
 import { OnlinePositions } from "@module/positions"
+import { UserProfile } from "@module/profiler"
 import { OfflinePositions } from "@module/sticky-roles"
-import { SubscriptionFeaturePermissions } from "@module/Subscriptions"
+import { SubscriptionFeaturePermissions } from "@module/subscriptions"
 import { Vouch } from "@module/vouch-system"
 import { VouchUtil } from "@module/vouch-system/VouchUtil"
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder("commands.purge")
+    builder: new SlashCommandBuilder()
+        .setLocalizations("commands.purge")
         .addBooleanOption((option) =>
             option
                 .setName("inactivity-purge")
@@ -73,33 +72,22 @@ SlashCommand({
     },
 
     async handleModalSubmit(interaction) {
-        await interaction.deferReply({ ephemeral: true })
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral })
 
-        const isInactivityPurge = interaction.args.pop()! === "true"
+        const isInactivityPurge = interaction.args.shift()! === "true"
         const components = interaction.components.map((v) => v.components).flat()
         const reason = components.find((v) => v.customId === "reason")!.value
         const rank = components.find((v) => v.customId === "rank")?.value.toLowerCase()
+        const users = components.find((v) => v.customId === "users")!.value.split("\n")
 
-        const users = components
-            .find((v) => v.customId === "users")!
-            .value.split("\n")
-            .filter((v) => {
-                const member = interaction.guild.members.resolve(v)
-                const isCouncil = member && OnlinePositions.hasPosition(member, `${rank} Council`)
-                const isImmune =
-                    isInactivityPurge && member?.hasPermission(SubscriptionFeaturePermissions.PurgeImmunity)
-
-                return !isCouncil && !isImmune
-            })
-
-        const resolved = new Set<UserProfile>()
+        const resolved = new Set<string>()
         let purged = 0
         const problems: string[] = []
         const warnings: string[] = []
 
         await Promise.all(
             users.map((user) =>
-                purge(interaction, resolved, user, reason, rank)
+                purge(interaction, resolved, user, reason, rank, isInactivityPurge)
                     .then((warning) => {
                         if (warning) warnings.push(warning)
                         purged++
@@ -138,20 +126,31 @@ SlashCommand({
 
 async function purge(
     interaction: BaseInteraction<"cached">,
-    resolved: Set<UserProfile>,
+    resolved: Set<string>,
     resolvable: string,
     reason: string,
     rankInput: string | undefined,
+    isInactivityPurge: boolean,
 ): Promise<string | void> {
-    const user = UserProfile.resolve(resolvable)
+    const user = UserProfile.resolveId(resolvable)
     if (!user) throw new UserError(`User couldn't be resolved from '${resolvable}'.`)
+    const mention = userMention(user)
 
-    if (resolved.has(user)) return `Duplicate entry detected for ${user}!`
+    if (resolved.has(user)) return `Duplicate entry detected for ${mention}!`
     resolved.add(user)
 
     const rank = VouchUtil.determineDemoteRank(user, interaction.user)
     if (rankInput && rank.toLowerCase() !== rankInput) {
-        return `${user} is wrong rank for purge (${rank}).`
+        return `${mention} is wrong rank for purge (${rank}).`
+    }
+
+    const member = interaction.guild.members.resolve(user)
+    if (member && OnlinePositions.hasPosition(member, `${rank} Council`)) {
+        return `${mention} is a ${rank} council member.`
+    }
+
+    if (isInactivityPurge && member?.hasPermission(SubscriptionFeaturePermissions.PurgeImmunity)) {
+        return `${mention} is immune to inactivity purge.`
     }
 
     const removeReason = `Demoted from ${rank} by ${interaction.user.tag}.`
@@ -159,7 +158,7 @@ async function purge(
 
     const filter = {
         position: rank,
-        userId: user.id,
+        userId: user,
         worth: -2,
     }
 
@@ -173,17 +172,14 @@ async function purge(
         { upsert: true, new: true },
     ).catch(console.error)
 
-    if (vouch) {
-        LogUtil.logCreate(vouch, interaction.user).catch(console.error)
-    }
-
-    LogUtil.logDemotion(user, rank, interaction.user).catch(console.error)
+    if (vouch) LogUtil.logCreate(vouch, interaction.user)
+    LogUtil.logDemotion(user, rank, interaction.user)
 
     await interaction.client.users
-        .createDM(user.id)
+        .createDM(user)
         .then((dm) => dm.send(bold(`You lost your ${rank} rank in Bridge Scrims for ${reason}.`)))
         .catch(() => null)
 
-    const announcement = new MessageOptionsBuilder().setContent(bold(`${user} was removed from ${rank}.`))
-    Config.buildSendMessages(`${rank} Announcements Channel`, null, announcement).catch(console.error)
+    const announcement = new MessageOptionsBuilder().setContent(bold(`${mention} was removed from ${rank}.`))
+    Config.buildSendMessages(`${rank} Announcements Channel`, null, announcement)
 }

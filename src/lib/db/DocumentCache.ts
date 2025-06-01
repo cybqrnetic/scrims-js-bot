@@ -2,7 +2,7 @@ import { EventEmitter } from "events"
 
 export class DocumentCache<T> extends Map<string, T> {
     protected events = new EventEmitter({ captureRejections: true })
-    protected promise = Promise.withResolvers()
+    protected init = Promise.withResolvers()
 
     constructor() {
         super()
@@ -50,11 +50,11 @@ export class DocumentCache<T> extends Map<string, T> {
         return this
     }
 
-    initialized() {
-        return this.promise.promise
+    __setInitialized() {
+        this.init.resolve(null)
     }
 
-    _setInitialized() {
-        this.promise.resolve(null)
+    async initialized() {
+        await this.init.promise
     }
 }

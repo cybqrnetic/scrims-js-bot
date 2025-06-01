@@ -19,9 +19,7 @@ export const RANKS = {
     Premium: "Premium",
 }
 
-export const ASSETS = process.cwd() + "/src/assets/"
-export const TEST = process.env["TEST"]?.toLowerCase() === "true"
-export const HOST_GUILD_ID = process.env["HOST_GUILD_ID"] ?? "759894401957888031"
+export const MAIN_GUILD_ID = process.env["MAIN_GUILD_ID"] ?? "759894401957888031"
 export const ROLE_APP_HUB = process.env["ROLE_APP_HUB"] ?? "874783384042340392"
 
 export const RANKED_SEASON = process.env["RANKED_SEASON"] ?? "test"
