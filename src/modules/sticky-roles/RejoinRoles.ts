@@ -1,21 +1,15 @@
-import {
-    DiscordIdArrayProp,
-    DiscordIdProp,
-    Document,
-    SchemaDocument,
-    getSchemaFromClass,
-    modelSchemaWithCache,
-} from "lib"
+import { DocumentType, Prop } from "@typegoose/typegoose"
+import { Document, modelClassCached } from "lib"
+import { Types } from "mongoose"
 
 @Document("UserRejoinRoles", "rejoinroles")
-class RejoinRolesSchema {
-    @DiscordIdProp({ required: true })
+class RejoinRolesClass {
+    @Prop({ type: Types.Long, required: true })
     _id!: string
 
-    @DiscordIdArrayProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     roles!: string[]
 }
 
-const schema = getSchemaFromClass(RejoinRolesSchema)
-export const UserRejoinRoles = modelSchemaWithCache(schema, RejoinRolesSchema)
-export type UserRejoinRoles = SchemaDocument<typeof schema>
+export const UserRejoinRoles = modelClassCached(RejoinRolesClass)
+export type UserRejoinRoles = DocumentType<RejoinRolesClass>

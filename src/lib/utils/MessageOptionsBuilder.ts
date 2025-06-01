@@ -1,43 +1,88 @@
 import {
-    APIActionRowComponent,
     APIEmbed,
-    APIMessageActionRowComponent,
+    APIMessageTopLevelComponent,
     ActionRowBuilder,
     AllowedMentionsTypes,
     BaseMessageOptions,
+    BitField,
+    BitFieldResolvable,
     ButtonBuilder,
+    ContainerBuilder,
     EmbedBuilder,
+    JSONEncodable,
     MessageActionRowComponentBuilder,
+    MessageFlags,
+    MessageFlagsString,
     MessageMentionOptions,
 } from "discord.js"
 
-type BuilderOrBuildCall<T> = ((builder: T) => T) | T
-function resolveBuilders<T>(Builder: new () => T, resolvables: BuilderOrBuildCall<T>[]) {
-    return resolvables.map((v) => (v instanceof Function ? v(new Builder()) : v))
+type BuilderOrCallback<T> = ((builder: T) => T) | T
+function resolveBuilder<T>(Builder: new () => T, resolvable: BuilderOrCallback<T>) {
+    return resolvable instanceof Function ? resolvable(new Builder()) : resolvable
+}
+
+function resolveBuilders<T>(builder: new () => T, resolvables: BuilderOrCallback<T>[]) {
+    return resolvables.map((v) => resolveBuilder(builder, v))
 }
 
 // content should be able to be null
 const NULL = null as unknown as undefined
 
+type CreateFlags =
+    | MessageFlags.Ephemeral
+    | MessageFlags.SuppressEmbeds
+    | MessageFlags.SuppressNotifications
+    | MessageFlags.IsComponentsV2
+
+type CreateFlagsString = Extract<
+    MessageFlagsString,
+    "Ephemeral" | "SuppressEmbeds" | "SuppressNotifications" | "IsComponentsV2"
+>
+
 export class MessageOptionsBuilder {
     public content?: string
     public embeds: APIEmbed[]
-    public components: APIActionRowComponent<APIMessageActionRowComponent>[]
+    public components: APIMessageTopLevelComponent[]
     public allowedMentions: MessageMentionOptions
-    public ephemeral?: boolean
+    public flags?: number
+    private _flags?: BitField<CreateFlagsString, CreateFlags>
 
     constructor({ content, embeds, components, allowedMentions }: BaseMessageOptions = {}) {
         this.content = content ?? NULL
         this.embeds = (embeds as APIEmbed[]) ?? []
-        this.components = (components as APIActionRowComponent<APIMessageActionRowComponent>[]) ?? []
+        this.components = (components as APIMessageTopLevelComponent[]) ?? []
         this.allowedMentions = allowedMentions ?? {
             parse: [AllowedMentionsTypes.User, AllowedMentionsTypes.Role],
         }
+        this._flags = new BitField()
+    }
+
+    setFlag(flag: BitFieldResolvable<CreateFlagsString, CreateFlags>, value: boolean = true) {
+        if (!this._flags) this._flags = new BitField()
+
+        if (value) this._flags.add(flag)
+        else this._flags.remove(flag)
+
+        this.flags = this._flags?.valueOf()
+        return this
+    }
+
+    setContainer(container: BuilderOrCallback<ContainerBuilder>) {
+        this.setFlag(MessageFlags.IsComponentsV2)
+        this.components = [resolveBuilder(ContainerBuilder, container).toJSON()]
+        return this
+    }
+
+    setContainerContent(content: string, accentColor?: number) {
+        return this.setContainer(
+            new ContainerBuilder()
+                .addTextDisplayComponents((text) => text.setContent(content))
+                .setAccentColor(accentColor),
+        )
     }
 
     setEphemeral(ephemeral: boolean) {
-        this.ephemeral = ephemeral
-        return this
+        return this.setFlag(MessageFlags.Ephemeral, ephemeral)
     }
 
     setAllowedMentions(allowedMentions: MessageMentionOptions = {}) {
@@ -51,7 +96,7 @@ export class MessageOptionsBuilder {
     }
 
     setContent(content?: string | null) {
-        this.content = content === null ? NULL : !content ? undefined : `${content}`
+        this.content = content === null ? NULL : content === undefined ? undefined : `${content}`
         if (this.content && this.content.length > 2000)
             throw new TypeError("Message content can't be longer than 2000!")
         return this
@@ -61,7 +106,7 @@ export class MessageOptionsBuilder {
         return this.setContent(editor(this.content ?? ""))
     }
 
-    addEmbeds(...embeds: BuilderOrBuildCall<EmbedBuilder>[]) {
+    addEmbeds(...embeds: BuilderOrCallback<EmbedBuilder>[]) {
         this.embeds.push(...resolveBuilders(EmbedBuilder, embeds).map((v) => v.toJSON()))
         if (this.embeds.length > 10) throw new TypeError("You can't have more than 10 embeds!")
         return this
@@ -74,7 +119,7 @@ export class MessageOptionsBuilder {
         )
     }
 
-    addButtons(...buttons: BuilderOrBuildCall<ButtonBuilder>[]) {
+    addButtons(...buttons: BuilderOrCallback<ButtonBuilder>[]) {
         if (buttons.length > 5) throw new TypeError("There can't be more than 5 buttons per action row!")
         return this.addComponents(
             new ActionRowBuilder<MessageActionRowComponentBuilder>().addComponents(
@@ -83,7 +128,7 @@ export class MessageOptionsBuilder {
         )
     }
 
-    addComponents(...components: ActionRowBuilder<MessageActionRowComponentBuilder>[]) {
+    addComponents(...components: JSONEncodable<APIMessageTopLevelComponent>[]) {
         this.components.push(...components.map((v) => v.toJSON()))
         if (components.length > 5) throw new TypeError("There can't be more than 5 action rows!")
         return this

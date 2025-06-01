@@ -1,9 +1,8 @@
 # testing
 node_modules
 dist
-data
 transcripts
-tests
+temp.ts
 logs
 
 # developing

@@ -11,93 +11,99 @@ export class ChallongeBracketClient {
     static readonly Error = ChalllongeAPIError
     constructor(readonly tourneyId: string | number) {}
 
-    protected extractParticipants(participants: any[] = []) {
-        return Object.fromEntries(
-            participants.map((item) => [item.participant.id, item.participant]),
-        ) as ChallongeParticipants
+    protected extractParticipants(participants: ParticipantResponse[] = []) {
+        return Object.fromEntries(participants.map((v) => [v.participant.id, v.participant]))
     }
 
-    protected extractMatches(matches: any[] = []) {
-        return Object.fromEntries(matches.map((item) => [item.match.id, item.match])) as ChallongeMatches
+    protected extractMatches(matches: MatchResponse[] = []) {
+        return Object.fromEntries(matches.map((v) => [v.match.id, v.match]))
     }
 
-    protected extractTournament(tourney: any) {
-        tourney.matches = this.extractMatches(tourney.matches)
-        tourney.participants = this.extractParticipants(tourney.participants)
-        return tourney as ChallongeTournament
+    protected extractTournament({ tournament }: TourneyResponse): ChallongeTournament {
+        return {
+            ...tournament,
+            matches: this.extractMatches(tournament.matches),
+            participants: this.extractParticipants(tournament.participants),
+        }
     }
 
-    async challongeRequest(
+    private async request<T>(
         method: "GET" | "POST" | "PUT" | "DELETE",
         path: string[],
         urlParams: Record<string, string> = {},
         options: RequestOptions = {},
     ) {
-        if (!API_TOKEN) throw new TypeError("CHALLONGE_TOKEN is not set!")
-
         path = [`${this.tourneyId}`, ...path]
-        options.method = method
-        options.urlParams = new URLSearchParams({ api_key: API_TOKEN, ...urlParams })
+        urlParams["api_key"] = API_TOKEN
+
         if (!options.timeout) options.timeout = TIMEOUT
         if (!options.headers) options.headers = {}
+
         options.headers["Content-Type"] = "application/json; charset=utf-8"
+        options.urlParams = urlParams
+        options.method = method
+
         return request(`https://${SERVER}/tournaments/${path.join("/")}.json`, options)
-            .then((v) => v.json() as Promise<any>)
+            .then((v) => v.json() as Promise<T>)
             .catch((error) => this.onError(error))
     }
 
     async start() {
-        const response = await this.challongeRequest("POST", ["start"], {
+        const response = await this.request<TourneyResponse>("POST", ["start"], {
             include_participants: "1",
             include_matches: "1",
         })
-        return this.extractTournament(response.tournament)
+        return this.extractTournament(response)
     }
 
     async getTournament() {
-        const response = await this.challongeRequest("GET", [], {
+        const response = await this.request<TourneyResponse>("GET", [], {
             include_participants: "1",
             include_matches: "1",
         })
-        return this.extractTournament(response.tournament)
+        return this.extractTournament(response)
     }
 
     async addParticipant(name: string, misc: string) {
         const body = JSON.stringify({ participant: { name, misc } })
-        const response = await this.challongeRequest("POST", ["participants"], {}, { body })
-        return Object.values(this.extractParticipants([response]))[0]
+        const response = await this.request<ParticipantResponse>("POST", ["participants"], {}, { body })
+        return response.participant
     }
 
     async removeParticipant(participantId: string | number) {
-        const response = await this.challongeRequest("DELETE", ["participants", `${participantId}`])
-        return Object.values(this.extractParticipants([response]))[0]
+        const response = await this.request<ParticipantResponse>("DELETE", [
+            "participants",
+            `${participantId}`,
+        ])
+        return response.participant
     }
 
     async getMatches() {
-        const response = await this.challongeRequest("GET", ["matches"])
+        const response = await this.request<MatchResponse[]>("GET", ["matches"])
         return this.extractMatches(response)
     }
 
     async getParticipants() {
-        const response = await this.challongeRequest("GET", ["participants"])
+        const response = await this.request<ParticipantResponse[]>("GET", ["participants"])
         return this.extractParticipants(response)
     }
 
     async startMatch(matchId: string | number) {
-        const response = await this.challongeRequest("POST", ["matches", `${matchId}`, "mark_as_underway"])
-        return Object.values(this.extractMatches([response]))[0]
+        const path = ["matches", `${matchId}`, "mark_as_underway"]
+        const response = await this.request<MatchResponse>("POST", path)
+        return response.match
     }
 
     async updateMatch(matchId: string | number, score: string, winner_id: number) {
         const body = JSON.stringify({ match: { scores_csv: !score ? "0-0" : score, winner_id } })
-        const response = await this.challongeRequest("PUT", ["matches", `${matchId}`], {}, { body })
-        return Object.values(this.extractMatches([response]))[0]
+        const response = await this.request<MatchResponse>("PUT", ["matches", `${matchId}`], {}, { body })
+        return response.match
     }
 
     protected async onError(error: unknown): Promise<never> {
         if (error instanceof TimeoutError) throw new ChalllongeAPIError("api.timeout", "Challonge API")
         if (error instanceof HTTPError) {
-            const resp = (await error.response.json()) as any
+            const resp = (await error.response.json()) as ErrorResponse
             if (resp.errors)
                 console.error(`${error.response.url} responded with errors in body!`, resp.errors)
             else console.error(`${error.response.url} responded with a ${error.response.status} status!`)
@@ -105,6 +111,16 @@ export class ChallongeBracketClient {
 
         throw new ChalllongeAPIError(`api.request_failed`, "Challonge API")
     }
+}
+
+interface ErrorResponse {
+    errors?: string[]
+}
+
+type MatchResponse = { match: ChallongeMatch }
+type ParticipantResponse = { participant: ChallongeParticipant }
+type TourneyResponse = {
+    tournament: ChallongeTournament & { participants: ParticipantResponse[]; matches: MatchResponse[] }
 }
 
 export type ChallongeTournamentState = "pending" | "underway" | "complete"

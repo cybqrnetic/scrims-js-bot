@@ -1,4 +1,3 @@
-import { Colors, RankedStats } from "@Constants"
 import {
     bold,
     ButtonBuilder,
@@ -9,7 +8,10 @@ import {
     StringSelectMenuBuilder,
     userMention,
 } from "discord.js"
-import { MessageOptionsBuilder, SlashCommand, UserError, UserProfile } from "lib"
+
+import { Colors, RANKED_SEASON } from "@Constants"
+import { RankedStats, UserProfile } from "@module/profiler"
+import { MessageOptionsBuilder, SlashCommand, UserError } from "lib"
 
 const NAME = "ranked-leaderboard"
 const PAGE = 15
@@ -20,15 +22,17 @@ const Types = {
     BestStreak: "Best Win Streak",
 }
 
-const Fields = {
-    [Types.Elo]: RankedStats.Elo,
-    [Types.Wins]: RankedStats.Wins,
-    [Types.BestStreak]: RankedStats.BestStreak,
+const Fields: Record<string, keyof RankedStats> = {
+    [Types.Elo]: "elo",
+    [Types.Wins]: "wins",
+    [Types.BestStreak]: "bestWinStreak",
 }
 
 async function getLeaderboard(type: string, page: number) {
     const skip = (page - 1) * PAGE
-    const field = Fields[type]!
+    const property = Fields[type]!
+    const field = `ranked.${RANKED_SEASON}.${property}`
+
     const leaderboard = await UserProfile.find(
         { [field]: { $exists: true } },
         { [field]: 1 },
@@ -43,14 +47,14 @@ async function getLeaderboard(type: string, page: number) {
         .setFooter({ text: `Page ${page}` })
         .setTimestamp()
 
-    const split = field.split(".")
     embed.setDescription(
         leaderboard
             .slice(0, PAGE)
-            .map((v, i) => {
-                const val = split.reduce((pv, cv) => pv[cv], v as any)
-                return `${bold(`${i + 1 + skip}.`)} ${userMention(v.id)} ${inlineCode(val)}`
-            })
+            .map(
+                (v, i) =>
+                    `${bold(`${i + 1 + skip}.`)} ${userMention(v.id)} ` +
+                    inlineCode(v.ranked![RANKED_SEASON]![property]!.toString()),
+            )
             .join("\n"),
     )
 

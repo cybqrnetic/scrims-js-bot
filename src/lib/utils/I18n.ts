@@ -1,15 +1,14 @@
 import { EmbedBuilder } from "discord.js"
-import fs from "fs"
+import fs from "fs/promises"
 import path from "path"
 
 import { MessageOptionsBuilder } from "./MessageOptionsBuilder"
 
-const DEFAULT_LOCALE = "en-US"
+export const DEFAULT_LOCALE = process.env["DEFAULT_LOCALE"] ?? "en-US"
 const UNKNOWN_RESOURCE = "UNKNOWN_RESOURCE"
 
-interface Resources {
-    [x: string]: string | Resources
-}
+const GROUPS_REGEX = /(\?)\((.+?)\)/g
+const REPLACES_REGEX = /(\$){(.+?)}|(&){(.+?)}|(§){(\d+?)}|%s/g
 
 /**
  * Resource identifiers should be in **snake_case** (all lowercase & underscores).
@@ -17,126 +16,273 @@ interface Resources {
  * - **-/+** At the start of a identifier means that the resource should be returned in all lowercase/uppercase.
  * - **${resource_id}** Indicates that a different resource should be inserted.
  * - **§{0-∞}** Indicates that a parameter with a certain index should be inserted.
+ * - **&{name}** Indicates that a named parameter should be inserted.
  * - **?(...)** Indicates that anything in the brackets should be discarded if anything unknown comes up.
  */
 export class I18n {
-    protected resources: Resources = {}
     static instances: Record<string, I18n> = {}
+    static default: I18n
 
-    static getInstance(locale: string = DEFAULT_LOCALE) {
-        return this.instances[locale] ?? this.instances[DEFAULT_LOCALE]!
+    static getInstance(locale?: string) {
+        return (locale && this.instances[locale]) || this.default
     }
 
-    static getLocalizations(identifier: string, ...params: any[]) {
+    static getInstances() {
+        return Object.values(this.instances)
+    }
+
+    static getLocalizations(identifier: string, ...params: unknown[]) {
         return Object.fromEntries(
-            Object.entries(this.instances)
-                .map(([_, i18n]): [string, string] => [_, i18n.get(identifier, ...params)])
-                .filter(([_, v]) => v !== UNKNOWN_RESOURCE),
+            this.getInstances()
+                .map((i18n): [string, string] => [i18n.locale, i18n.get(identifier, ...params)])
+                .filter(([, v]) => v !== UNKNOWN_RESOURCE),
         )
     }
 
-    static loadLocal(localName: string, path: string) {
-        const resources = JSON.parse(fs.readFileSync(path, { encoding: "utf8" }))
-        if (localName in I18n.instances) I18n.instances[localName]!.mergeResources(resources)
-        else I18n.instances[localName] = new I18n(resources)
+    static async loadLocale(name: string, path: string) {
+        const data = await fs.readFile(path, { encoding: "utf8" })
+        const resources = Parser.parse(JSON.parse(data) as Data)
+        this.instances[name] = new I18n(resources, name)
     }
 
-    static loadLocales(dir: string) {
-        const files = fs.readdirSync(dir)
-        files.forEach((fileName) => this.loadLocal(fileName.slice(0, -5), path.join(dir, fileName)))
+    static async loadLocales(dir: string) {
+        const files = await fs.readdir(dir)
+        await Promise.all(files.map((name) => this.loadLocale(name.slice(0, -5), path.join(dir, name))))
+
+        this.default = this.instances[DEFAULT_LOCALE]!
+        if (!this.default) {
+            throw new Error(`Default locale not found: ${DEFAULT_LOCALE}`)
+        }
     }
 
-    constructor(resources: Resources) {
-        Object.defineProperty(this, "resources", { value: resources })
+    constructor(
+        private readonly resources: Resources,
+        readonly locale: string,
+    ) {}
+
+    has(id: string) {
+        return this.lookup(splitId(id)) !== undefined
     }
 
-    mergeResources(resources: Resources) {
-        this.resources = { ...this.resources, ...resources }
+    hasString(id: string) {
+        return Array.isArray(this.lookup(splitId(id)))
     }
 
-    get(resourceId: string, ...params: any[]) {
-        return this._get(resourceId, params, true) as string
+    get(id: string, ...params: unknown[]) {
+        const value = this.lookup(splitId(id))
+        return Array.isArray(value) ? this.formatGroups(value, wrapParams(params)) : UNKNOWN_RESOURCE
     }
 
-    has(resourceId: string) {
-        return this._get(resourceId) !== UNKNOWN_RESOURCE
+    getMessageOptions(id: string, ...params: unknown[]) {
+        const value = this.lookup(id.split("."))
+        if (value === undefined) return new MessageOptionsBuilder().setContent(UNKNOWN_RESOURCE)
+        if (Array.isArray(value)) {
+            return new MessageOptionsBuilder()
+                .setContent(this.formatGroups(value, wrapParams(params)))
+                .removeMentions()
+        }
+
+        return new MessageOptionsBuilder()
+            .addEmbeds(new EmbedBuilder(this.formatObject(value, wrapParams(params))))
+            .removeMentions()
     }
 
-    hasString(resourceId: string) {
-        return this._get(resourceId, [], true) !== UNKNOWN_RESOURCE
+    getEmbed(id: string, ...params: unknown[]) {
+        const value = this.lookup(splitId(id))
+        if (value === undefined) return new EmbedBuilder().setDescription(UNKNOWN_RESOURCE)
+        if (Array.isArray(value))
+            return new EmbedBuilder().setDescription(this.formatGroups(value, wrapParams(params)))
+
+        return new EmbedBuilder(this.formatObject(value, wrapParams(params)))
     }
 
-    getMessageOptions(resourceId: string, ...params: any[]) {
-        const val = this._get(resourceId, params)
-        if (typeof val === "string") return new MessageOptionsBuilder().setContent(val).removeMentions()
-        return new MessageOptionsBuilder().addEmbeds(this.getEmbed(resourceId, ...params)).removeMentions()
+    getObject<T extends object>(id: string, ...params: unknown[]): T {
+        const value = this.lookup(splitId(id))
+        if (value === undefined || Array.isArray(value)) return {} as T
+        return this.formatObject(value, wrapParams(params)) as T
     }
 
-    getEmbed(identifier: string, ...params: any[]) {
-        const data = params.length === 1 && params[0] instanceof Object ? params[0] : { description: params }
-        const value = this._get(identifier, data?.description)
-        if (typeof value === "string") return new EmbedBuilder().setDescription(value)
-        return new EmbedBuilder(this.formatObject(value, data))
+    private lookup(id: string[]): Group[] | Resources | undefined {
+        return id.reduce((pv, cv) => pv?.[cv] as Resources, this.resources)
     }
 
-    getObject(identifier: string, ...params: any[]) {
-        const data = params.length === 1 && params[0] instanceof Object ? params[0] : params
-        const value = this._get(identifier)
-        if (typeof value === "string") return {}
-        return this.formatObject(value, data)
-    }
-
-    protected _get(identifier: string, params: any[] = [], forceString = false) {
-        const toLower = identifier.startsWith("-")
-        const toUpper = identifier.startsWith("+")
-        const args = (toLower || toUpper ? identifier.slice(1) : identifier).split(".").filter((v) => v)
-
-        const val = args.reduce((pv: any, cv) => pv?.[cv], this.resources) as string
-        if (typeof val !== "string" && forceString) return UNKNOWN_RESOURCE
-        if (typeof val === "string")
-            return this.formatString(toLower ? val.toLowerCase() : toUpper ? val.toUpperCase() : val, params)
-        return val ?? UNKNOWN_RESOURCE
-    }
-
-    protected formatObject(
-        obj: Record<string, any>,
-        params: any[] | Record<string, any[]> = [],
-    ): Record<string, any> {
-        const getParams = (key: string) => (params instanceof Array ? params : params[key])
+    private formatObject(obj: Resources, params: Params): Record<string, unknown> {
         return Object.fromEntries(
             Object.entries(obj).map(([key, val]) => [
                 key,
-                val instanceof Object
-                    ? this.formatObject(val, getParams(key))
-                    : this.formatString(val, getParams(key)),
+                Array.isArray(val)
+                    ? this.formatGroups(val, params)
+                    : this.formatObject(val, params.fork(key)),
             ]),
         )
     }
 
-    protected formatString(string: string, params: any[] = []) {
-        const format = (str: string): { v: string; missing: boolean } => {
-            const refReplaces = Array.from(str.matchAll(/\${(.+?)}/g)).map(([m, id]) => [
-                m,
-                this._get(id!, params, true),
-            ])
-            const idxReplaces = Array.from(str.matchAll(/§{(\d+?)}/g)).map(([m, i]) => [
-                m,
-                params[parseInt(i!)] ?? UNKNOWN_RESOURCE,
-            ])
-            const orderedReplaces = Array.from(str.matchAll(/%s/g)).map(([m], i) => [
-                m,
-                params[i] ?? UNKNOWN_RESOURCE,
-            ])
-            const replaces = [...orderedReplaces, ...refReplaces, ...idxReplaces]
-            replaces.forEach(([m, r]) => (str = str.replace(m, r === UNKNOWN_RESOURCE ? "unknown" : r)))
-            return { missing: replaces.some(([_, r]) => r === UNKNOWN_RESOURCE), v: str }
+    private formatGroups(groups: Group[], params: Params) {
+        return groups.reduce((pv, cv) => pv + this.formatGroup(cv, params), "")
+    }
+
+    private formatGroup(group: Group, params: Params) {
+        let output = ""
+        for (const value of group.values) {
+            if (typeof value === "string") {
+                output += value
+            } else if (value.id !== undefined) {
+                const val = this.lookup(value.id.split)
+                if (Array.isArray(val)) {
+                    const str = this.formatGroups(val, params)
+                    output += value.id.lower ? str.toLowerCase() : value.id.upper ? str.toUpperCase() : str
+                } else {
+                    if (group.optional) return ""
+                    output += UNKNOWN_RESOURCE
+                }
+            } else if (value.idx !== undefined) {
+                output += (params.get(value.idx) as string) ?? ""
+            } else if (value.name !== undefined) {
+                output += (params.getNamed(value.name) as string) ?? ""
+            } else {
+                output += (params.next() as string) ?? ""
+            }
+        }
+        return output
+    }
+}
+
+interface Identifier {
+    split: string[]
+    lower?: true
+    upper?: true
+}
+
+interface Reference {
+    id?: Identifier
+    name?: string
+    idx?: number
+}
+
+type Value = Reference | string
+
+interface Group {
+    values: Value[]
+    optional?: true
+}
+
+interface Resources {
+    [x: string]: Group[] | Resources
+}
+
+class Params {
+    private array?: unknown[]
+    constructor(
+        private readonly values: unknown[] | Record<string, unknown>,
+        private i: [number] = [0],
+    ) {}
+
+    private asArray() {
+        if (this.array) return this.array
+        return (this.array = Array.isArray(this.values)
+            ? this.values
+            : Object.values(this.values).flatMap((v) => v))
+    }
+
+    next() {
+        return this.asArray()[this.i[0]++]
+    }
+
+    get(index: number) {
+        return this.asArray()[this.i[0] + index]
+    }
+
+    getNamed(name: string) {
+        return Array.isArray(this.values) ? undefined : this.values[name]
+    }
+
+    fork(name: string) {
+        const values = Array.isArray(this.values) ? [] : (this.values[name] as unknown[])
+        return new Params(values, this.i)
+    }
+}
+
+function wrapParams(params: unknown[]): Params {
+    return params.length === 1 && typeof params[0] === "object"
+        ? new Params(params[0] as Record<string, unknown>)
+        : new Params(params)
+}
+
+function splitId(id: string) {
+    return id.split(".")
+}
+
+interface Data {
+    [x: string]: string | Data
+}
+
+class Parser {
+    public static parse(data: Data): Resources {
+        return Object.fromEntries(
+            Object.entries(data).map(([key, value]) => [
+                key,
+                typeof value === "object" ? this.parse(value) : this.groups(value),
+            ]),
+        )
+    }
+
+    private static groups(value: string): Group[] {
+        const groups: Group[] = []
+
+        let j = 0
+        for (const match of value.matchAll(GROUPS_REGEX)) {
+            groups.push({ values: [value.slice(j, match.index)] })
+
+            const group: Group = { values: this.values(match[2]!) }
+            switch (match[1]) {
+                case "?":
+                    group.optional = true
+                    break
+            }
+
+            groups.push(group)
+            j = match.index + match[0].length
         }
 
-        Array.from(string.matchAll(/\?\((.+?)\)/g)).forEach(([m, content]) => {
-            const { missing, v } = format(content!)
-            string = string.replace(m, missing ? "" : v)
-        })
+        if (j < value.length) {
+            groups.push({ values: this.values(value.slice(j, value.length)) })
+        }
 
-        return format(string).v
+        return groups
+    }
+
+    private static values(value: string): Value[] {
+        const values: Value[] = []
+
+        let j = 0
+        for (const match of value.matchAll(REPLACES_REGEX)) {
+            if (j < match.index) {
+                values.push(value.slice(j, match.index))
+            }
+
+            const ref: Reference = {}
+            if (match[1] !== undefined) {
+                ref.id = this.identifier(match[2]!)
+            } else if (match[3] !== undefined) {
+                ref.name = match[4]!
+            } else if (match[5] !== undefined) {
+                ref.idx = parseInt(match[6]!)
+            }
+
+            values.push(ref)
+            j = match.index + match[0].length
+        }
+
+        if (j < value.length) {
+            values.push(value.slice(j, value.length))
+        }
+
+        return values
+    }
+
+    private static identifier(value: string): Identifier {
+        if (value.startsWith("-")) return { split: splitId(value.slice(1)), lower: true }
+        if (value.startsWith("+")) return { split: splitId(value.slice(1)), upper: true }
+        return { split: splitId(value) }
     }
 }

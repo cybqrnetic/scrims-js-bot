@@ -1,58 +1,51 @@
 import {
-    EmbedBuilder,
+    BaseInteraction,
     GuildChannelCreateOptions,
-    GuildMember,
+    MessageComponentInteraction,
     TextChannel,
-    type Interaction,
 } from "discord.js"
 import { MessageOptionsBuilder } from "lib"
 
-import { ExchangeHandler, ExchangeInputField, RecallExchangeInteraction } from "../exchange"
+import { AbstractFormHandler, ExchangeState, FormComponent } from "@module/forms"
 import { Ticket } from "./Ticket"
 import { TicketManager } from "./TicketManager"
 
-export class TicketCreateHandler extends ExchangeHandler {
+export abstract class TicketCreateHandler extends AbstractFormHandler {
     constructor(
         customId: string,
         title: string,
         readonly tickets: TicketManager,
-        fields: ExchangeInputField<any>[],
+        pages: FormComponent[][],
+        notes?: string,
+        color?: number,
     ) {
-        super(customId, title, fields)
+        super(customId, title, pages, notes, color)
     }
 
     /** @override */
-    async verify(interaction: Interaction) {
-        await this.tickets.verifyTicketRequest(interaction.user, interaction.guildId!)
-        return true
+    protected onInit() {}
+
+    /** @override */
+    protected async onVerify(ctx: BaseInteraction<"cached">) {
+        await this.tickets.verifyTicketRequest(ctx.user, ctx.guildId)
     }
 
-    /** @overload */
-    getModalResponse(interaction: RecallExchangeInteraction, embed: EmbedBuilder) {
-        return new MessageOptionsBuilder().addEmbeds(
-            embed.setTitle("Ticket Create Confirmation").setColor("#FFFFFF"),
-        )
-    }
-
-    async getTicketExtras(interaction: RecallExchangeInteraction): Promise<object | void> {}
-
-    /** @overload */
-    async getFinishResponse(interaction: RecallExchangeInteraction) {
-        const messages = await this.buildTicketMessages(interaction)
+    /** @override */
+    protected async onFinish(interaction: MessageComponentInteraction<"cached">, state: ExchangeState) {
+        const messages = await this.buildTicketMessages(interaction, state)
 
         let ticket: Ticket | undefined
         const channel = await this.createTicketChannel(interaction)
         try {
             ticket = await Ticket.create({
                 channelId: channel.id,
-                guildId: interaction.guildId!,
+                guildId: interaction.guildId,
                 userId: interaction.user.id,
                 type: this.tickets.type,
                 extras: await this.getTicketExtras(interaction),
             })
             await Promise.all(messages.map((m) => channel.send(m)))
-            this.onCreate(ticket!, channel, interaction).catch(console.error)
-            return new MessageOptionsBuilder().setContent(`${channel}`)
+            return this.onCreate(interaction, ticket, channel)
         } catch (error) {
             await Promise.all([
                 channel.delete().catch(console.error),
@@ -62,28 +55,26 @@ export class TicketCreateHandler extends ExchangeHandler {
         }
     }
 
-    async buildTicketMessages(interaction: RecallExchangeInteraction) {
-        return [
-            new MessageOptionsBuilder().addEmbeds(
-                new EmbedBuilder()
-                    .setDescription(
-                        `👋 **Welcome** ${interaction.user} to your ${this.tickets.type} ticket channel.`,
-                    )
-                    .setFields(interaction.state.getEmbedFields())
-                    .setTitle("Ticket Channel")
-                    .setColor("#FFFFFF"),
-            ),
-        ]
+    protected abstract buildTicketMessages(
+        interaction: MessageComponentInteraction<"cached">,
+        state: ExchangeState,
+    ): Promise<MessageOptionsBuilder[]>
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    protected async getTicketExtras(ctx: BaseInteraction<"cached">): Promise<object | void> {}
+
+    protected async onCreate(ctx: BaseInteraction<"cached">, ticket: Ticket, channel: TextChannel) {
+        return Promise.resolve(
+            new MessageOptionsBuilder().setContainerContent(`### Your Ticket Channel: ${channel}`),
+        )
     }
 
-    async onCreate(ticket: Ticket, channel: TextChannel, interaction: RecallExchangeInteraction) {}
-
-    async createTicketChannel(
-        interaction: RecallExchangeInteraction,
+    protected async createTicketChannel(
+        ctx: BaseInteraction<"cached">,
         channelOptions: Partial<GuildChannelCreateOptions> = {},
     ) {
         if (!channelOptions.name)
-            channelOptions.name = `${this.tickets.type.toLowerCase()}-${interaction.user.username}`
-        return this.tickets.createChannel(interaction.member as GuildMember, channelOptions)
+            channelOptions.name = `${this.tickets.type.toLowerCase()}-${ctx.user.username}`
+        return this.tickets.createChannel(ctx.member, channelOptions)
     }
 }

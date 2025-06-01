@@ -1,47 +1,48 @@
-import { EmbedBuilder, codeBlock, time, userMention } from "discord.js"
+import { DocumentType, Prop } from "@typegoose/typegoose"
+import { EmbedBuilder, TextChannel, codeBlock, time, userMention } from "discord.js"
 
-import {
-    ColorUtil,
-    DiscordIdProp,
-    Document,
-    Prop,
-    SchemaDocument,
-    TextUtil,
-    getSchemaFromClass,
-    modelSchema
-} from "lib"
+import { ColorUtil, Document, TextUtil, bot, modelClass } from "lib"
+import { Types } from "mongoose"
 
 @Document("Suggestion", "suggestions")
-class SuggestionSchema {
-    @Prop({ type: Number, required: true })
+class SuggestionClass {
+    @Prop({ required: true })
     sequence!: number
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     creatorId!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     guildId!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     channelId!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     messageId!: string
 
-    @Prop({ type: Date, default: Date.now })
+    @Prop({ default: Date.now })
     createdAt!: Date
 
-    @Prop({ type: String, required: false })
+    @Prop()
     imageURL?: string
 
-    @Prop({ type: String, required: false })
+    @Prop()
     title?: string
 
-    @Prop({ type: String, required: true })
+    @Prop({ required: true })
     idea!: string
 
-    @Prop({ type: Date, required: false })
+    @Prop()
     epic?: Date
+
+    channel() {
+        return bot.channels.cache.get(this.channelId) as TextChannel | undefined
+    }
+
+    message() {
+        return this.channel()?.messages.cache.get(this.messageId)
+    }
 
     toEmbed(hue = 60) {
         return new EmbedBuilder()
@@ -63,6 +64,5 @@ class SuggestionSchema {
     }
 }
 
-const schema = getSchemaFromClass(SuggestionSchema)
-export const Suggestion = modelSchema(schema, SuggestionSchema)
-export type Suggestion = SchemaDocument<typeof schema>
+export const Suggestion = modelClass(SuggestionClass)
+export type Suggestion = DocumentType<SuggestionClass>

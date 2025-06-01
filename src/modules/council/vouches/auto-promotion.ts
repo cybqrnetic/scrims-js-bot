@@ -1,13 +1,12 @@
-import { DiscordBot, I18n } from "lib"
+import { getMainGuild, I18n } from "lib"
 
-import { HOST_GUILD_ID, ROLE_APP_HUB } from "@Constants"
+import { MAIN_GUILD_ID, ROLE_APP_HUB } from "@Constants"
 import { Config } from "@module/config"
 import { OnlinePositions, PositionRole } from "@module/positions"
 import { Vouch, VouchCollection } from "@module/vouch-system"
 import { LogUtil } from "./LogUtil"
 
-Vouch.onUpdate(onVouched)
-async function onVouched(vouch: Vouch) {
+Vouch.onUpdate(async (vouch) => {
     if (!vouch.isPositive()) return
 
     const user = vouch.user()
@@ -18,10 +17,10 @@ async function onVouched(vouch: Vouch) {
         const vouches = await VouchCollection.fetch(vouch.userId, vouch.position)
         if (vouches.getPositiveSincePurge().length < autoAt) return
 
-        const member = await DiscordBot.getInstance().host?.members.fetch(vouch.userId)
+        const member = await getMainGuild()?.members.fetch(vouch.userId)
         if (!member) return
 
-        const roles = PositionRole.getPermittedRoles(vouch.position, HOST_GUILD_ID)
+        const roles = PositionRole.getPermittedRoles(vouch.position, MAIN_GUILD_ID)
         await Promise.all(
             roles.map((r) =>
                 member.roles.add(r, `Promoted to ${vouch.position} by ${vouch.executor()?.tag}.`),
@@ -38,4 +37,4 @@ async function onVouched(vouch: Vouch) {
 
         LogUtil.announcePromotion(member.user, vouch.position)
     }
-}
+})

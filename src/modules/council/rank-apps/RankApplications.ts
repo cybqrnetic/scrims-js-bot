@@ -1,18 +1,21 @@
 import {
+    BaseInteraction,
     ButtonStyle,
+    codeBlock,
     EmbedBuilder,
     GuildChannelCreateOptions,
     GuildMember,
+    MessageComponentInteraction,
+    TextChannel,
     TextInputStyle,
-    type Interaction,
 } from "discord.js"
-import { Component, I18n, LocalizedError, MessageOptionsBuilder, TextUtil, TimeUtil } from "lib"
+import { I18n, LocalizedError, MessageOptionsBuilder, TextUtil, TimeUtil } from "lib"
 
 import { Config } from "@module/config"
-import { ExchangeInputField, RecallExchangeInteraction } from "@module/exchange"
+import { ExchangeState, IgnInput, TextInput } from "@module/forms"
 import { BotMessage } from "@module/messages"
 import { PositionRole } from "@module/positions"
-import { TicketCreateHandler, TicketManager } from "@module/tickets"
+import { Ticket, TicketCreateHandler, TicketManager } from "@module/tickets"
 import { Vouch } from "@module/vouch-system"
 import { VouchCollection } from "@module/vouch-system/VouchCollection"
 import { CouncilVoteManager } from "./CouncilVoteManager"
@@ -25,28 +28,27 @@ function CreateRankApplications(rank: string, cooldown: number) {
     const tickets = new RankAppTicketManager(rank, cooldown)
     const handler = new RankAppCreateHandler(rank, tickets)
 
-    Component(handler.asComponent())
+    const componentId = handler.register().getId()
     BotMessage({
         name: `${rank} Applications`,
-        builder(builder, member) {
+        builder(i18n, member) {
             const minVouches = handler.minVouches(member.guild.id)
-            return builder
+            const council = PositionRole.getRoles(`${rank} Council`, member.guild.id)[0] ?? `@${rank} Council`
+            return new MessageOptionsBuilder()
                 .addEmbeds((embed) =>
                     embed
                         .setTitle(`${rank} Applications`)
                         .setColor(member.guild.members.me?.displayColor ?? null)
                         .setDescription(
                             `If you have gained at least ${minVouches} vouches from dueling the ` +
-                                (PositionRole.getRoles(`${rank} Council`, member.guild.id)[0]?.toString() ??
-                                    `@${rank} Council`) +
-                                ` you can apply for ${rank} with the button below.`,
+                                `${council} you can apply for ${rank} with the button below.`,
                         ),
                 )
                 .addButtons((button) =>
                     button
                         .setLabel(`Apply for ${rank}`)
                         .setStyle(ButtonStyle.Primary)
-                        .setCustomId(handler.customId),
+                        .setCustomId(componentId),
                 )
         },
     })
@@ -78,24 +80,24 @@ export class RankAppTicketManager extends TicketManager {
     }
 }
 
-const APPLICATION_FIELDS = [
-    ExchangeInputField("McAccount", {
-        customId: "mc_account",
-        label: "What is your Minecraft IGN?",
-        style: TextInputStyle.Short,
-        minLength: 3,
-        maxLength: 16,
-        required: true,
-    }),
+const IGN_INPUT = IgnInput.builder().setId("ign").setLabel("Minecraft Username").setRequired(true).build()
+const COMMENTS_INPUT = TextInput.builder()
+    .setId("comments")
+    .setLabel("Any additional reasons why to accept?")
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(false)
+    .setMaxLength(1500)
+    .build()
 
-    ExchangeInputField({
-        customId: "comments",
-        label: "Any additional reasons why to accept?",
-        style: TextInputStyle.Paragraph,
-        maxLength: 1500,
-        required: false,
-    }),
-]
+function getNotes(tickets: TicketManager) {
+    return (
+        `:mag:   Please **verify all fields** are filled out as intended before you 📨 **Submit** this.` +
+        (tickets.options.cooldown
+            ? `\n:hourglass_flowing_sand:   Note that the **application cooldown** is ` +
+              `${TextUtil.stringifyTimeDelta(tickets.options.cooldown)}.`
+            : "")
+    )
+}
 
 class RankAppCreateHandler extends TicketCreateHandler {
     readonly GuildConfig
@@ -104,7 +106,14 @@ class RankAppCreateHandler extends TicketCreateHandler {
         readonly rank: string,
         tickets: TicketManager,
     ) {
-        super(`${rank}Application`, `${rank} Application`, tickets, APPLICATION_FIELDS)
+        super(
+            `${rank}Application`,
+            `${rank} Application`,
+            tickets,
+            [[IGN_INPUT, COMMENTS_INPUT]],
+            getNotes(tickets),
+            0xbbddf5,
+        )
         this.GuildConfig = Config.declareTypes({
             MinVouches: `${rank} App Min Vouches`,
             InfoChannel: `${rank} Info Channel`,
@@ -120,26 +129,26 @@ class RankAppCreateHandler extends TicketCreateHandler {
     }
 
     /** @override */
-    async verify(interaction: Interaction<"cached">) {
-        await super.verify(interaction)
-        const vouches = await VouchCollection.fetch(interaction.user.id, this.rank)
-        const minVouches = this.minVouches(interaction.guildId)
-        if (vouches.getPositive().length < minVouches)
+    async onVerify(ctx: BaseInteraction<"cached">) {
+        await super.onVerify(ctx)
+
+        const vouches = await VouchCollection.fetch(ctx.user.id, this.rank)
+        const minVouches = this.minVouches(ctx.guildId)
+        if (vouches.getPositive().length < minVouches) {
             throw new LocalizedError("app_not_enough_vouches", {
                 title: [minVouches, this.rank],
                 description: [
-                    Config.getConfigValue(this.GuildConfig.InfoChannel, interaction.guildId),
-                    Config.getConfigValue("Support Channel", interaction.guildId),
+                    Config.getConfigValue(this.GuildConfig.InfoChannel, ctx.guildId),
+                    Config.getConfigValue("Support Channel", ctx.guildId),
                 ],
                 footer: [TimeUtil.stringifyTimeDelta(Vouch.getExpiration(this.rank))],
             })
-
-        return true
+        }
     }
 
     /** @override */
-    async buildTicketMessages(interaction: RecallExchangeInteraction) {
-        const color = PositionRole.getRoles(this.rank, interaction.guildId!)[0]?.hexColor ?? null
+    async buildTicketMessages(interaction: MessageComponentInteraction<"cached">, state: ExchangeState) {
+        const color = PositionRole.getRoles(this.rank, interaction.guildId)[0]?.hexColor ?? null
         const vouches = await VouchCollection.fetch(interaction.user.id, this.rank)
 
         return [
@@ -147,7 +156,12 @@ class RankAppCreateHandler extends TicketCreateHandler {
                 new EmbedBuilder()
                     .setAuthor({ name: interaction.user.tag, iconURL: interaction.user.displayAvatarURL() })
                     .setTitle(this.title)
-                    .setFields(interaction.state.getEmbedFields())
+                    .setFields(
+                        this.getResults(interaction, state).map((v) => ({
+                            name: v.label,
+                            value: v.value ?? codeBlock(""),
+                        })),
+                    )
                     .setColor(color),
             ),
 
@@ -157,33 +171,19 @@ class RankAppCreateHandler extends TicketCreateHandler {
                     includeHidden: true,
                     includeExpired: true,
                 },
-                interaction.guildId!,
+                interaction.guildId,
             ),
 
-            this.vote.buildVoteMessage(interaction.user, interaction.guild!),
+            this.vote.buildVoteMessage(interaction.user, interaction.guild),
         ]
     }
 
     /** @override */
-    getModalResponse(interaction: RecallExchangeInteraction, embed: EmbedBuilder) {
-        if (interaction.state.index === -1) return super.getModalResponse(interaction, embed)
-        embed.setTitle(`${this.rank} Application Confirmation`)
-        embed.setDescription(
-            `:mag:   Please **verify all fields** are filled out as intended before you 📨 **Submit** this.` +
-                (this.tickets.options.cooldown
-                    ? `\n:hourglass_flowing_sand:   Note that the **application cooldown** is ` +
-                      `${TextUtil.stringifyTimeDelta(this.tickets.options.cooldown)}.`
-                    : ""),
-        )
-        embed.setColor("#BBDDF5")
-        return new MessageOptionsBuilder().addEmbeds(embed)
-    }
-
-    /** @override */
-    async getFinishResponse(interaction: RecallExchangeInteraction) {
-        await super.getFinishResponse(interaction)
-        return new MessageOptionsBuilder().setContent(
-            `Your application was received! You will be informed through DMs once a decision is made.`,
+    protected onCreate(_ctx: BaseInteraction<"cached">, _ticket: Ticket, _channel: TextChannel) {
+        return Promise.resolve(
+            new MessageOptionsBuilder().setContent(
+                `Your application was received! You will be informed through DMs once a decision is made.`,
+            ),
         )
     }
 }

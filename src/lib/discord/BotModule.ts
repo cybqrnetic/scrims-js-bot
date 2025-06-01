@@ -1,32 +1,30 @@
-import { DiscordBot } from "./DiscordBot"
+import { Client } from "discord.js"
+import { bot } from "."
 
 export class BotModule {
     static readonly instances: Record<string, BotModule> = {}
     static getInstance<T extends BotModule>(this: (new () => T) & typeof BotModule): T {
         if (!(this.name in this.instances)) {
-            const instance = new this() as T
+            const instance = new this()
             this.instances[this.name] = instance
-            DiscordBot.useBot((bot) => instance.setBot(bot))
+            instance.setBot(bot)
             return instance
         }
         return this.instances[this.name] as T
     }
 
-    protected readonly bot!: DiscordBot
+    protected readonly bot!: Client
 
-    private setBot(bot: DiscordBot) {
+    private setBot(bot: Client) {
         Object.defineProperty(this, "bot", { value: bot })
         this.bot.on("ready", () => this.onReady())
         this.bot.on("initialized", () => this.onInitialized())
         this.addListeners()
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
     protected addListeners() {}
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    protected async onReady() {}
+    protected onReady() {}
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
-    protected async onInitialized() {}
+    protected onInitialized() {}
 }

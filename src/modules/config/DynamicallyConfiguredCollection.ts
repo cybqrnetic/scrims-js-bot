@@ -1,54 +1,28 @@
-import { DiscordBot } from "lib"
+import { Collection } from "discord.js"
 import { Config } from "./Config"
 
-export class DynamicallyConfiguredCollection<T> {
-    constructor(
-        protected readonly type: string,
-        protected readonly createCall: (entry: Config) => Promise<T>,
-        protected readonly removeCall: (obj: T) => unknown,
-        protected readonly created: Record<string, T> = {},
-    ) {
-        Config.cache.on("add", (v) => this.onCacheAdd(v).catch(console.error))
-        Config.cache.on("delete", (v) => this.onCacheDelete(v).catch(console.error))
-    }
-
-    get clientId() {
-        return DiscordBot.getInstance().user?.id
-    }
-
-    guilds() {
-        return Object.keys(this.created)
-    }
-
-    values() {
-        return Object.values(this.created)
-    }
-
-    get(guildId: string) {
-        return this.created[guildId]
-    }
-
-    protected isCorrectHandler(entry: Config) {
-        return entry.type === this.type
-    }
-
-    protected async onCacheAdd(entry: Config) {
-        if (this.isCorrectHandler(entry)) {
-            this.remove(entry.guildId)
-            this.created[entry.guildId] = await this.createCall(entry)
+export function DynamicallyCreatedCollection<T>(
+    type: string,
+    createCall: (entry: Config) => T,
+    removeCall: (obj: Awaited<T>) => unknown,
+): Collection<string, Awaited<T>> {
+    const collection = new Collection<string, Awaited<T>>()
+    async function remove(guildId: string) {
+        if (collection.has(guildId)) {
+            try {
+                await removeCall(collection.get(guildId)!)
+            } finally {
+                collection.delete(guildId)
+            }
         }
     }
 
-    remove(guildId: string) {
-        if (guildId in this.created) {
-            this.removeCall(this.created[guildId]!)
-            delete this.created[guildId]
-        }
+    async function add(entry: Config) {
+        await remove(entry.guildId).catch(console.error)
+        collection.set(entry.guildId, await createCall(entry))
     }
 
-    protected async onCacheDelete(entry: Config) {
-        if (this.isCorrectHandler(entry)) {
-            this.remove(entry.guildId)
-        }
-    }
+    Config.onCache("add", type, (entry) => add(entry))
+    Config.onCache("delete", type, (entry) => remove(entry.guildId))
+    return collection
 }

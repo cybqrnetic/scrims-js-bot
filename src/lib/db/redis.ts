@@ -1,23 +1,22 @@
 import { createClient } from "redis"
 
-const uri = process.env["REDIS_URI"]
 export const redis = createClient({
-    url: uri,
+    url: process.env["REDIS_URI"],
     socket: { reconnectStrategy: 3000, timeout: 6000, connectTimeout: 6000 },
 })
-export const subscriber = redis.duplicate()
-
-subscriber.on("error", (err) => console.error(`[Redis Subscriber] ${err}`))
 redis.on("error", (err) => console.error(`[Redis Client] ${err}`))
 
-if (uri) {
-    redis
-        .connect()
-        .then(() => subscriber.connect())
-        .then(() => console.log(`Connected to Redis.`))
-        .catch(console.error)
-} else if (process.argv[2] !== "test") {
-    console.warn("REDIS_URI env var not set!")
+const subscriber = redis.duplicate()
+subscriber.on("error", (err) => console.error(`[Redis Subscriber] ${err}`))
+
+export async function connectRedis() {
+    await Promise.all([redis.connect(), subscriber.connect()])
+        .then(() => console.log("Connected to redis."))
+        .catch((err) => console.warn("Redis connection failed.", err))
+}
+
+export async function disconnectRedis() {
+    await Promise.all([redis.destroy(), subscriber.destroy()])
 }
 
 export const messenger = {
@@ -25,13 +24,11 @@ export const messenger = {
         return redis.publish(channel, JSON.stringify(message))
     },
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async sub<T = any>(pattern: string | string[], listener: (message: T, channel: string) => unknown) {
+    async sub<T = unknown>(pattern: string | string[], listener: (message: T, channel: string) => unknown) {
         await subscriber
             .pSubscribe(pattern, (message: string, channel: string) => {
-                const data = JSON.parse(message)
                 try {
-                    listener(data?.message?.data ?? data, channel)
+                    listener(JSON.parse(message) as T, channel)
                 } catch (err) {
                     console.error(err)
                 }

@@ -1,4 +1,5 @@
 import { DEFAULT_ELO, RANKED_SEASON } from "@Constants"
+import { UserProfile } from "@module/profiler"
 import {
     ApplicationCommandType,
     ContextMenuCommandBuilder,
@@ -8,7 +9,8 @@ import {
     type ContextMenuCommandType,
     type User,
 } from "discord.js"
-import { ContextMenu, DiscordUtil, SlashCommand, UserError, UserProfile } from "lib"
+
+import { ContextMenu, DiscordUtil, SlashCommand, UserError } from "lib"
 
 SlashCommand({
     builder: new SlashCommandBuilder()

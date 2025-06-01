@@ -29,7 +29,8 @@ SlashCommand({
                 .setRequired(false),
         ),
 
-    config: { defer: "ephemeral_reply", permission: "support.ping", restricted: true },
+    config: { defer: "EphemeralReply", permission: "support.ping", restricted: true },
+
     async handler(interaction) {
         const roleId = interaction.options.getString(Options.Role, true)
         const text = interaction.options.getString(Options.Text) ?? ""

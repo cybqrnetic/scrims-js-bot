@@ -1,13 +1,12 @@
 import {
     APIRole,
     AuditLogEvent,
-    Channel,
     Client,
     ClientEvents,
+    DMChannel,
     Events,
     Guild,
     GuildAuditLogsEntry,
-    GuildChannel,
     GuildMember,
     NonThreadGuildBasedChannel,
     Snowflake,
@@ -16,33 +15,49 @@ import {
 import { EventEmitter } from "events"
 
 export class AuditedEventEmitter {
-    protected events: EventEmitter = new EventEmitter({ captureRejections: true })
+    private events: EventEmitter = new EventEmitter({ captureRejections: true })
 
-    constructor(protected readonly bot: Client) {
+    constructor(private readonly bot: Client) {
         this.events.on("error", console.error)
         this.bot.on(Events.GuildAuditLogEntryCreate, (...args) => this.onAuditLogEntry(...args))
+        this.bot.on(Events.ChannelDelete, (channel) => this.onChannelDelete(channel))
     }
 
-    async fetchExecutor<T extends { guild: Guild; executor: User | null }, E extends AuditLogEvent>(
-        object: T,
+    async fetchLogEntry<E extends AuditLogEvent>(
+        guild: Guild,
         type: E,
-        validator: (obj: T, log: GuildAuditLogsEntry<E>) => boolean,
+        validator: (log: GuildAuditLogsEntry<E>) => boolean,
     ) {
-        const fetchedLogs = await object.guild
+        const fetchedLogs = await guild
             .fetchAuditLogs({ limit: 3, type })
             .catch((error) => console.error(`Unable to fetch audit logs because of ${error}!`))
 
-        if (fetchedLogs) {
-            object.executor =
-                fetchedLogs.entries
-                    .filter((log) => validator(object, log))
-                    .sort((a, b) => b.createdTimestamp - a.createdTimestamp)
-                    .first()?.executor ?? null
-        }
-        return object
+        return fetchedLogs?.entries
+            .filter((log) => validator(log as GuildAuditLogsEntry<E>))
+            .sort((a, b) => b.createdTimestamp - a.createdTimestamp)
+            .first()
     }
 
-    async onAuditLogEntry(...[entry, guild]: ClientEvents[Events.GuildAuditLogEntryCreate]) {
+    private async onChannelDelete(channel: NonThreadGuildBasedChannel | DMChannel) {
+        if (channel.isDMBased()) return
+
+        const entry = await this.fetchLogEntry(
+            channel.guild,
+            AuditLogEvent.ChannelDelete,
+            (entry) => entry.targetId === channel.id,
+        )
+
+        const executor = await entry?.executor?.fetch()
+        this.emit(AuditLogEvent.ChannelDelete, {
+            guild: channel.guild,
+            channel,
+            channelId: channel.id,
+            executor,
+            reason: null,
+        })
+    }
+
+    private async onAuditLogEntry(...[entry, guild]: ClientEvents[Events.GuildAuditLogEntryCreate]) {
         const { action, executorId, target, targetId, changes, reason } = entry
         const executor = executorId ? await this.bot.users.fetch(executorId).catch(() => null) : null
         if (!targetId || !executor) return
@@ -54,14 +69,11 @@ export class AuditedEventEmitter {
             this.emit(action, { ...eventData, user: target })
         }
 
-        if (action === AuditLogEvent.ChannelCreate || action === AuditLogEvent.ChannelDelete) {
-            let channel: Channel | null = target instanceof GuildChannel ? target : null
-            if (!channel && action !== AuditLogEvent.ChannelDelete)
-                channel = await this.bot.channels.fetch(targetId)
+        if (action === AuditLogEvent.ChannelCreate) {
             this.emit(action, {
                 ...eventData,
                 channelId: targetId,
-                channel: channel as NonThreadGuildBasedChannel | null,
+                channel: target as NonThreadGuildBasedChannel,
             })
         }
 
@@ -78,19 +90,19 @@ export class AuditedEventEmitter {
         }
     }
 
-    protected emit<K extends keyof ThisEvents>(event: K, ...args: ThisEvents[K]): boolean
-    protected emit(eventName: string | number, ...args: any[]) {
+    protected emit<K extends keyof AuditedEvents>(event: K, ...args: AuditedEvents[K]): boolean
+    protected emit(eventName: string | number, ...args: unknown[]) {
         return this.events.emit(`${eventName}`, ...args)
     }
 
-    on<K extends keyof ThisEvents>(event: K, listener: (...args: ThisEvents[K]) => unknown): this
-    on(eventName: string | number, listener: (...args: any[]) => void) {
+    on<K extends keyof AuditedEvents>(event: K, listener: (...args: AuditedEvents[K]) => unknown): this
+    on(eventName: string | number, listener: (...args: unknown[]) => void) {
         this.events.on(`${eventName}`, listener)
         return this
     }
 }
 
-interface ThisEvents {
+export interface AuditedEvents {
     [AuditLogEvent.MemberRoleUpdate]: [action: AuditedRoleUpdate]
     [AuditLogEvent.ChannelCreate]: [action: AuditedChannelAction]
     [AuditLogEvent.ChannelDelete]: [action: AuditedChannelAction]
@@ -100,7 +112,7 @@ interface ThisEvents {
 
 interface AuditLogAction {
     guild: Guild
-    executor: User
+    executor?: User
     reason: string | null
 }
 
@@ -109,11 +121,12 @@ export interface AuditedGuildBan extends AuditLogAction {
 }
 
 export interface AuditedChannelAction extends AuditLogAction {
-    channel: NonThreadGuildBasedChannel | null
+    channel?: NonThreadGuildBasedChannel
     channelId: Snowflake
 }
 
 export interface AuditedRoleUpdate extends AuditLogAction {
+    executor: User
     member: GuildMember | null
     memberId: Snowflake
     added: Snowflake[]

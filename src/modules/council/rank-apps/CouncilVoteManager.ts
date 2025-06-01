@@ -28,15 +28,15 @@ function getVotesValue(votes: Votes) {
     )
 }
 
-const VOTE_VALUES: Record<string, number> = {
+const VOTE_VALUES = record({
     ":raised_back_of_hand:": 0,
     ":white_check_mark:": 1,
     ":no_entry:": -1,
     ":zzz:": NaN,
-}
+})
 
 const VOTE_EMOJIS: Record<number, string> = Object.fromEntries(
-    Object.entries(VOTE_VALUES).map((v) => v.reverse()),
+    Object.entries(VOTE_VALUES).map(([a, b]) => [b, a]),
 )
 
 export class CouncilVoteManager {
@@ -53,7 +53,7 @@ export class CouncilVoteManager {
         if (!votes) return {}
         return Object.fromEntries(
             Array.from(votes.matchAll(/(:.+?:).+?<@(\d+)>/gm))
-                .map(([_, emoji, userId]) => {
+                .map(([, emoji, userId]) => {
                     const vote = VOTE_VALUES[emoji!]
                     return !vote ? false : [userId, vote]
                 })
@@ -125,11 +125,11 @@ export class CouncilVoteManager {
 Component({
     builder: "COUNCIL_VOTE",
     async handler(interaction) {
-        const { ticketManager, ticket } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction)
-        if (!(ticketManager instanceof RankAppTicketManager))
+        const { manager, ticket } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction)
+        if (!(manager instanceof RankAppTicketManager))
             throw new UserError(`This interaction is not available in this channel.`)
 
-        if (!interaction.user.hasPermission(`council.${ticketManager.rank.toLowerCase()}.vote`))
+        if (!interaction.user.hasPermission(`council.${manager.rank.toLowerCase()}.vote`))
             throw new LocalizedError("command_handler.missing_permissions")
 
         const vote = parseFloat(interaction.args.shift()!)
@@ -141,7 +141,7 @@ Component({
         ticket.extras.votes[interaction.user.id] = vote
 
         await interaction.update(
-            ticketManager.vote.buildVoteMessage(ticket.user(), interaction.guild!, ticket.extras.votes),
+            manager.vote.buildVoteMessage(ticket.user(), interaction.guild, ticket.extras.votes),
         )
     },
 })
@@ -171,15 +171,15 @@ async function handleEvaluate(
             return handleDeny(interaction)
     }
 
-    const { ticket, ticketManager } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction)
-    if (!(ticketManager instanceof RankAppTicketManager))
+    const { ticket, manager } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction)
+    if (!(manager instanceof RankAppTicketManager))
         throw new UserError("This command can only be used in rank application channels!")
 
-    if (!interaction.user.hasPermission(`council.${ticketManager.rank.toLowerCase()}.evaluateVote`))
+    if (!interaction.user.hasPermission(`council.${manager.rank.toLowerCase()}.evaluateVote`))
         throw new LocalizedError("command_handler.missing_permissions")
 
     await interaction.reply(
-        ticketManager.vote
+        manager.vote
             .buildVoteEvalMessage(ticket.user(), interaction.guild, ticket.extras?.votes)
             .setEphemeral(true),
     )

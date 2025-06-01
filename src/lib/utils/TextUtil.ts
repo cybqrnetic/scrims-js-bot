@@ -7,11 +7,6 @@ interface Time {
     min: number
 }
 
-interface StringFormatOptions {
-    /** What to return if any params are falsely */
-    unknownCase?: string
-}
-
 export class TextUtil {
     static stripText(text: string, charLimit = Infinity) {
         while (text.includes("\n\n\n")) text = text.replace("\n\n\n", "\n\n")
@@ -77,13 +72,13 @@ export class TextUtil {
     static isValidHttpUrl(string: string) {
         try {
             return new URL(string).protocol.startsWith("http")
-        } catch (_) {
+        } catch {
             return false
         }
     }
 
     static snakeToUpperCamelCase(str: string) {
-        return str.replace(/(?:^|_)([a-z])/g, (_, char) => char.toUpperCase())
+        return str.replace(/(?:^|_)([a-z])/g, (_, char: string) => char.toUpperCase())
     }
 
     static snakeToNormalCase(str: string) {

@@ -1,5 +1,5 @@
 import { Collection, GuildMember, User } from "discord.js"
-import { DiscordBot } from "./DiscordBot"
+import { getMainGuild } from "."
 
 declare module "discord.js" {
     interface GuildMember {
@@ -11,10 +11,8 @@ declare module "discord.js" {
     }
 }
 
-User.prototype.hasPermission = function (_permission: string) {
-    return (
-        DiscordBot.getInstance().host?.members.cache.get(this.id)?.permissions.has("Administrator") ?? false
-    )
+User.prototype.hasPermission = function () {
+    return getMainGuild()?.members.cache.get(this.id)?.permissions.has("Administrator") ?? false
 }
 
 GuildMember.prototype.hasPermission = function (permission: string) {
@@ -23,7 +21,7 @@ GuildMember.prototype.hasPermission = function (permission: string) {
 
 export class Permissions {
     static getMembersWithPermission(permission: string) {
-        const members = DiscordBot.getInstance().host?.members.cache ?? new Collection()
+        const members = getMainGuild()?.members.cache ?? new Collection()
         return members.filter((m) => m.hasPermission(permission))
     }
 }

@@ -1,9 +1,10 @@
 import { User, userMention } from "discord.js"
-import { DiscordBot, DiscordUtil, I18n, MessageOptionsBuilder, UserProfile } from "lib"
+import { bot, DiscordUtil, I18n, MessageOptionsBuilder } from "lib"
 
 import { Colors, Emojis, RANKS } from "@Constants"
 import { Config } from "@module/config"
 import { PositionRole } from "@module/positions"
+import { UserProfile } from "@module/profiler"
 import { Vouch, VouchUtil } from "@module/vouch-system"
 
 Object.values(RANKS).forEach((rank) => {
@@ -35,8 +36,8 @@ const PROMOTION_PREFIX: Record<string, string> = {
 }
 
 export class LogUtil {
-    static async logDelete(vouch: Vouch, executor: User) {
-        await Config.buildSendLogMessages(`${vouch.position} Vouch Log Channel`, null, (guild) => {
+    static logDelete(vouch: Vouch, executor: User) {
+        Config.buildSendLogMessages(`${vouch.position} Vouch Log Channel`, null, (guild) => {
             return new MessageOptionsBuilder()
                 .addEmbeds((e) =>
                     e
@@ -55,11 +56,9 @@ export class LogUtil {
         })
     }
 
-    static async logCreate(vouch: Vouch, _executor?: User) {
+    static logCreate(vouch: Vouch, _executor?: User) {
         const user = userMention(vouch.userId)
-        const executor = vouch.executorId
-            ? userMention(vouch.executorId)
-            : `${_executor || DiscordBot.INSTANCE?.user}`
+        const executor = vouch.executorId ? userMention(vouch.executorId) : `${_executor || bot?.user}`
         const reason = vouch.comment ? ` for *${vouch.comment}*` : ""
 
         const msg = vouch.isPurge()
@@ -72,23 +71,24 @@ export class LogUtil {
                 ? `${Symbols.Devouch} ${executor} devouched ${user}${reason}.`
                 : `${Symbols.Vouch} ${executor} vouched ${user}${reason}.`
 
-        return Config.buildSendLogMessages(`${vouch.position} Vouch Log Channel`, null, () => {
+        Config.buildSendLogMessages(`${vouch.position} Vouch Log Channel`, null, () => {
             return new MessageOptionsBuilder().setContent(msg)
         })
     }
 
-    static async logPromotion(user: string, rank: string, executor: User) {
-        return Config.buildSendLogMessages("Positions Log Channel", null, () => {
+    static logPromotion(user: string, rank: string, executor: User) {
+        Config.buildSendLogMessages("Positions Log Channel", null, () => {
             return new MessageOptionsBuilder().setContent(
                 `:mortar_board:  ${userMention(user)} was promoted to ${rank} by ${executor}.`,
             )
         })
     }
 
-    static async logDemotion(user: User | UserProfile, rank: string, executor: User) {
-        return Config.buildSendLogMessages("Positions Log Channel", null, () => {
+    static logDemotion(user: string | User | UserProfile, rank: string, executor: User) {
+        const mention = typeof user === "string" ? userMention(user) : user.toString()
+        Config.buildSendLogMessages("Positions Log Channel", null, () => {
             return new MessageOptionsBuilder().setContent(
-                `:flag_white:  ${user} was demoted from ${rank} by ${executor}.`,
+                `:flag_white:  ${mention} was demoted from ${rank} by ${executor}.`,
             )
         })
     }

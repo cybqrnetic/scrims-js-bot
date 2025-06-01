@@ -1,20 +1,11 @@
+import { DocumentType, Prop } from "@typegoose/typegoose"
 import { Role } from "discord.js"
-import {
-    DiscordBot,
-    DiscordIdProp,
-    Document,
-    Prop,
-    SchemaDocument,
-    getSchemaFromClass,
-    modelSchemaWithCache,
-} from "lib"
-
-const mapped = new Map<string, Map<string, Set<PositionRole>>>()
-const declaredPositions = new Set<string>()
+import { bot, Document, modelClassCached } from "lib"
+import { Types } from "mongoose"
 
 @Document("PositionRole", "positionroles")
-class PositionRoleSchema {
-    static declarePositions<T extends object>(positions: T): T {
+class PositionRoleClass {
+    static declarePositions<T extends string[] | Record<string, string>>(positions: T): T {
         if (Array.isArray(positions)) positions.forEach((pos) => declaredPositions.add(pos))
         else Object.values(positions).forEach((pos) => declaredPositions.add(pos))
         return positions
@@ -36,12 +27,12 @@ class PositionRoleSchema {
     }
 
     static getGuildRoles(guildId: string) {
-        if (!mapped.has(guildId)) return []
-        return Array.from(mapped.get(guildId)!.values()).flatMap((v) => Array.from(v))
+        if (!(guildId in mapped)) return []
+        return Object.values(mapped[guildId]!).flatMap((v) => Array.from(v))
     }
 
     static getPositionRoles(position: string, guildId: string) {
-        return [...(mapped.get(guildId)?.get(position) ?? [])]
+        return [...(mapped[guildId]?.[position] ?? [])]
     }
 
     static getPermittedRoles(position: string, guildId: string) {
@@ -49,22 +40,21 @@ class PositionRoleSchema {
     }
 
     static resolvePermittedRoles(positionRoles: PositionRole[]) {
-        return positionRoles
-            .map((v) => v.role())
-            .filter((v): v is Role => !!v && DiscordBot.getInstance().hasRolePermissions(v))
+        const roles = Array.from(new Set(positionRoles.map((v) => v.role())))
+        return roles.filter((v): v is Role => v?.editable === true)
     }
 
     @Prop({ type: String, required: true })
     position!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     guildId!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     roleId!: string
 
     guild() {
-        return DiscordBot.getInstance().guilds.cache.get(this.guildId)
+        return bot.guilds.cache.get(this.guildId)
     }
 
     role() {
@@ -72,22 +62,24 @@ class PositionRoleSchema {
     }
 }
 
-const schema = getSchemaFromClass(PositionRoleSchema)
-export const PositionRole = modelSchemaWithCache(schema, PositionRoleSchema)
-export type PositionRole = SchemaDocument<typeof schema>
+export const PositionRole = modelClassCached(PositionRoleClass)
+export type PositionRole = DocumentType<PositionRoleClass>
 
-PositionRole.cache.on("add", (posRole) => {
-    let guildMap = mapped.get(posRole.guildId)
-    if (!guildMap) {
-        guildMap = new Map()
-        mapped.set(posRole.guildId, guildMap)
-    }
+const mapped: Record<string, Record<string, Set<PositionRole>>> = {}
+const declaredPositions = new Set<string>()
 
-    if (!guildMap.get(posRole.position)?.add(posRole)) {
-        guildMap.set(posRole.position, new Set([posRole]))
-    }
-})
+PositionRole.cache
+    .on("add", (posRole) => {
+        let guildMap = mapped[posRole.guildId]
+        if (!guildMap) {
+            guildMap = {}
+            mapped[posRole.guildId] = guildMap
+        }
 
-PositionRole.cache.on("delete", (posRole) => {
-    mapped.get(posRole.guildId)?.get(posRole.position)?.delete(posRole)
-})
+        if (!guildMap[posRole.position]?.add(posRole)) {
+            guildMap[posRole.position] = new Set([posRole])
+        }
+    })
+    .on("delete", (posRole) => {
+        mapped[posRole.guildId]?.[posRole.position]?.delete(posRole)
+    })

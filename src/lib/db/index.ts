@@ -1,4 +1,37 @@
+import mongoose from "mongoose"
+import mongooseLong from "mongoose-long"
+
+mongooseLong(mongoose)
+mongoose.Schema.Types.Long.get((v?: mongoose.Types.Long) => v?.toString())
+
+let startupTasks: (() => Promise<unknown>)[] | null = []
+
+export class DB {
+    static addStartupTask(task: () => Promise<unknown>) {
+        if (startupTasks === null) {
+            throw new Error("Already connected to the database, cannot add startup task.")
+        }
+
+        startupTasks.push(task)
+    }
+}
+
+export async function connectDatabase() {
+    await mongoose
+        .connect(process.env["MONGO_URI"]!, { connectTimeoutMS: 7000, serverSelectionTimeoutMS: 7000 })
+        .then(({ connection }) => {
+            connection.on("error", console.error)
+            console.log(`Connected to database ${connection.name}.`)
+        })
+
+    await Promise.all(startupTasks!.map((task) => task()))
+    startupTasks = null
+}
+
+export async function disconnectDatabase() {
+    await mongoose.disconnect()
+}
+
 export * from "./DocumentCache"
-export * from "./models/UserProfile"
 export * from "./redis"
 export * from "./util"

@@ -1,33 +1,24 @@
 import {
     ButtonStyle,
     Events,
-    InteractionContextType,
+    MessageFlags,
+    SlashCommandBuilder,
     SlashCommandRoleOption,
     SlashCommandStringOption,
     type ChatInputCommandInteraction,
     type MessageComponentInteraction,
 } from "discord.js"
 
-import {
-    BotListener,
-    LocalizedError,
-    LocalizedSlashCommandBuilder,
-    MessageOptionsBuilder,
-    SlashCommand,
-    TextUtil,
-} from "lib"
+import { BotListener, LocalizedError, MessageOptionsBuilder, SlashCommand, TextUtil } from "lib"
 
 import { PositionRole } from "@module/positions"
 
-const SubCmdHandlers: Record<
-    string,
-    (interaction: ChatInputCommandInteraction<"cached">) => Promise<unknown>
-> = {
+const SubCommands = record({
     status: onStatusSubcommand,
     reload: onReloadSubcommand,
     remove: onRemoveSubcommand,
     add: onAddSubcommand,
-}
+})
 
 const Actions = {
     Replace: "REPLACE",
@@ -44,24 +35,23 @@ BotListener(Events.GuildRoleDelete, async (_bot, role) => {
 })
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder()
-        .setNameAndDescription("commands.position_roles")
-        .addSubcommand((sub) => sub.setNameAndDescription("commands.position_roles.status"))
-        .addSubcommand((sub) => sub.setNameAndDescription("commands.position_roles.reload"))
+    builder: new SlashCommandBuilder()
+        .setLocalizations("commands.position_roles")
+        .addSubcommand((sub) => sub.setLocalizations("commands.position_roles.status"))
+        .addSubcommand((sub) => sub.setLocalizations("commands.position_roles.reload"))
         .addSubcommand((sub) =>
             sub
-                .setNameAndDescription("commands.position_roles.add")
+                .setLocalizations("commands.position_roles.add")
                 .addRoleOption(buildRoleOption())
                 .addStringOption(buildPositionOption()),
         )
         .addSubcommand((sub) =>
             sub
-                .setNameAndDescription("commands.position_roles.remove")
+                .setLocalizations("commands.position_roles.remove")
                 .addRoleOption(buildRoleOption())
                 .addStringOption(buildPositionOption().setRequired(false)),
         )
-        .setDefaultMemberPermissions("0")
-        .setContexts(InteractionContextType.Guild),
+        .setDefaultMemberPermissions("0"),
 
     async handleAutocomplete(interaction) {
         const focused = interaction.options.getFocused().toLowerCase()
@@ -79,39 +69,39 @@ SlashCommand({
     },
 
     async handler(interaction) {
-        await interaction.deferReply({ ephemeral: true })
-        await SubCmdHandlers[interaction.options.getSubcommand(true)]?.(interaction)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral })
+        await SubCommands[interaction.options.getSubcommand(true)]?.(interaction)
     },
 
     async handleComponent(interaction) {
         const [roleId, position, action] = interaction.args
         await interaction.update({ content: "Processing...", embeds: [], components: [] })
 
-        const role = interaction.guild!.roles.resolve(roleId!)
+        const role = interaction.guild.roles.resolve(roleId!)
         if (!role) throw new LocalizedError("type_error.role")
 
         const positionRole = new PositionRole({
             roleId: role.id,
             position: position,
-            guildId: interaction.guildId!,
+            guildId: interaction.guildId,
         })
 
         if (action === Actions.Replace)
-            await PositionRole.deleteMany({ roleId: role.id, guildId: interaction.guildId! })
+            await PositionRole.deleteMany({ roleId: role.id, guildId: interaction.guildId })
         await addPositionRole(interaction, positionRole)
     },
 })
 
 function buildRoleOption() {
     return new SlashCommandRoleOption()
-        .setNameAndDescription("commands.position_roles.role_option")
+        .setLocalizations("commands.position_roles.role_option")
         .setRequired(true)
         .setName(Options.Role)
 }
 
 function buildPositionOption() {
     return new SlashCommandStringOption()
-        .setNameAndDescription("commands.position_roles.position_option")
+        .setLocalizations("commands.position_roles.position_option")
         .setAutocomplete(true)
         .setRequired(true)
         .setName(Options.Position)
@@ -160,9 +150,9 @@ async function addPositionRole(
     positionRole: PositionRole,
 ) {
     const created = await positionRole.save()
-    PositionRole.cache.set(created.id, created)
+    PositionRole.cache.set(created._id.toString(), created)
 
-    const warning = interaction.client.hasRolePermissions(created.role()!)
+    const warning = created.role()!.editable
         ? ``
         : `\n_ _\n ${interaction.i18n.get("role_access_warning", interaction.client.user, created.role()!)}`
 
@@ -179,7 +169,7 @@ async function onAddSubcommand(interaction: ChatInputCommandInteraction<"cached"
     const role = interaction.options.getRole(Options.Role, true)
     const position = interaction.options.getString(Options.Position, true)
 
-    const existing = await PositionRole.find({ roleId: role.id, guildId: interaction.guildId! })
+    const existing = await PositionRole.find({ roleId: role.id, guildId: interaction.guildId })
     if (existing.map((v) => v.position).includes(position))
         return interaction.editReply(
             getFinishPayload(interaction, interaction.i18n.get("position_roles.exists", role, position)),
@@ -213,7 +203,7 @@ async function onAddSubcommand(interaction: ChatInputCommandInteraction<"cached"
 
     await addPositionRole(
         interaction,
-        new PositionRole({ roleId: role.id, position, guildId: interaction.guildId! }),
+        new PositionRole({ roleId: role.id, position, guildId: interaction.guildId }),
     )
 }
 
@@ -228,8 +218,8 @@ async function onRemoveSubcommand(interaction: ChatInputCommandInteraction<"cach
             (!position || v.position === position),
     )
 
-    await PositionRole.deleteMany({ _id: { $in: deleted.map((d) => d.id) } })
-    deleted.forEach((v) => PositionRole.cache.delete(v.id))
+    await PositionRole.deleteMany({ _id: { $in: deleted.map((d) => d._id) } })
+    deleted.forEach((v) => PositionRole.cache.delete(v._id.toString()))
 
     if (!deleted.length) {
         if (position) throw new LocalizedError("position_roles.not_connected_exact", role, position)

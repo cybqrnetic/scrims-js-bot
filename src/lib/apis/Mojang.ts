@@ -2,8 +2,6 @@ import { LocalizedError } from "../utils/LocalizedError"
 import { APICache } from "./Cache"
 import { HTTPError, RequestOptions, TimeoutError, request } from "./request"
 
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
 export class MojangAPIError extends LocalizedError {}
 
 const SESSION_SERVER = "sessionserver.mojang.com"
@@ -16,13 +14,13 @@ export class MojangClient {
 
     protected static throttling: number | null = null
 
-    static async mojangRequest(server: string, path: string[], urlParams = {}, options: RequestOptions = {}) {
-        options.urlParams = new URLSearchParams(urlParams)
+    static async request<T>(server: string, path: string[], urlParams = {}, options: RequestOptions = {}) {
+        options.urlParams = urlParams
         if (!options.timeout) options.timeout = TIMEOUT
 
         await this.waitForThrottlingOrAbort()
         return request(`https://${server}/${path.join("/")}`, options)
-            .then((v) => v.json() as Promise<any>)
+            .then((v) => v.json() as Promise<T>)
             .catch((error) => this.onError(error))
     }
 
@@ -32,7 +30,8 @@ export class MojangClient {
             if (profile) return profile
         }
 
-        const response = await this.mojangRequest(SESSION_SERVER, ["session", "minecraft", "profile", uuid])
+        const path = ["session", "minecraft", "profile", uuid]
+        const response = await this.request<ProfileResponse>(SESSION_SERVER, path)
         if (!response?.id || !response?.name) return null
 
         const result = { id: this.normalizeUUID(response.id), name: response.name }
@@ -63,7 +62,8 @@ export class MojangClient {
             if (profile) return profile
         }
 
-        const response = await this.mojangRequest(API_SERVER, ["users", "profiles", "minecraft", name])
+        const path = ["users", "profiles", "minecraft", name]
+        const response = await this.request<ProfileResponse>(API_SERVER, path)
         if (!response?.id || !response?.name) return null
 
         const result = { id: this.normalizeUUID(response.id), name: response.name }
@@ -71,10 +71,10 @@ export class MojangClient {
         return result
     }
 
-    protected static async onError(error: any) {
+    protected static onError(error: unknown) {
         if (error instanceof TimeoutError) throw new MojangAPIError("api.timeout", "Mojang API")
         if (error instanceof HTTPError) {
-            if (error.response.status === 404) return {}
+            if (error.response.status === 404) return undefined
             if (error.response.status === 429) {
                 const timeout = parseInt(error.response.headers.get("retry-after") || "")
                 if (timeout) this.enableThrottling(timeout)
@@ -96,10 +96,15 @@ export class MojangClient {
 
     protected static enableThrottling(seconds: number) {
         this.throttling = Date.now() + seconds * 1000
-        sleep(seconds * 1000).then(() => {
+        void sleep(seconds * 1000).then(() => {
             this.throttling = null
         })
     }
+}
+
+interface ProfileResponse {
+    id: string
+    name: string
 }
 
 export interface MojangResolvedUser {

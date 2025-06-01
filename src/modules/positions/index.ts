@@ -1,6 +1,6 @@
-import { HOST_GUILD_ID, RANKS } from "@Constants"
+import { RANKS } from "@Constants"
 import { Collection, type GuildMember, type User } from "discord.js"
-import { DiscordBot } from "lib"
+import { bot, MAIN_GUILD_ID } from "lib"
 import { PositionRole } from "./PositionRole"
 
 export const Positions = PositionRole.declarePositions({
@@ -26,20 +26,20 @@ for (const rank of Object.values(RANKS)) {
 export * from "./PositionRole"
 
 export class OnlinePositions {
-    static hasPosition(user: User | GuildMember, position: string, guildId = HOST_GUILD_ID) {
+    static hasPosition(user: User | GuildMember, position: string, guildId = MAIN_GUILD_ID) {
         const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
         return !roles.length ? undefined : hasRoles(user.id, guildId, roles)
     }
 
-    static getMembersWithPosition(position: string, guildId = HOST_GUILD_ID) {
+    static getMembersWithPosition(position: string, guildId = MAIN_GUILD_ID) {
         const roles = PositionRole.getPositionRoles(position, guildId).map((v) => v.roleId)
-        const members = DiscordBot.getInstance().guilds.cache.get(guildId)?.members.cache ?? new Collection()
+        const members = bot.guilds.cache.get(guildId)?.members.cache ?? new Collection()
         return members.filter((m) => hasRoles(m.id, guildId, roles))
     }
 }
 
 function hasRoles(userId: string, guildId: string, roles: string[]) {
-    const member = DiscordBot.getInstance().guilds.cache.get(guildId)?.members.resolve(userId)
+    const member = bot.guilds.cache.get(guildId)?.members.resolve(userId)
     return member ? roles.some((v) => hasRole(member, v)) : undefined
 }
 

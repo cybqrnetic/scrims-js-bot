@@ -1,20 +1,12 @@
-import {
-    DiscordBot,
-    DiscordIdProp,
-    Document,
-    Prop,
-    SchemaDocument,
-    TimeUtil,
-    UuidProp,
-    getSchemaFromClass,
-    modelSchema,
-} from "lib"
+import { bot, Document, modelClass, TimeUtil } from "lib"
 
 import { ROLE_APP_HUB } from "@Constants"
 import { Config } from "@module/config"
+import { DocumentType, Prop } from "@typegoose/typegoose"
+import { Types } from "mongoose"
 
 @Document("Vouch", "vouches")
-class VouchSchema {
+class VouchClass {
     private static updateCalls: ((vouch: Vouch) => unknown)[] = []
     static onUpdate(call: (vouch: Vouch) => unknown) {
         this.updateCalls.push(call)
@@ -30,16 +22,16 @@ class VouchSchema {
         })
     }
 
-    @UuidProp({ required: true })
+    @Prop({ type: Types.UUID, required: true })
     _id!: string
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     userId!: string
 
     @Prop({ type: String, required: true })
     position!: string
 
-    @DiscordIdProp({ required: false })
+    @Prop({ type: Types.Long, required: false })
     executorId!: string
 
     @Prop({ type: Date, required: true, default: Date.now })
@@ -52,12 +44,11 @@ class VouchSchema {
     comment?: string
 
     user() {
-        return DiscordBot.INSTANCE?.users.cache.get(this.userId)
+        return bot.users.cache.get(this.userId)
     }
 
     executor() {
-        if (!this.executorId) return null
-        return DiscordBot.INSTANCE?.users.cache.get(this.executorId)
+        return this.executorId ? bot.users.cache.get(this.executorId) : null
     }
 
     isPositive() {
@@ -89,20 +80,19 @@ class VouchSchema {
     }
 }
 
-const schema = getSchemaFromClass(VouchSchema)
-export const Vouch = modelSchema(schema, VouchSchema)
-export type Vouch = SchemaDocument<typeof schema>
+export const Vouch = modelClass(VouchClass)
+export type Vouch = DocumentType<VouchClass>
 
 const REGEX = /(.+) (Vouch|Devouch) Expiration/g
 const durations = new Map<string, number>()
-Config.cache.on("add", (config) => {
-    if (config.type.match(REGEX) && config.guildId === ROLE_APP_HUB) {
-        durations.set(config.type, TimeUtil.parseDuration(config.value))
-    }
-})
-
-Config.cache.on("delete", (config) => {
-    if (config.guildId === ROLE_APP_HUB) {
-        durations.delete(config.type)
-    }
-})
+Config.cache
+    .on("add", (config) => {
+        if (config.type.match(REGEX) && config.guildId === ROLE_APP_HUB) {
+            durations.set(config.type, TimeUtil.parseDuration(config.value))
+        }
+    })
+    .on("delete", (config) => {
+        if (config.guildId === ROLE_APP_HUB) {
+            durations.delete(config.type)
+        }
+    })

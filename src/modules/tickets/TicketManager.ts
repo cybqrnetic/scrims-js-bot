@@ -1,26 +1,28 @@
+import { Config } from "@module/config"
+import { OnlinePositions, PositionRole } from "@module/positions"
 import {
     AuditLogEvent,
+    BaseInteraction,
     CategoryChannel,
+    Channel,
+    channelMention,
     ChannelType,
     Collection,
     Events,
     GuildChannelCreateOptions,
     GuildMember,
     OverwriteData,
+    OverwriteType,
     PartialGuildMember,
     PermissionFlagsBits,
     PermissionResolvable,
     User,
-    channelMention,
-    type BaseInteraction,
     type GuildTextBasedChannel,
 } from "discord.js"
 
-import { AuditedChannelAction, BotListener, DiscordBot, LocalizedError, PersistentData, UserError } from "lib"
-
-import { Config } from "@module/config"
-import { OnlinePositions, PositionRole } from "@module/positions"
-import { Ticket } from "./Ticket"
+import { AuditedChannelAction, auditedEvents, bot, BotListener, LocalizedError, UserError } from "lib"
+import { Types } from "mongoose"
+import { CloseTimeout, Ticket } from "./Ticket"
 import TicketTranscriber, { TicketTranscriberOptions } from "./TicketTranscriber"
 
 const CLOSE_REASONS = {
@@ -28,14 +30,6 @@ const CLOSE_REASONS = {
     ChannelMissing: "closed this ticket because of the channel no longer existing",
     ChannelDeletedAudited: "deleted the ticket channel",
     ChannelDeletedUnaudited: "closed this ticket after someone deleted the channel",
-}
-
-interface CloseTimeout {
-    ticketId: string
-    messageId: string
-    timestamp: number
-    closerId: string
-    reason?: string
 }
 
 export interface TicketManagerConfig {
@@ -49,25 +43,39 @@ export interface TicketManagerConfig {
     creatorPermissions?: PermissionResolvable
 }
 
-const persistentTimeouts = new PersistentData(
-    "TicketCloseTimeouts",
-    new Map<string, Set<CloseTimeout>>(),
-    (data) => Array.from(data.entries()).map(([k, v]): [string, CloseTimeout[]] => [k, Array.from(v)]),
-    (from, data) =>
-        new Map(
-            data
-                .filter(([k, v]) => TicketManager.getManager(k))
-                .map(([k, v]): [string, Set<CloseTimeout>] => [k, new Set(v)]),
-        ),
-)
-
-BotListener("initialized", () => {
-    deleteGhostTicketsLoop()
-    persistentTimeouts.load()
+BotListener("initialized", async () => {
+    const tickets = (await Ticket.find({ status: { $ne: "deleted" } })).toMultiMap((v) => v.type)
+    for (const manager of Object.values(TicketManager.managers)) {
+        manager.initialize(tickets[manager.type] ?? [])
+    }
 })
 
 export class TicketManager {
     private static ticketManagers: Record<string, TicketManager> = {}
+    static async findTicket<Extras extends object>(interaction: BaseInteraction, perms = true) {
+        const ticket = await Ticket.findOne({ channelId: interaction.channelId! })
+        if (!ticket) throw new LocalizedError("tickets.none")
+        if (ticket.status === "deleted") {
+            throw new UserError("This ticket has been deleted.")
+        }
+
+        const manager = TicketManager.getManager(ticket.type)
+        if (!manager) {
+            throw new UserError(
+                "I am not responsible for these types of tickets. Maybe try a different integration.",
+            )
+        }
+
+        if (
+            perms && manager.options.permission
+                ? !interaction.user.hasPermission(manager.options.permission)
+                : !interaction.memberPermissions?.has("Administrator")
+        ) {
+            throw new LocalizedError("tickets.unauthorized_manage", ticket.type)
+        }
+
+        return { ticket: ticket as Ticket<Extras>, manager }
+    }
 
     static get managers() {
         return Object.values(this.ticketManagers)
@@ -77,31 +85,20 @@ export class TicketManager {
         return this.ticketManagers[type]
     }
 
-    static async findTicket<Extras extends object>(interaction: BaseInteraction) {
-        const ticket = await Ticket.findOne({ channelId: interaction.channelId! })
-        if (!ticket) throw new LocalizedError("tickets.none")
-        const ticketManager = TicketManager.getManager(ticket.type)
-        if (!ticketManager)
-            throw new UserError(
-                "I am not responsible for these types of tickets. Maybe try a different integration.",
-            )
-        return { ticket: ticket as Ticket<Extras>, ticketManager }
-    }
-
-    private readonly bot: DiscordBot
     private readonly transcriber?: TicketTranscriber
     private readonly guildConfig
 
-    private readonly timeouts: Promise<Set<CloseTimeout>>
-    private readonly timeoutIndex = new Map<string, Set<CloseTimeout>>()
-    private readonly timeoutTimers = new Map<CloseTimeout, NodeJS.Timeout>()
-    private ticketChannels = new Set<string>()
+    private readonly initialized = Promise.withResolvers()
+    private readonly timeoutTimers = new Map<TicketCloseTimeout, NodeJS.Timeout>()
+    private readonly timeouts = new Map<string, Set<TicketCloseTimeout>>()
+    private readonly channels = new Set<string>()
 
     constructor(
         readonly type: string,
         readonly options: TicketManagerConfig = {},
     ) {
-        this.bot = DiscordBot.getInstance()
+        TicketManager.ticketManagers[type] = this
+
         this.guildConfig = Config.declareTypes({ Category: `Tickets ${this.type} Category` })
         Config.declareType(`${this.type} Transcripts Channel`)
 
@@ -117,67 +114,59 @@ export class TicketManager {
 
         if (options.transcript !== false) this.transcriber = new TicketTranscriber(options.transcript)
 
-        this.timeouts = persistentTimeouts.get(false).then((v) => {
-            const timeouts = v.get(type) ?? new Set()
-            v.set(type, timeouts)
-            timeouts.forEach((v) => this.startCloseTimeout(v))
-            return timeouts
-        })
-
-        TicketManager.ticketManagers[type] = this
-        this.__addListeners()
+        bot.on(Events.GuildMemberRemove, (member) => this.onMemberRemove(member))
+        bot.on(Events.MessageDelete, (msg) => this.cancelCloseTimeouts(msg.id))
+        auditedEvents.on(AuditLogEvent.ChannelDelete, (channel) => this.onChannelDelete(channel))
     }
 
     private ticketShouldExist(ticket: Ticket) {
-        return (
-            !this.bot.guilds.cache.get(ticket.guildId)?.members?.me ||
-            this.bot.channels.cache.get(ticket.channelId)
-        )
+        return !bot.guilds.cache.has(ticket.guildId) || bot.channels.cache.get(ticket.channelId)
     }
 
-    async deleteGhostTickets(tickets: Ticket[]) {
-        this.ticketChannels = new Set(tickets.map((v) => v.channelId))
-        await Promise.all(
-            tickets
-                .filter((v) => !this.ticketShouldExist(v))
-                .map((v) =>
-                    this.closeTicket(v.id, undefined, CLOSE_REASONS.ChannelMissing).catch(console.error),
-                ),
-        )
+    initialize(tickets: Ticket[]) {
+        for (const ticket of tickets) {
+            if (!this.ticketShouldExist(ticket)) {
+                this.closeTicket(ticket._id, undefined, CLOSE_REASONS.ChannelMissing).catch(console.error)
+                continue
+            }
+
+            this.channels.add(ticket.channelId)
+            if (ticket.closeTimeouts) {
+                for (const timeout of ticket.closeTimeouts) {
+                    this.startCloseTimeout({ ...timeout, ticketId: ticket._id.toString() })
+                }
+            }
+        }
+        this.initialized.resolve(null)
     }
 
-    __addListeners() {
-        this.bot.on(Events.GuildMemberRemove, (member) => this.onMemberRemove(member))
-        this.bot.on(Events.MessageDelete, (msg) => this.cancelCloseTimeouts(msg.id))
-        this.bot.auditedEvents.on(AuditLogEvent.ChannelDelete, (channel) => this.onChannelDelete(channel))
-    }
+    async cancelCloseTimeouts(resolvable: string) {
+        await this.initialized.promise
 
-    getCloseTimeouts() {
-        return Array.from(this.timeoutTimers.keys())
-    }
-
-    cancelCloseTimeouts(resolvable: string) {
-        const timeouts = this.timeoutIndex.get(resolvable)
+        const timeouts = this.timeouts.get(resolvable)
         if (timeouts) {
-            this.timeoutIndex.delete(resolvable)
             for (const timeout of timeouts) {
-                this.timeoutIndex.get(timeout.ticketId)?.delete(timeout)
-                this.timeoutIndex.get(timeout.messageId)?.delete(timeout)
+                this.removeCloseTimeoutIndex(timeout.ticketId, timeout)
+                this.removeCloseTimeoutIndex(timeout.ticketId, timeout)
+
                 clearTimeout(this.timeoutTimers.get(timeout))
                 this.timeoutTimers.delete(timeout)
-                this.timeouts.then((v) => v.delete(timeout))
             }
         }
     }
 
-    private addCloseTimeoutIndex(key: string, timeout: CloseTimeout) {
-        if (!this.timeoutIndex.get(key)?.add(timeout)) {
-            this.timeoutIndex.set(key, new Set([timeout]))
-        }
+    async addCloseTimeout(timeout: CloseTimeout, ticket: Ticket) {
+        await this.initialized.promise
+
+        this.startCloseTimeout({ ...timeout, ticketId: ticket._id.toString() })
+        Ticket.updateOne(
+            { _id: ticket._id, status: { $ne: "deleted" } },
+            { $push: { closeTimeouts: timeout } },
+        ).catch(console.error)
     }
 
-    private startCloseTimeout(timeout: CloseTimeout) {
-        const time = Math.max(0, timeout.timestamp - Date.now())
+    private startCloseTimeout(timeout: TicketCloseTimeout) {
+        const time = Math.max(0, timeout.timestamp.getTime() - Date.now())
 
         this.addCloseTimeoutIndex(timeout.ticketId, timeout)
         this.addCloseTimeoutIndex(timeout.messageId, timeout)
@@ -192,16 +181,22 @@ export class TicketManager {
         )
     }
 
-    async addCloseTimeout(timeout: CloseTimeout) {
-        const timeouts = await this.timeouts
-        timeouts.add(timeout)
-        this.startCloseTimeout(timeout)
+    private addCloseTimeoutIndex(key: string, timeout: TicketCloseTimeout) {
+        if (!this.timeouts.get(key)?.add(timeout)) {
+            this.timeouts.set(key, new Set([timeout]))
+        }
+    }
+
+    private removeCloseTimeoutIndex(key: string, timeout: TicketCloseTimeout) {
+        const timeouts = this.timeouts.get(key)
+        if (timeouts && timeouts.delete(timeout) && timeouts.size === 0) {
+            this.timeouts.delete(key)
+        }
     }
 
     getTicketCategory(guildId: string) {
         const id = Config.getConfigValue(this.guildConfig.Category, guildId)
-        if (id) return (this.bot.channels.cache.get(id) as CategoryChannel) ?? null
-        return null
+        return bot.channels.cache.get(id!) as CategoryChannel | undefined
     }
 
     async createChannel(member: GuildMember, channelOptions: Partial<GuildChannelCreateOptions> = {}) {
@@ -216,6 +211,7 @@ export class TicketManager {
         channelOptions.permissionOverwrites = parentOverwriteData.concat(
             {
                 id: member.guild.id,
+                type: OverwriteType.Role,
                 allow: parentOverwrites.get(member.guild.id)?.allow.remove(PermissionFlagsBits.ViewChannel),
                 deny:
                     parentOverwrites.get(member.guild.id)?.deny.add(PermissionFlagsBits.ViewChannel) ??
@@ -223,18 +219,15 @@ export class TicketManager {
             },
             {
                 id: member.id,
+                type: OverwriteType.Member,
                 allow: this.options.creatorPermissions,
                 deny: parentOverwrites.get(member.id)?.deny,
             },
         )
 
         const channel = await member.guild.channels.create(channelOptions as GuildChannelCreateOptions)
-        this.ticketChannels.add(channel.id)
+        this.channels.add(channel.id)
         return channel
-    }
-
-    async channelTicket(channelId: string) {
-        return Ticket.findOne({ channelId, type: this.type })
     }
 
     async verifyTicketRequest(user: User, guildId: string) {
@@ -244,11 +237,8 @@ export class TicketManager {
         }
 
         const existing = await Ticket.find({ guildId, userId: user.id, type: this.type, status: "open" })
-        existing
-            .filter((ticket) => !this.ticketShouldExist(ticket))
-            .forEach((ticket) =>
-                this.closeTicket(ticket.id, undefined, CLOSE_REASONS.ChannelMissing).catch(console.error),
-            )
+        for (const ticket of existing.filter((ticket) => !this.ticketShouldExist(ticket)))
+            this.closeTicket(ticket._id, undefined, CLOSE_REASONS.ChannelMissing).catch(console.error)
 
         const stillExisting = existing.filter((ticket) => this.ticketShouldExist(ticket))
         if (stillExisting.length >= (this.options.userLimit ?? 1)) {
@@ -266,45 +256,66 @@ export class TicketManager {
         if (
             pvTicket &&
             this.options.cooldown &&
-            (Date.now() - pvTicket.createdAt!.valueOf()) / 1000 < this.options.cooldown
-        )
+            (Date.now() - pvTicket.createdAt.valueOf()) / 1000 < this.options.cooldown
+        ) {
             throw new LocalizedError(
                 "tickets.cooldown",
-                Math.floor(pvTicket.createdAt!.valueOf() / 1000 + this.options.cooldown),
+                Math.floor(pvTicket.createdAt.valueOf() / 1000 + this.options.cooldown),
             )
+        }
 
         return true
     }
 
-    async onChannelDelete({ channelId, executor }: AuditedChannelAction) {
-        if (!this.ticketChannels.has(channelId)) return
-        this.ticketChannels.delete(channelId)
+    async onChannelDelete({ channelId, executor, channel }: AuditedChannelAction) {
+        await this.initialized.promise
+        if (!this.channels.has(channelId)) return
 
-        const ticket = await this.channelTicket(channelId)
+        const ticket = await Ticket.findOne({ channelId, type: this.type })
         if (!ticket) return
 
-        if (executor) await this.closeTicket(ticket.id, executor.id, CLOSE_REASONS.ChannelDeletedAudited)
-        else await this.closeTicket(ticket.id, undefined, CLOSE_REASONS.ChannelDeletedUnaudited)
+        if (executor)
+            await this.closeTicket(ticket._id, executor.id, CLOSE_REASONS.ChannelDeletedAudited, channel)
+        else await this.closeTicket(ticket._id, undefined, CLOSE_REASONS.ChannelDeletedUnaudited, channel)
     }
 
-    async closeTicket(ticketId: string, closerId?: string, reason?: string) {
-        this.cancelCloseTimeouts(ticketId)
+    async closeTicket(
+        ticketId: Types.ObjectId | string,
+        closerId?: string,
+        reason?: string,
+        channel?: Channel | null,
+    ) {
+        void this.cancelCloseTimeouts(ticketId.toString())
+
         const ticket = await Ticket.findOneAndUpdate(
             { _id: ticketId, status: { $ne: "deleted" } },
-            { status: "deleted", closerId, closeReason: reason, deletedAt: new Date() },
+            {
+                status: "deleted",
+                closerId,
+                closeReason: reason,
+                deletedAt: new Date(),
+                $unset: { closeTimeouts: "" },
+            },
+            { new: true },
         )
 
-        if (!ticket) return
+        if (ticket) {
+            this.initialized.promise.then(() => this.channels.delete(ticket.channelId)).catch(console.error)
 
-        const guild = this.bot.guilds.cache.get(ticket.guildId)
-        const channel = await this.bot.channels.fetch(ticket.channelId).catch(() => null)
-        if (this.transcriber && guild && channel?.isTextBased()) {
-            await this.transcriber.send(guild, ticket, channel as GuildTextBasedChannel).catch(console.error)
-        }
+            const guild = bot.guilds.cache.get(ticket.guildId)
+            if (!channel) {
+                channel = await bot.channels.fetch(ticket.channelId).catch(() => null)
+            }
 
-        if (channel) {
-            this.ticketChannels.delete(ticket.channelId)
-            await channel.delete().catch(() => null)
+            if (this.transcriber && guild && channel?.isTextBased()) {
+                await this.transcriber
+                    .send(guild, ticket, channel as GuildTextBasedChannel)
+                    .catch(console.error)
+            }
+
+            if (channel) {
+                await channel.delete().catch(() => null)
+            }
         }
     }
 
@@ -314,7 +325,7 @@ export class TicketManager {
         const tickets = await Ticket.find({ userId: member.id, type: this.type })
         await Promise.allSettled(
             tickets.map((ticket) =>
-                this.closeTicket(ticket.id, undefined, CLOSE_REASONS.CreatorLeft).catch((err) =>
+                this.closeTicket(ticket._id, undefined, CLOSE_REASONS.CreatorLeft).catch((err) =>
                     console.error(`Error while automatically closing ticket ${ticket.id}!`, err),
                 ),
             ),
@@ -322,24 +333,6 @@ export class TicketManager {
     }
 }
 
-function deleteGhostTicketsLoop() {
-    deleteGhostTickets()
-        .catch(console.error)
-        .finally(() => {
-            setTimeout(deleteGhostTicketsLoop, 5 * 60 * 1000)
-        })
-}
-
-async function deleteGhostTickets() {
-    const tickets = await Ticket.find({ status: { $ne: "deleted" } })
-    const ticketTypes = new Map<string, Ticket[]>()
-    for (const ticket of tickets) {
-        if (!ticketTypes.get(ticket.type)?.push(ticket)) {
-            ticketTypes.set(ticket.type, [ticket])
-        }
-    }
-
-    await Promise.all(
-        Object.values(TicketManager.managers).map((m) => m.deleteGhostTickets(ticketTypes.get(m.type) ?? [])),
-    )
+interface TicketCloseTimeout extends CloseTimeout {
+    ticketId: string
 }

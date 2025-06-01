@@ -1,18 +1,19 @@
-import { DiscordIdProp, Document, SchemaDocument, getSchemaFromClass, modelSchemaWithCache } from "lib"
+import { DocumentType, Prop } from "@typegoose/typegoose"
+import { Document, modelClassCached } from "lib"
+import { Types } from "mongoose"
 
 @Document("TransientRole", "transientroles")
-class TransientRoleSchema {
+class TransientRoleClass {
     static isTransient(role: string) {
         return cache.has(role)
     }
 
-    @DiscordIdProp({ required: true })
+    @Prop({ type: Types.Long, required: true })
     _id!: string
 }
 
-const schema = getSchemaFromClass(TransientRoleSchema)
-export const TransientRole = modelSchemaWithCache(schema, TransientRoleSchema)
-export type TransientRole = SchemaDocument<typeof schema>
+export const TransientRole = modelClassCached(TransientRoleClass)
+export type TransientRole = DocumentType<TransientRoleClass>
 
 const cache = new Set()
 TransientRole.cache.on("add", (role) => cache.add(role._id))

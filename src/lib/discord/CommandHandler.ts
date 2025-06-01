@@ -1,21 +1,23 @@
 import {
     ApplicationCommandOptionChoiceData,
     BaseMessageOptions,
+    BitField,
     DiscordAPIError,
     Interaction,
     MessageFlags,
     ModalBuilder,
     type BaseInteraction,
 } from "discord.js"
+
+import { ErrorReply } from "@redis/client"
 import { MongoError } from "mongodb"
 
-import { HOST_GUILD_ID } from "@Constants"
+import { MAIN_GUILD_ID } from "."
 import { I18n } from "../utils/I18n"
 import { LocalizedError } from "../utils/LocalizedError"
 import { MessageOptionsBuilder } from "../utils/MessageOptionsBuilder"
 import { UserError } from "../utils/UserError"
 import { CommandConfig } from "./CommandInstaller"
-import type { DiscordBot } from "./DiscordBot"
 
 const IGNORE_CODES = new Set(["10062", "10008", "10003"])
 
@@ -55,19 +57,17 @@ export class CommandHandler {
             if (interaction.commandName === "CANCEL" && !callback)
                 throw new LocalizedError("operation_cancelled")
 
-            if (config?.restricted && interaction.guildId !== HOST_GUILD_ID)
+            if (config?.restricted && interaction.guildId !== MAIN_GUILD_ID)
                 throw new LocalizedError("command_handler.missing_permissions")
 
             if (config?.permission && !interaction.user.hasPermission(config.permission))
                 throw new LocalizedError("command_handler.missing_permissions")
 
-            if (config?.forceGuild && !interaction.inGuild())
-                throw new LocalizedError("command_handler.guild_only")
-
             if (!interaction.isAutocomplete()) {
-                if (config?.defer === "reply") await interaction.deferReply()
-                if (config?.defer === "ephemeral_reply") await interaction.deferReply({ ephemeral: true })
-                if (config?.defer === "update" && !interaction.isCommand()) await interaction.deferUpdate()
+                if (config?.defer === "Reply") await interaction.deferReply()
+                if (config?.defer === "EphemeralReply")
+                    await interaction.deferReply({ flags: MessageFlags.Ephemeral })
+                if (config?.defer === "Update" && !interaction.isCommand()) await interaction.deferUpdate()
             }
 
             await callback?.(interaction)
@@ -99,26 +99,44 @@ export class CommandHandler {
     }
 
     protected getErrorPayload(i18n: I18n, error: unknown) {
-        if (error instanceof MongoError) error = new LocalizedError("unexpected_error.database")
-        if (error instanceof DiscordAPIError) error = new LocalizedError("unexpected_error.discord")
-        if (error instanceof LocalizedError) return error.toMessagePayload(i18n)
+        if (error instanceof LocalizedError) return error.toMessage(i18n)
         if (error instanceof UserError) return error.toMessage()
-        return new LocalizedError("unexpected_error.unknown").toMessagePayload(i18n)
+
+        if (error instanceof DiscordAPIError) return this.unexpectedErrorPayload(i18n, "discord")
+        if (error instanceof MongoError || error instanceof ErrorReply)
+            return this.unexpectedErrorPayload(i18n, "database")
+
+        return this.unexpectedErrorPayload(i18n, "unknown")
     }
 
-    protected async interactionReturn(interaction: any, payload: unknown) {
+    protected unexpectedErrorPayload(i18n: I18n, type: string) {
+        return new MessageOptionsBuilder()
+            .setEphemeral(true)
+            .setContainerContent(
+                `### ${i18n.get("unexpected_error.title")}\n${i18n.get(`unexpected_error.${type}`)} ` +
+                    `${i18n.get("unexpected_error.apology")}\n\n-# ${i18n.get("unexpected_error.footer")}`,
+                0xfb2943,
+            )
+    }
+
+    protected async interactionReturn(interaction: Interaction, payload: unknown) {
+        await interaction.response
+
         if (interaction.isAutocomplete()) {
             if (Array.isArray(payload)) await interaction.respond(payload)
         } else if (payload instanceof ModalBuilder) {
-            if (!interaction.isModalSubmit())
-                if (!interaction.replied && !interaction.deferred) await interaction.showModal(payload)
+            if (!interaction.isModalSubmit() && !interaction.replied && !interaction.deferred)
+                await interaction.showModal(payload)
         } else if (typeof payload === "object" && payload !== null) {
             const message = payload as MessageOptionsBuilder
-            const responded = interaction.replied || interaction.deferred
-            const isEphemeral = interaction.message?.flags?.has(MessageFlags.Ephemeral)
-            if (responded && !isEphemeral && message.ephemeral) return interaction.followUp(message)
-            if (responded) return interaction.editReply(message)
-            if (isEphemeral) return interaction.update(message)
+            const replied = interaction.replied || interaction.deferred
+            const responseEphemeral = message.flags && new BitField(message.flags).has(MessageFlags.Ephemeral)
+            const repliedEphemeral =
+                !interaction.isCommand() && interaction.message?.flags?.has(MessageFlags.Ephemeral)
+
+            if (replied && !repliedEphemeral && responseEphemeral) return interaction.followUp(message)
+            if (replied) return interaction.editReply(message)
+            if (repliedEphemeral) return interaction.update(message)
             return interaction.reply(message)
         }
     }
@@ -139,13 +157,19 @@ declare module "discord.js" {
     interface BaseInteraction {
         i18n: I18n
         user: User
-        client: DiscordBot<true>
         path: string
         args: string[]
         customId?: string
         commandName: string
         subCommandName: string | null
         commandConfig?: CommandConfig
-        return: (payload: InteractionsReturnable) => Promise<void>
+        response?: Promise<InteractionResponse>
+        return: (payload: InteractionsReturnable) => Promise<InteractionResponse | Message | void>
+    }
+
+    interface ModalSubmitInteraction<Cached> {
+        update(
+            options: string | MessagePayload | InteractionUpdateOptions,
+        ): Promise<InteractionResponse<BooleanCache<Cached>>>
     }
 }

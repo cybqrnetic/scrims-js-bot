@@ -4,10 +4,11 @@ import {
     Events,
     Message,
     NonThreadGuildBasedChannel,
+    PartialMessage,
     TextChannel,
 } from "discord.js"
+
 import { SequencedAsync } from "../../utils/SequencedAsync"
-import { DiscordBot } from "../DiscordBot"
 
 export type GetMessageCall = () => BaseMessageOptions
 
@@ -16,7 +17,8 @@ export class MessageFloater {
     channel: TextChannel | null
 
     protected getMessageCall
-    protected msgCreateHandler
+    protected messageCreateHandler
+    protected messageDeleteHandler
     protected channelDeleteHandler
     protected resendTimeout?: NodeJS.Timeout
 
@@ -25,29 +27,40 @@ export class MessageFloater {
         this.channel = message.channel as TextChannel
         this.message = message
 
-        this.msgCreateHandler = (m: Message) => this.onMessageCreate(m).catch(console.error)
-        this.bot?.on(Events.MessageCreate, this.msgCreateHandler)
+        this.messageCreateHandler = (m: Message) => this.onMessageCreate(m)
+        this.bot!.on(Events.MessageCreate, this.messageCreateHandler)
 
-        this.channelDeleteHandler = (c: DMChannel | NonThreadGuildBasedChannel) =>
-            this.onChannelDelete(c).catch(console.error)
-        this.bot?.on(Events.ChannelDelete, this.channelDeleteHandler)
+        this.messageDeleteHandler = (m: Message | PartialMessage) => this.onMessageDelete(m)
+        this.bot!.on(Events.MessageDelete, this.messageDeleteHandler)
+
+        this.channelDeleteHandler = (c: DMChannel | NonThreadGuildBasedChannel) => this.onChannelDelete(c)
+        this.bot!.on(Events.ChannelDelete, this.channelDeleteHandler)
     }
 
     get bot() {
-        return (this.channel?.client as DiscordBot) ?? null
+        return this.channel?.client
     }
 
     get channelId() {
         return this.channel?.id
     }
 
-    async onMessageCreate(message: Message) {
-        if (message.channelId === this.channelId)
-            if (message.author.id !== message.client.user?.id) await this.send()
+    onMessageCreate(message: Message) {
+        if (message.channelId === this.channelId && message.author.id !== message.client.user?.id)
+            this.send().catch(console.error)
     }
 
-    async onChannelDelete(channel: DMChannel | NonThreadGuildBasedChannel) {
-        if (this.channelId === channel.id) this.destroy()
+    onMessageDelete(message: Message | PartialMessage) {
+        if (message.id === this.message?.id) {
+            this.message = undefined
+            this.send().catch(console.error)
+        }
+    }
+
+    onChannelDelete(channel: DMChannel | NonThreadGuildBasedChannel) {
+        if (this.channelId === channel.id) {
+            this.destroy()
+        }
     }
 
     @SequencedAsync({ merge: true })
@@ -65,8 +78,10 @@ export class MessageFloater {
     }
 
     destroy() {
-        this.bot?.off(Events.MessageCreate, this.msgCreateHandler)
+        this.bot?.off(Events.MessageCreate, this.messageCreateHandler)
+        this.bot?.off(Events.MessageDelete, this.messageDeleteHandler)
         this.bot?.off(Events.ChannelDelete, this.channelDeleteHandler)
+
         clearTimeout(this.resendTimeout)
         this.message?.delete()?.catch(() => null)
         this.channel = null

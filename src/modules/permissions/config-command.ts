@@ -1,4 +1,5 @@
 import {
+    MessageFlags,
     SlashCommandBuilder,
     SlashCommandRoleOption,
     SlashCommandStringOption,
@@ -83,7 +84,7 @@ async function onStatusSubcommand(interaction: ChatInputCommandInteraction<"cach
     })
 
     if (config.length === 0) {
-        await interaction.reply({ content: "No permission roles configured.", ephemeral: true })
+        await interaction.reply({ content: "No permission roles configured.", flags: MessageFlags.Ephemeral })
         return
     }
 
@@ -106,7 +107,7 @@ async function onAddSubcommand(interaction: ChatInputCommandInteraction<"cached"
     const role = interaction.options.getRole(Options.Role, true)
     const permission = interaction.options.getString(Options.Permission, true)
 
-    await interaction.deferReply({ ephemeral: true })
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral })
     await RolePermissions.updateOne(
         { _id: role.id },
         { name: role.name, $addToSet: { permissions: permission } },
@@ -119,7 +120,7 @@ async function onRemoveSubcommand(interaction: ChatInputCommandInteraction<"cach
     const role = interaction.options.getRole(Options.Role, true)
     const permission = interaction.options.getString(Options.Permission, true)
 
-    await interaction.deferReply({ ephemeral: true })
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral })
     await RolePermissions.updateOne({ _id: role.id }, { name: role.name, $pull: { permissions: permission } })
     await interaction.editReply(`Removed ${inlineCode(permission)}.`)
 }

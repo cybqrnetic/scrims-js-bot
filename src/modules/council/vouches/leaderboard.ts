@@ -13,7 +13,7 @@ for (const rank of Object.values(RANKS)) {
         permission: `council.${rank.toLowerCase()}.messages`,
         async builder(_builder, member) {
             const vouches = await Vouch.find({ position: rank })
-            return LeaderboardFeature.getInstance().buildMessage(member.guild!, vouches, rank)
+            return LeaderboardFeature.getInstance().buildMessage(member.guild, vouches, rank)
         },
     })
 
@@ -21,9 +21,9 @@ for (const rank of Object.values(RANKS)) {
 }
 
 export class LeaderboardFeature extends BotModule {
-    protected async onReady() {
+    protected onReady() {
         setInterval(() => this.updateAll().catch(console.error), 60 * 60 * 1000)
-        Config.cache.initialized().then(() => this.updateAll().catch(console.error))
+        void Config.cache.initialized().then(() => this.updateAll().catch(console.error))
         Vouch.onUpdate((vouch) => this.update(vouch.position).catch(console.error))
     }
 
@@ -45,15 +45,15 @@ export class LeaderboardFeature extends BotModule {
             if (!channel?.isTextBased()) return
             const message = await channel.messages.fetch(messageId).catch(() => null)
             if (!message) return
-            const updated = await this.buildMessage(message.guild!, vouches, rank)
-            if (message.embeds?.[0]?.description !== (updated.embeds[0] as any).description)
+            const updated = this.buildMessage(message.guild!, vouches, rank)
+            if (message.embeds?.[0]?.description !== updated.embeds[0]?.description)
                 await message
                     .edit(updated)
                     .catch((err) => console.error(`Council Leaderboard Update Failed: ${err}`))
         }
     }
 
-    async buildMessage(guild: Guild, vouches: Vouch[], role: string) {
+    buildMessage(guild: Guild, vouches: Vouch[], role: string) {
         const embed = new EmbedBuilder().setTitle(`${role} Council Leaderboard`)
 
         const council = OnlinePositions.getMembersWithPosition(`${role} Council`)
@@ -81,7 +81,6 @@ export class LeaderboardFeature extends BotModule {
         }
 
         const getLength = (id: string, map: Record<string, unknown[]>) => map[id]?.length ?? 0
-
         embed.setDescription(
             council
                 .sort((a, b) => getLength(b.id, councilVouches) - getLength(a.id, councilVouches))

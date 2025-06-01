@@ -1,29 +1,26 @@
 import {
     ActionRowBuilder,
+    MessageFlags,
     ModalBuilder,
+    SlashCommandBuilder,
     TextInputBuilder,
     TextInputStyle,
     bold,
     inlineCode,
     type BaseInteraction,
 } from "discord.js"
-import {
-    LocalizedSlashCommandBuilder,
-    MessageOptionsBuilder,
-    SlashCommand,
-    UserError,
-    UserProfile,
-} from "lib"
+import { MessageOptionsBuilder, SlashCommand, UserError } from "lib"
 import { DateTime } from "luxon"
 
 import { Config } from "@module/config"
 import { LogUtil } from "@module/council/vouches/LogUtil"
+import { UserProfile } from "@module/profiler"
 import { OfflinePositions } from "@module/sticky-roles"
 import { Vouch } from "@module/vouch-system"
 import { VouchUtil } from "@module/vouch-system/VouchUtil"
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder("commands.purge").setDefaultMemberPermissions("0"),
+    builder: new SlashCommandBuilder().setLocalizations("commands.purge").setDefaultMemberPermissions("0"),
 
     async handler(interaction) {
         const reason = new TextInputBuilder()
@@ -62,14 +59,14 @@ SlashCommand({
     },
 
     async handleModalSubmit(interaction) {
-        await interaction.deferReply({ ephemeral: true })
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral })
 
         const components = interaction.components.map((v) => v.components).flat()
         const reason = components.find((v) => v.customId === "reason")!.value
         const users = components.find((v) => v.customId === "users")!.value.split("\n")
         const rank = components.find((v) => v.customId === "rank")?.value.toLowerCase()
 
-        const resolved = new Set<UserProfile>()
+        const resolved = new Set<string>()
         let purged = 0
         const problems: string[] = []
         const warnings: string[] = []
@@ -115,12 +112,12 @@ SlashCommand({
 
 async function purge(
     interaction: BaseInteraction<"cached">,
-    resolved: Set<UserProfile>,
+    resolved: Set<string>,
     resolvable: string,
     reason: string,
     rankInput: string | undefined,
 ): Promise<string | void> {
-    const user = UserProfile.resolve(resolvable)
+    const user = UserProfile.resolveId(resolvable)
     if (!user) throw new UserError(`User couldn't be resolved from '${resolvable}'.`)
 
     if (resolved.has(user)) return `Duplicate entry detected for ${user}!`
@@ -136,7 +133,7 @@ async function purge(
 
     const filter = {
         position: rank,
-        userId: user.id,
+        userId: user,
         worth: -2,
     }
 
@@ -150,17 +147,14 @@ async function purge(
         { upsert: true, new: true },
     ).catch(console.error)
 
-    if (vouch) {
-        LogUtil.logCreate(vouch, interaction.user).catch(console.error)
-    }
-
-    LogUtil.logDemotion(user, rank, interaction.user).catch(console.error)
+    if (vouch) LogUtil.logCreate(vouch, interaction.user)
+    LogUtil.logDemotion(user, rank, interaction.user)
 
     await interaction.client.users
-        .createDM(user.id)
+        .createDM(user)
         .then((dm) => dm.send(bold(`You lost your ${rank} rank in Bridge Scrims for ${reason}.`)))
         .catch(() => null)
 
     const announcement = new MessageOptionsBuilder().setContent(bold(`${user} was removed from ${rank}.`))
-    Config.buildSendMessages(`${rank} Announcements Channel`, null, announcement).catch(console.error)
+    Config.buildSendMessages(`${rank} Announcements Channel`, null, announcement)
 }

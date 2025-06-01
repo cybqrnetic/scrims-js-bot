@@ -12,6 +12,8 @@ Config.onCache("delete", VOTE_CHANNELS, (doc) => channels.delete(doc.guildId))
 
 BotListener(Events.MessageCreate, async (_bot, message) => {
     if (!message.author.bot || !message.inGuild() || message.channel.isThread()) return
+
+    await Config.cache.initialized()
     if (!channels.get(message.guildId)?.has(message.channelId)) return
 
     const name = message.embeds[0]?.title ?? "Discussion"

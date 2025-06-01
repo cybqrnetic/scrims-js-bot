@@ -26,5 +26,5 @@ BotListener(Events.MessageCreate, async (_bot, msg) => {
     const role = PositionRole.getRoles(PING_POSITIONS[rank]!, msg.guildId)[0]
     await Promise.all([msg.delete(), role ? msg.channel.send(`${msg.author}: ${role}`) : null])
 
-    await VouchDuelSession.create(msg.author.id, rank)
+    VouchDuelSession.create(msg.author.id, rank)
 })

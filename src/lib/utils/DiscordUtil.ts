@@ -2,7 +2,6 @@ import {
     CachedManager,
     Collection,
     EmbedAuthorData,
-    Guild,
     GuildMember,
     MessageManager,
     TimestampStylesString,
@@ -17,38 +16,33 @@ type BasicCachedManager<K, Holds, V> = CachedManager<K, Holds, V> & {
 
 declare module "luxon" {
     interface DateTime {
-        toDiscord(): `<t:${number}>`
-        toDiscord<S extends TimestampStylesString>(style: S): `<t:${number}:${S}>`
+        toDiscord(): string
+        toDiscord<S extends TimestampStylesString>(style: S): string
     }
 }
 
-// @ts-ignore
-DateTime.prototype.toDiscord = function (style?: TimestampStylesString) {
+DateTime.prototype.toDiscord = function <S extends TimestampStylesString>(style?: S) {
     return DiscordUtil.formatTime(this, style)
 }
 
 declare global {
     interface Date {
-        toDiscord(): `<t:${number}>`
-        toDiscord<S extends TimestampStylesString>(style: S): `<t:${number}:${S}>`
+        toDiscord(): string
+        toDiscord<S extends TimestampStylesString>(style: S): string
     }
 }
 
-// @ts-ignore
 Date.prototype.toDiscord = function (style?: TimestampStylesString) {
     return DiscordUtil.formatTime(this, style)
 }
 
 export class DiscordUtil {
-    /** Date can be a timestamp is milliseconds or seconds*/
     static formatTime<S extends TimestampStylesString>(date: DateTime | Date | number, style?: S) {
-        if (date instanceof Date) date = Math.floor(date.valueOf() / 1000)
-        else if (date instanceof DateTime) date = Math.floor(date.toSeconds())
-        else if (typeof date === "number") {
-            date = Math.floor(date)
-            if (date.toString().length === 13) date = Math.floor(date / 1000)
-        }
-        return `<t:${date}${style ? `:${style}` : ""}>`
+        if (date instanceof Date) date = date.valueOf() / 1000
+        else if (date instanceof DateTime) date = date.toSeconds()
+        else date = date / 1000
+
+        return `<t:${Math.floor(date)}${style ? `:${style}` : ""}>`
     }
 
     static userAsEmbedAuthor(user?: GuildMember | User | null): EmbedAuthorData | null {
@@ -96,23 +90,5 @@ export class DiscordUtil {
         limit?: number,
     ) {
         return this.completelyFetch(manager, 100, true, limit)
-    }
-
-    static parseUser(resolvable: string, guild: Guild): GuildMember | undefined {
-        resolvable = resolvable.replace(/```|:|\n|@/g, "")
-
-        const find = (resolvable: string, matches: GuildMember[] = []) => {
-            const members = Array.from(guild.members.cache.values())
-            matches = members.filter((m) => m.id === resolvable)
-            if (matches.length === 1) return matches[0]
-
-            matches = members.filter((m) => m.user.username === resolvable)
-            if (matches.length === 1) return matches[0]
-
-            matches = members.filter((m) => m.displayName === resolvable)
-            if (matches.length === 1) return matches[0]
-        }
-
-        return find(resolvable) ?? find(resolvable.toLowerCase())
     }
 }

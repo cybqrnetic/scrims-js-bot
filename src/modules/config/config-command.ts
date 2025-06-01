@@ -1,5 +1,5 @@
-import { EmbedBuilder, InteractionContextType, italic } from "discord.js"
-import { LocalizedSlashCommandBuilder, MessageOptionsBuilder, SlashCommand } from "lib"
+import { EmbedBuilder, InteractionContextType, italic, MessageFlags, SlashCommandBuilder } from "discord.js"
+import { MessageOptionsBuilder, SlashCommand } from "lib"
 
 import { Config } from "./Config"
 
@@ -9,20 +9,17 @@ const Options = {
 }
 
 SlashCommand({
-    builder: new LocalizedSlashCommandBuilder()
-        .setNameAndDescription("commands.config")
+    builder: new SlashCommandBuilder()
+        .setLocalizations("commands.config")
         .addStringOption((option) =>
             option
-                .setNameAndDescription("commands.config.key_option")
+                .setLocalizations("commands.config.key_option")
                 .setName(Options.Key)
                 .setAutocomplete(true)
                 .setRequired(false),
         )
         .addStringOption((option) =>
-            option
-                .setNameAndDescription("commands.config.val_option")
-                .setName(Options.Value)
-                .setRequired(false),
+            option.setLocalizations("commands.config.val_option").setName(Options.Value).setRequired(false),
         )
         .setDefaultMemberPermissions("0")
         .setContexts(InteractionContextType.Guild),
@@ -39,7 +36,7 @@ SlashCommand({
     },
 
     async handler(interaction) {
-        await interaction.deferReply({ ephemeral: true })
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral })
 
         const type = interaction.options.getString(Options.Key)
         const value = interaction.options.getString(Options.Value)
@@ -61,7 +58,7 @@ SlashCommand({
             )
         }
 
-        const selector = { type, guildId: interaction.guildId! }
+        const selector = { type, guildId: interaction.guildId }
 
         if (value === "" || value === "null" || value === "none") {
             const deleted = await Config.findOneAndDelete(selector)
@@ -76,8 +73,8 @@ SlashCommand({
         const created = await Config.findOneAndUpdate(selector, { value }, { upsert: true, new: true })
         await interaction.editReply(
             old
-                ? `:twisted_rightwards_arrows:  ${old} **->** ${created!.parsedValue()}`
-                : `:white_check_mark: ${created!.parsedValue()}`,
+                ? `:twisted_rightwards_arrows:  ${old} **->** ${created.parsedValue()}`
+                : `:white_check_mark: ${created.parsedValue()}`,
         )
     },
 })
