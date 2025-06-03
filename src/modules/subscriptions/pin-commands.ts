@@ -76,7 +76,7 @@ SlashCommand({
     builder: new SlashCommandBuilder()
         .setLocalizations("commands.unpin")
         .addStringOption((option) =>
-            option.setLocalizations("commands.unpin.message_option").setRequired(true),
+            option.setLocalizations("commands.unpin.message_option").setRequired(true).setAutocomplete(true),
         )
         .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions("0"),
