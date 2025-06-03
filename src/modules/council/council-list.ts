@@ -1,4 +1,4 @@
-import { Collection, ContainerBuilder, Guild, GuildMember, MessageFlags, bold } from "discord.js"
+import { Collection, ContainerBuilder, Guild, GuildMember, MessageFlags, User, bold } from "discord.js"
 import { BotModule, MessageOptionsBuilder, TimeUtil } from "lib"
 
 import { RANKS } from "@Constants"
@@ -86,8 +86,8 @@ export class CouncilListFeature extends BotModule {
 
         const content = await Promise.all(
             sortMembers(councilHead)
-                .map((m) => this.buildCouncilInfo(profiles, m, true))
-                .concat(sortMembers(council).map((m) => this.buildCouncilInfo(profiles, m))),
+                .map((m) => this.buildCouncilInfo(profiles, m.user, guild, true))
+                .concat(sortMembers(council).map((m) => this.buildCouncilInfo(profiles, m.user, guild))),
         )
 
         return new MessageOptionsBuilder().setContainer(
@@ -102,13 +102,13 @@ export class CouncilListFeature extends BotModule {
         )
     }
 
-    async buildCouncilInfo(profiles: Record<string, UserProfile>, member: GuildMember, head = false) {
-        const profile = profiles[member.id]
+    async buildCouncilInfo(profiles: Record<string, UserProfile>, user: User, guild: Guild, head = false) {
+        const profile = profiles[user.id]
         const localTime = profile?.getCurrentTime()
         const stats = [
             await profile?.fetchMCUsername(),
-            member.toString(),
-            OnlinePositions.hasPosition(member, DO_NOT_DM, member.guild.id) ? "🔴" : "🟢",
+            user.toString(),
+            OnlinePositions.hasPosition(user, DO_NOT_DM, guild.id) ? "🔴" : "🟢",
             localTime &&
                 localTime.set({ minute: Math.round(localTime.minute / 10) * 10 }).toFormat("h:mm a") +
                     ` (GMT${TimeUtil.stringifyOffset(profile!.getOffset())})`,
