@@ -18,6 +18,9 @@ export const SubscriptionFeaturePermissions = {
     TTSPerms: "subscription.tts_perms",
     NextChatAccess: "subscription.next_chat_access",
     PurgeImmunity: "subscription.purge_immunity",
+    CustomRole: "subscription.custom_role",
+    PinMessages: "subscription.pin_messages",
+    JoinFullCalls: "subscription.join_full_calls",
 }
 
 const MANUALLY_GIVEN_POSITIONS = new Set(["ColoredRole"])

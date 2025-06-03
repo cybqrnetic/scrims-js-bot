@@ -9,6 +9,7 @@ import {
 
 import { PositionRole, Positions } from "@module/positions"
 import { BotListener, ColorUtil, Profanity, SlashCommand, TextUtil, UserError } from "lib"
+import { SubscriptionFeaturePermissions } from "."
 import { CustomRole } from "./CustomRole"
 
 SlashCommand({
@@ -19,7 +20,7 @@ SlashCommand({
         .setDefaultMemberPermissions("0")
         .setContexts(InteractionContextType.Guild),
 
-    config: { defer: "EphemeralReply", permission: "commands.custom_role" },
+    config: { defer: "EphemeralReply", permission: SubscriptionFeaturePermissions.CustomRole },
     subHandlers: {
         create: onCreateSubcommand,
         // Might wanna add this later: just pass undefined instead of null or default values for the options.
@@ -65,10 +66,10 @@ async function onCreateSubcommand(interaction: ChatInputCommandInteraction<"cach
             )
         }
 
-        if (image.size > 256 * 1024) {
+        if (image.size > 2000 * 1024) {
             throw new UserError(
                 "Image Too Large",
-                "The image provided is too large. Please provide an image smaller than 256KB.",
+                "The image provided is too large. Please provide an image smaller than 2MB.",
             )
         }
     }

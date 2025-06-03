@@ -1,5 +1,6 @@
 import { ChannelType, InteractionContextType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js"
 import { SlashCommand, UserError } from "lib"
+import { SubscriptionFeaturePermissions } from "."
 
 SlashCommand({
     builder: new SlashCommandBuilder()
@@ -13,7 +14,7 @@ SlashCommand({
         .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions("0"),
 
-    config: { defer: "EphemeralReply", permission: "commands.join" },
+    config: { defer: "EphemeralReply", permission: SubscriptionFeaturePermissions.JoinFullCalls },
 
     async handler(interaction) {
         const channel = interaction.options.getChannel<ChannelType.GuildVoice>("channel", true)

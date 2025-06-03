@@ -1,6 +1,7 @@
 import { Config } from "@module/config"
 import { Events, InteractionContextType, SlashCommandBuilder } from "discord.js"
 import { BotListener, SlashCommand, UserError } from "lib"
+import { SubscriptionFeaturePermissions } from "."
 import { PinnedMessage } from "./PinnedMessage"
 
 const INVALID_LINK_ERROR = new UserError("Invalid Message Link", "Please provide a valid message link.")
@@ -13,7 +14,7 @@ SlashCommand({
         .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions("0"),
 
-    config: { defer: "EphemeralReply", permission: "commands.pin" },
+    config: { defer: "EphemeralReply", permission: SubscriptionFeaturePermissions.PinMessages },
 
     async handler(interaction) {
         const pinnedAmount = await PinnedMessage.countDocuments({
@@ -80,7 +81,7 @@ SlashCommand({
         .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions("0"),
 
-    config: { defer: "EphemeralReply", permission: "commands.pin" },
+    config: { defer: "EphemeralReply", permission: SubscriptionFeaturePermissions.PinMessages },
 
     async handleAutocomplete(interaction) {
         const userId = interaction.user.id
