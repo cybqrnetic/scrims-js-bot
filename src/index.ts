@@ -1,7 +1,7 @@
 import { GatewayIntentBits } from "discord.js"
 import { Bootstrap } from "lib"
 
-const PUBLIC_FEATURES = ["modules/vouch-system", "modules/ranked"]
+const PUBLIC_FEATURES = ["modules/vouch-system", "modules/ranked", "modules/time"]
 
 await new Bootstrap()
     .withEntrypoint("external", { include: ["modules/admin-commands", ...PUBLIC_FEATURES] })

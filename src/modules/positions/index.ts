@@ -40,7 +40,7 @@ export class OnlinePositions {
 
 function hasRoles(userId: string, guildId: string, roles: string[]) {
     const member = bot.guilds.cache.get(guildId)?.members.resolve(userId)
-    return member ? roles.some((v) => hasRole(member, v)) : undefined
+    return member === null ? false : member ? roles.some((v) => hasRole(member, v)) : undefined
 }
 
 function hasRole(member: GuildMember, role: string) {

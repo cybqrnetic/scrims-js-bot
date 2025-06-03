@@ -1,7 +1,15 @@
 import { UserProfile } from "@module/profiler"
-import { SlashCommandBuilder, TimestampStyles, TimestampStylesString, time as formatTime } from "discord.js"
-import { SlashCommand, TimeUtil, UserError } from "lib"
+import {
+    ButtonBuilder,
+    ButtonStyle,
+    SlashCommandBuilder,
+    TimestampStyles,
+    TimestampStylesString,
+    time as formatTime,
+} from "discord.js"
+import { MessageOptionsBuilder, SlashCommand, TimeUtil, UserError } from "lib"
 import { DateTime } from "luxon"
+import { TZ_FORM } from "./timezone-form"
 
 const Options = {
     Time: "time",
@@ -11,7 +19,7 @@ const Options = {
 SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("time")
-        .setDescription("Use this command to show a date/time in a format everyone can understand.")
+        .setDescription("Use this command to send a date/time that adjusts to each person's local time.")
         .addStringOption((o) =>
             o
                 .setName(Options.Time)
@@ -35,11 +43,22 @@ SlashCommand({
 
     async handler(interaction) {
         const profile = await UserProfile.findOne({ _id: interaction.user.id })
-        if (!profile || profile.getOffset() === undefined)
-            throw new UserError(
-                "Unregistered",
-                `You can't use this command since I don't know your timezone. Use \`/register\` to set it.`,
+        if (profile?.getOffset() === undefined) {
+            return interaction.reply(
+                new MessageOptionsBuilder()
+                    .setContent(
+                        "You have not set your timezone yet. " +
+                            "Please use the **`/timezone`** command or the button below to set it.",
+                    )
+                    .addButtons(
+                        new ButtonBuilder()
+                            .setCustomId(TZ_FORM.getId())
+                            .setLabel("Set Timezone")
+                            .setStyle(ButtonStyle.Primary),
+                    )
+                    .setEphemeral(true),
             )
+        }
 
         const content = [interaction.options.getString(Options.Time, true)] as [string]
         const duration = TimeUtil.parseDuration(content)

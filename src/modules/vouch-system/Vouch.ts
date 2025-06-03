@@ -5,6 +5,9 @@ import { Config } from "@module/config"
 import { DocumentType, Prop } from "@typegoose/typegoose"
 import { Types } from "mongoose"
 
+const POSITIONS = record({ Pristine: 10, Prime: 20, Private: 30, Premium: 40 })
+const POSITIONS_REVERSED = Object.fromEntries(Object.entries(POSITIONS).map(([key, value]) => [value, key]))
+
 @Document("Vouch", "vouches")
 class VouchClass {
     private static updateCalls: ((vouch: Vouch) => unknown)[] = []
@@ -22,13 +25,18 @@ class VouchClass {
         })
     }
 
-    @Prop({ type: Types.UUID, required: true })
-    _id!: string
+    @Prop({ type: Types.ObjectId, required: true })
+    _id!: Types.ObjectId
 
     @Prop({ type: Types.Long, required: true })
     userId!: string
 
-    @Prop({ type: String, required: true })
+    @Prop({
+        type: Number,
+        required: true,
+        set: (v: string) => POSITIONS[v],
+        get: (v: number) => POSITIONS_REVERSED[v],
+    })
     position!: string
 
     @Prop({ type: Types.Long, required: false })

@@ -1,5 +1,5 @@
 import { MessageFlags, SlashCommandBuilder } from "discord.js"
-import { LocalizedError, SlashCommand } from "lib"
+import { SlashCommand } from "lib"
 import { messages } from "."
 
 const Options = {
@@ -35,10 +35,7 @@ SlashCommand({
         const messageId = interaction.options.getString(Options.Message, true)
         await interaction.deferReply({ flags: MessageFlags.Ephemeral })
 
-        const message = await messages.get(messageId, interaction.member)
-        if (!message) throw new LocalizedError("bot_message_missing", messageId)
-
-        await interaction.channel.send(message)
+        await messages.send(messageId, interaction.member, interaction.channel)
         await interaction.editReply({ content: "Message was sent." })
     },
 })

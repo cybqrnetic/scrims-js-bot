@@ -20,6 +20,7 @@
 
         "moduleResolution": "bundler",
         "sourceMap": true,
+        "rootDir": ".",
         "outDir": "dist",
 
         "paths": {

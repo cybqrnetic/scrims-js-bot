@@ -1,4 +1,4 @@
-import { StringSelectMenuBuilder, userMention } from "discord.js"
+import { StringSelectMenuBuilder, User } from "discord.js"
 import { bot, ColorUtil, I18n, LocalizedError, MessageOptionsBuilder, TextUtil, TimeUtil } from "lib"
 
 import { PositionRole } from "@module/positions"
@@ -14,20 +14,16 @@ interface VouchMessageOptions {
 
 export class VouchCollection {
     static async fetch(userId: string, position: string) {
-        const vouches = await Vouch.find({ userId, position })
-        return new VouchCollection(userId, position, vouches)
+        const [user, vouches] = await Promise.all([bot.users.fetch(userId), Vouch.find({ userId, position })])
+        return new VouchCollection(user, position, vouches)
     }
 
     constructor(
-        readonly userId: string,
+        readonly user: User,
         readonly position: string,
         readonly vouches: Vouch[],
     ) {
         this.vouches = this.vouches.sort((a, b) => b.givenAt.valueOf() - a.givenAt.valueOf())
-    }
-
-    get user() {
-        return bot.users.resolve(this.userId)
     }
 
     get size() {
@@ -102,9 +98,8 @@ export class VouchCollection {
                 ),
             )
 
-        const mention = userMention(this.userId)
         if (embedFields.length === 0)
-            return new LocalizedError("vouches.none", mention, this.position).toMessage(i18n)
+            return new LocalizedError("vouches.none", this.user.toString(), this.position).toMessage(i18n)
 
         const color = ColorUtil.hsvToRgb((120 / vouches.length) * positive.length || 0, 1, 1)
         return new MessageOptionsBuilder().createMultipleEmbeds(embedFields, (fields) =>
@@ -112,8 +107,8 @@ export class VouchCollection {
                 .getEmbed("vouches.embed_summary", { title: [this.position] })
                 .setFields(...fields)
                 .setAuthor({
-                    iconURL: this.user?.avatarURL() ?? undefined,
-                    name: `${this.user?.tag} (${this.userId})`,
+                    iconURL: this.user.avatarURL() ?? undefined,
+                    name: `${this.user.tag}`,
                 })
                 .setColor(color),
         )
@@ -128,14 +123,14 @@ export class VouchCollection {
 
         const options = this.vouches.map((v, i) => ({
             label: TextUtil.limitText(VouchUtil.toString(v, i18n, i + 1).replace(/\*/g, ""), 100, "..."),
-            value: v._id,
+            value: v.id,
         }))
 
         Array.from(new Array(Math.ceil(options.length / 25)).keys())
             .map((_, i) => options.slice(i * 25, (i + 1) * 25))
             .map((options, i) =>
                 new StringSelectMenuBuilder()
-                    .setCustomId(`REMOVE_VOUCH/${this.userId}/${this.position}/${i}`)
+                    .setCustomId(`REMOVE_VOUCH/${this.user.id}/${this.position}/${i}`)
                     .setPlaceholder("Select to Remove")
                     .addOptions(...options),
             )

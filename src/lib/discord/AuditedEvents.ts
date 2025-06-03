@@ -53,23 +53,23 @@ export class AuditedEventEmitter {
             channel,
             channelId: channel.id,
             executor,
-            reason: null,
+            reason: entry?.reason ?? null,
         })
     }
 
     private async onAuditLogEntry(...[entry, guild]: ClientEvents[Events.GuildAuditLogEntryCreate]) {
         const { action, executorId, target, targetId, changes, reason } = entry
-        const executor = executorId ? await this.bot.users.fetch(executorId).catch(() => null) : null
-        if (!targetId || !executor) return
+        if (!targetId || !executorId) return
 
-        const eventData = { guild, executor, reason, entry }
+        const executor = await this.bot.users.fetch(executorId)
+        const eventData = { guild, executor, reason }
 
         if (action === AuditLogEvent.MemberBanAdd || action === AuditLogEvent.MemberBanRemove) {
             const target = await this.bot.users.fetch(targetId)
             this.emit(action, { ...eventData, user: target })
         }
 
-        if (action === AuditLogEvent.ChannelCreate) {
+        if (action === AuditLogEvent.ChannelCreate && target !== null) {
             this.emit(action, {
                 ...eventData,
                 channelId: targetId,
@@ -110,22 +110,22 @@ export interface AuditedEvents {
     [AuditLogEvent.MemberBanAdd]: [ban: AuditedGuildBan]
 }
 
-interface AuditLogAction {
+interface AuditLogAction<E extends boolean> {
     guild: Guild
-    executor?: User
+    executor: E extends true ? User : User | undefined
     reason: string | null
 }
 
-export interface AuditedGuildBan extends AuditLogAction {
+export interface AuditedGuildBan extends AuditLogAction<true> {
     user: User
 }
 
-export interface AuditedChannelAction extends AuditLogAction {
-    channel?: NonThreadGuildBasedChannel
+export interface AuditedChannelAction extends AuditLogAction<false> {
+    channel: NonThreadGuildBasedChannel
     channelId: Snowflake
 }
 
-export interface AuditedRoleUpdate extends AuditLogAction {
+export interface AuditedRoleUpdate extends AuditLogAction<true> {
     executor: User
     member: GuildMember | null
     memberId: Snowflake

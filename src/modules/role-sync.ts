@@ -60,16 +60,19 @@ export class RoleSyncModule extends BotModule {
 
         const start = Date.now()
         DiscordUtil.completelyFetch(guild.bans)
-            .then(() => {
+            .then(() =>
                 console.log(
                     `[Role Sync] Fetched ${guild.bans.cache.size} host bans in ${Date.now() - start}ms`,
-                )
-            })
+                ),
+            )
             .catch(console.error)
             .finally(() => this.bans.resolve())
 
-        this.syncRoles().catch(console.error)
-        setInterval(() => this.syncRoles(), 20 * 60 * 1000)
+        this.syncRoles()
+            .then(() => console.log(`[Role Sync] Initial sync finished.`))
+            .catch(console.error)
+
+        setInterval(() => this.syncRoles().catch(console.error), 20 * 60 * 1000)
     }
 
     async syncRoles() {
@@ -77,15 +80,21 @@ export class RoleSyncModule extends BotModule {
     }
 
     async onMemberAdd(member: GuildMember | PartialGuildMember) {
-        if (member.guild.id !== MAIN_GUILD_ID) await this.syncMemberRoles(member)
+        if (member.guild.id !== MAIN_GUILD_ID) {
+            await this.syncMemberRoles(member)
+        }
     }
 
     async onMemberRemove(member: GuildMember | PartialGuildMember) {
-        if (member.guild.id === MAIN_GUILD_ID) await this.syncUserRoles(member.user, null)
+        if (member.guild.id === MAIN_GUILD_ID) {
+            await this.syncUserRoles(member.user, null)
+        }
     }
 
     async onBanChange({ guild, user, executor }: AuditedGuildBan) {
-        if (guild.id === MAIN_GUILD_ID) await this.syncUserRoles(user, executor)
+        if (guild.id === MAIN_GUILD_ID) {
+            await this.syncUserRoles(user, executor)
+        }
     }
 
     async onRolesChange({ guild, memberId, executor, added, removed }: AuditedRoleUpdate) {
@@ -94,17 +103,22 @@ export class RoleSyncModule extends BotModule {
         const positionRoles = new Set(PositionRole.getGuildRoles(guild.id).map((v) => v.roleId))
         if (!added.concat(removed).find((v) => positionRoles.has(v))) return
 
-        const member = await guild.members.fetch(memberId)
-        if (member.guild.id === MAIN_GUILD_ID) await this.syncUserRoles(member.user, executor)
-        else await this.syncMemberRoles(member)
+        await membersFetched()
+        const member = guild.members.resolve(memberId)
+        if (member) {
+            if (guild.id === MAIN_GUILD_ID) await this.syncUserRoles(member.user, executor)
+            else await this.syncMemberRoles(member)
+        }
     }
 
     async syncUserRoles(user: User, executor?: User | null) {
         await membersFetched()
         await Promise.all(
             Array.from(this.bot.guilds.cache.values()).map(async (guild) => {
-                if (guild.id !== MAIN_GUILD_ID && guild.members.resolve(user))
-                    await this.syncMemberRoles(guild.members.resolve(user)!, executor)
+                const member = guild.members.resolve(user)
+                if (guild.id !== MAIN_GUILD_ID && member) {
+                    await this.syncMemberRoles(member, executor)
+                }
             }),
         )
     }
@@ -113,7 +127,6 @@ export class RoleSyncModule extends BotModule {
         if (member.guild.id === MAIN_GUILD_ID) return
 
         await this.bans.promise
-        await membersFetched()
 
         const forbidden = new Set<string>()
         const allowed = new Set<string>()
@@ -174,28 +187,29 @@ export class RoleSyncModule extends BotModule {
             ).then((results) => results.filter((role): role is Role => role !== undefined)),
         ])
 
-        if (removed.length > 0 && executor !== undefined) {
-            this.logRolesLost(member, executor, removed)
+        if (removed.length > 0) {
+            this.logRolesLost(member, removed, executor)
         }
 
-        if (added.length > 0 && executor) {
-            this.logRolesGained(member, executor, added)
+        if (added.length > 0 && executor !== null) {
+            this.logRolesGained(member, added, executor)
         }
     }
 
-    logRolesLost(member: GuildMember | PartialGuildMember, executor: User | null, roles: Role[]) {
-        const origin = !executor ? "after leaving" : `because of ${executor}`
+    logRolesLost(member: GuildMember | PartialGuildMember, roles: Role[], executor?: User | null) {
+        const origin = executor === null ? " after leaving" : executor ? ` because of ${executor}` : ""
         Config.buildSendLogMessages(LOG_CHANNEL, [member.guild.id], () => {
             return new MessageOptionsBuilder().setContent(
-                `:outbox_tray:  ${member} **Lost** ${roles.join(" ")} ${origin}.`,
+                `:outbox_tray:  ${member} **Lost** ${roles.join(" ")}${origin}.`,
             )
         })
     }
 
-    logRolesGained(member: GuildMember | PartialGuildMember, executor: User, roles: Role[]) {
+    logRolesGained(member: GuildMember | PartialGuildMember, roles: Role[], executor?: User) {
+        const origin = executor ? `from ${executor}` : ""
         Config.buildSendLogMessages(LOG_CHANNEL, [member.guild.id], () => {
             return new MessageOptionsBuilder().setContent(
-                `:inbox_tray:  ${member} **Got** ${roles.join(" ")} from ${executor}.`,
+                `:inbox_tray:  ${member} **Got** ${roles.join(" ")}${origin}.`,
             )
         })
     }

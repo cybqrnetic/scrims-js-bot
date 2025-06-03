@@ -135,12 +135,21 @@ export class I18n {
                     if (group.optional) return ""
                     output += UNKNOWN_RESOURCE
                 }
-            } else if (value.idx !== undefined) {
-                output += (params.get(value.idx) as string) ?? ""
-            } else if (value.name !== undefined) {
-                output += (params.getNamed(value.name) as string) ?? ""
             } else {
-                output += (params.next() as string) ?? ""
+                let param
+                if (value.idx !== undefined) {
+                    param = params.get(value.idx)
+                } else if (value.name !== undefined) {
+                    param = params.getNamed(value.name)
+                } else {
+                    param = params.next()
+                }
+
+                if (param === undefined || param === null) {
+                    if (group.optional) return ""
+                } else {
+                    output += param as string
+                }
             }
         }
         return output
@@ -189,7 +198,7 @@ class Params {
     }
 
     get(index: number) {
-        return this.asArray()[this.i[0] + index]
+        return this.asArray()[index]
     }
 
     getNamed(name: string) {
@@ -231,7 +240,9 @@ class Parser {
 
         let j = 0
         for (const match of value.matchAll(GROUPS_REGEX)) {
-            groups.push({ values: [value.slice(j, match.index)] })
+            if (j !== match.index) {
+                groups.push({ values: this.values(value.slice(j, match.index)) })
+            }
 
             const group: Group = { values: this.values(match[2]!) }
             switch (match[1]) {

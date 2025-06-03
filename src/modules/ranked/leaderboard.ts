@@ -94,7 +94,7 @@ SlashCommand({
         )
         .addIntegerOption((option) =>
             option
-                .setName("-page")
+                .setName("page")
                 .setDescription("The page of the leaderboard to display")
                 .setMinValue(1)
                 .setRequired(false),

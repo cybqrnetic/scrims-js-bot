@@ -20,9 +20,7 @@ export class PositionsLogModule extends BotModule {
         if (executor.id === this.bot.user?.id) return
         if (guild.id !== MAIN_GUILD_ID) return
 
-        const logRoles = new Set(
-            PositionRole.cache.filter((v) => v.guildId === guild.id).map((v) => v.roleId),
-        )
+        const logRoles = new Set(PositionRole.getGuildRoles(guild.id).map((v) => v.roleId))
 
         removed = removed.filter((role) => logRoles.has(role))
         added = added.filter((role) => logRoles.has(role))

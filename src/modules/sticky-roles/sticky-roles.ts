@@ -44,7 +44,7 @@ class StickyRolesModule extends BotModule {
             const log: Role[] = []
             await Promise.all(
                 rejoinRoles.roles
-                    .map((r) => member.guild.roles.cache.get(r))
+                    .map((r) => member.guild.roles.cache.get(r.toString()))
                     .filter((r): r is Role => r !== undefined)
                     .filter((r) => r.editable)
                     .filter((r) => !r.permissions.has("Administrator"))

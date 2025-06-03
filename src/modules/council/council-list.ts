@@ -1,5 +1,5 @@
-import { Collection, EmbedBuilder, Guild, GuildMember, bold } from "discord.js"
-import { BotModule, MessageOptionsBuilder } from "lib"
+import { Collection, ContainerBuilder, Guild, GuildMember, MessageFlags, bold } from "discord.js"
+import { BotModule, MessageOptionsBuilder, TimeUtil } from "lib"
 
 import { RANKS } from "@Constants"
 import { Config } from "@module/config"
@@ -8,15 +8,23 @@ import { OnlinePositions, PositionRole } from "@module/positions"
 import { UserProfile } from "@module/profiler"
 
 for (const rank of Object.values(RANKS)) {
+    const MESSAGE_CONFIG = Config.declareType(`${rank} Council List Message`)
+
     BotMessage({
         name: `${rank} Council List`,
         permission: `council.${rank.toLowerCase()}.messages`,
         async builder(i18n, member) {
             return CouncilListFeature.getInstance().buildMessage(member.guild, rank)
         },
-    })
 
-    Config.declareType(`${rank} Council List Message`)
+        async postSend(message) {
+            await Config.updateOne(
+                { type: MESSAGE_CONFIG, guildId: message.guildId },
+                { value: `${message.channelId}-${message.id}` },
+                { upsert: true },
+            )
+        },
+    })
 }
 
 const DO_NOT_DM = PositionRole.declarePosition(`Do Not DM`)
@@ -34,7 +42,7 @@ export class CouncilListFeature extends BotModule {
             date.setUTCMinutes(next, 0, 0) - Date.now(),
         )
 
-        this.bot.on("initialized", () => this.update().catch(console.error))
+        this.update().catch(console.error)
     }
 
     async update() {
@@ -48,18 +56,19 @@ export class CouncilListFeature extends BotModule {
                 const channel = await this.bot.channels.fetch(channelId).catch(() => null)
                 if (!channel?.isTextBased()) return
                 const message = await channel.messages.fetch(messageId).catch(() => null)
-                if (!message) return
+                if (!message || !message.flags.has(MessageFlags.IsComponentsV2)) return
                 const updated = await this.buildMessage(message.guild!, rank)
-                if (message.embeds?.[0]?.description !== updated.embeds[0]?.description)
+                if (!updated.contentEquals(message)) {
                     await message
                         .edit(updated)
                         .catch((err) => console.error(`Council List Update Failed: ${err}`))
+                }
             }
         }
     }
 
     async buildMessage(guild: Guild, role: string) {
-        const embed = new EmbedBuilder().setTitle(`${role} Council List`)
+        const container = new ContainerBuilder()
 
         const councilHead = OnlinePositions.getMembersWithPosition(`${role} Head`, guild.id)
         const council = OnlinePositions.getMembersWithPosition(`${role} Council`, guild.id).subtract(
@@ -70,7 +79,7 @@ export class CouncilListFeature extends BotModule {
         const profiles = (await UserProfile.find({ _id: { $in: councilIds } })).toMap((v) => v._id)
 
         const councilRole = PositionRole.getRoles(`${role} Council`, guild.id)[0]
-        if (councilRole) embed.setColor(councilRole.color)
+        if (councilRole) container.setAccentColor(councilRole.color)
 
         const getOffset = (member: GuildMember) => profiles[member.id]?.offset ?? Infinity
         const sortMembers = (members: Collection<string, GuildMember>) => {
@@ -83,11 +92,16 @@ export class CouncilListFeature extends BotModule {
                 .concat(sortMembers(council).map((m) => this.buildCouncilInfo(profiles, m))),
         )
 
-        embed.setDescription(content.join("\n") || "None")
-        if (content.length)
-            embed.setFooter({ text: "Council IGN | Discord | DM Status | Local Time +/- 10 mins" })
-
-        return new MessageOptionsBuilder().addEmbeds(embed)
+        return new MessageOptionsBuilder().setContainer(
+            container.addTextDisplayComponents((text) =>
+                text.setContent(
+                    `### ${role} Council List\n` +
+                        (content.length
+                            ? `${content.join("\n")}\n-# Council IGN | Discord | DM Status | Local Time +/- 10 mins`
+                            : "Empty."),
+                ),
+            ),
+        )
     }
 
     async buildCouncilInfo(profiles: Record<string, UserProfile>, member: GuildMember) {
@@ -99,7 +113,7 @@ export class CouncilListFeature extends BotModule {
             OnlinePositions.hasPosition(member, DO_NOT_DM, member.guild.id) ? "🔴" : "🟢",
             localTime &&
                 localTime.set({ minute: Math.round(localTime.minute / 10) * 10 }).toFormat("h:mm a") +
-                    ` (GMT${profile!.getUTCOffset()})`,
+                    ` (GMT${TimeUtil.stringifyOffset(profile!.getOffset())})`,
         ]
 
         return `- ${stats.filter((v) => v).join(" | ")}`

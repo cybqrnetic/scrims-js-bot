@@ -50,9 +50,9 @@ SlashCommand({
                     (entries) =>
                         new EmbedBuilder()
                             .setTitle("Guild Configuration")
-                            .setColor("#00d8ff")
+                            .setColor(0x00d8ff)
                             .setDescription(
-                                entries.map((v) => `\`•\` **${v.type}:** ${v.parsedValue()}`).join("\n"),
+                                entries.map((v) => `- **${v.type}:** ${v.parsedValue()}`).join("\n"),
                             ),
                 ),
             )

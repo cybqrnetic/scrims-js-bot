@@ -96,7 +96,8 @@ export function modelClassCached<U extends AnyParamConstructor<unknown>>(clazz: 
 
         DB.addStartupTask(async () => {
             await model.reloadCache()
-            setInterval(() => model.reloadCache().catch(console.error), 1000)
+            const interval = setInterval(() => model.reloadCache().catch(console.error), 1000)
+            model.db.once("close", () => clearInterval(interval))
         })
     }
 

@@ -8,7 +8,7 @@ BotListener(Events.MessageCreate, async (_bot, message) => {
                 await reloadCache()
                 await message.reply({ content: "Cache reloaded." })
             } else if (message.content === "!stop") {
-                console.log("Stop command used to terminate this process!")
+                console.warn("Stop command used to terminate this process!")
                 await message.reply({ content: "👋 **Goodbye**" })
                 process.emit("SIGTERM")
             }

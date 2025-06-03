@@ -40,7 +40,7 @@ export class OfflinePositions {
 function hasRoles(userId: string, roles: string[]) {
     const member = getMainGuild()?.members.resolve(userId)
     if (!member) {
-        const saved = new Set(UserRejoinRoles.cache.get(userId)?.roles)
+        const saved = new Set(UserRejoinRoles.cache.get(userId)?.roles.map((v) => v.toString()))
         return roles.some((v) => !TransientRole.isTransient(v) && saved.has(v))
     }
 

@@ -1,6 +1,8 @@
 import {
+    APIContainerComponent,
     APIEmbed,
     APIMessageTopLevelComponent,
+    APITextDisplayComponent,
     ActionRowBuilder,
     AllowedMentionsTypes,
     BaseMessageOptions,
@@ -8,12 +10,15 @@ import {
     BitFieldResolvable,
     ButtonBuilder,
     ContainerBuilder,
+    ContainerComponent,
     EmbedBuilder,
     JSONEncodable,
+    Message,
     MessageActionRowComponentBuilder,
     MessageFlags,
     MessageFlagsString,
     MessageMentionOptions,
+    TextDisplayComponent,
 } from "discord.js"
 
 type BuilderOrCallback<T> = ((builder: T) => T) | T
@@ -79,6 +84,20 @@ export class MessageOptionsBuilder {
                 .addTextDisplayComponents((text) => text.setContent(content))
                 .setAccentColor(accentColor),
         )
+    }
+
+    contentEquals(message: Message) {
+        if (message.flags.has(MessageFlags.IsComponentsV2)) {
+            const containerA = this.components[0] as APIContainerComponent | undefined
+            const textA = containerA?.components[0] as APITextDisplayComponent | undefined
+
+            const containerB = message.components[0] as ContainerComponent | undefined
+            const textB = containerB?.components[0] as TextDisplayComponent | undefined
+
+            return textA?.content === textB?.content
+        }
+
+        return this.content === message.content
     }
 
     setEphemeral(ephemeral: boolean) {

@@ -7,8 +7,8 @@ class RejoinRolesClass {
     @Prop({ type: Types.Long, required: true })
     _id!: string
 
-    @Prop({ type: Types.Long, required: true })
-    roles!: string[]
+    @Prop({ type: [Types.Long], required: true })
+    roles!: Types.Long[]
 }
 
 export const UserRejoinRoles = modelClassCached(RejoinRolesClass)

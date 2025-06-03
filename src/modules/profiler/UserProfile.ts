@@ -3,7 +3,7 @@ import { Guild, userMention } from "discord.js"
 import { DateTime } from "luxon"
 import { Types } from "mongoose"
 
-import { DB, Document, modelClass, MojangClient, TimeUtil } from "lib"
+import { DB, Document, modelClass, MojangClient } from "lib"
 
 export interface RankedStats {
     elo: number
@@ -65,18 +65,14 @@ class UserProfileClass {
     timezone?: string
 
     getCurrentTime() {
-        if (!this.offset) return undefined
-        return DateTime.utc().plus({ minutes: this.offset })
+        if (this.timezone) return DateTime.now().setZone(this.timezone)
+        if (this.offset) DateTime.utc().plus({ minutes: this.offset })
+        return undefined
     }
 
     getOffset() {
         if (this.timezone) return DateTime.now().setZone(this.timezone).offset
         return this.offset
-    }
-
-    getUTCOffset() {
-        if (!this.offset) return undefined
-        return TimeUtil.stringifyOffset(this.offset)
     }
 
     async fetchMCUsername() {

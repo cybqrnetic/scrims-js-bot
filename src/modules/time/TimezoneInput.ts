@@ -11,6 +11,7 @@ import {
 import { Emojis } from "@Constants"
 import { ExchangeState, FormComponent, OffsetInput } from "@module/forms"
 import { rawTimeZones } from "@vvo/tzdb"
+import { codeBlock } from "discord.js"
 import { DateTime } from "luxon"
 
 const TIMEZONES = rawTimeZones
@@ -26,7 +27,6 @@ const Selects = {
 }
 
 export class TimezoneInput implements FormComponent {
-    private readonly offsetId: string
     private readonly countryId: string
     private readonly offset: OffsetInput
 
@@ -34,10 +34,9 @@ export class TimezoneInput implements FormComponent {
         private readonly id: string,
         private readonly required: boolean,
     ) {
-        this.offsetId = `${id}:offset`
         this.countryId = `${id}:country`
         this.offset = OffsetInput.builder()
-            .setId(this.offsetId)
+            .setId(`${id}:offset`)
             .setLabel("Current Time")
             .setRequired(required)
             .build()
@@ -74,7 +73,7 @@ export class TimezoneInput implements FormComponent {
         const timezone = state.get<string>(this.id)
         return {
             label: "Timezone",
-            value: timezone ? ZONE_ALT[timezone] : undefined,
+            value: timezone ? codeBlock(ZONE_ALT[timezone]!) : undefined,
         }
     }
 
@@ -97,6 +96,11 @@ export class TimezoneInput implements FormComponent {
             return
         }
 
+        const countries = Array.from(new Set(options.map((zone) => zone.countryName)))
+        if (countries.length === 1) {
+            state.set(this.countryId, countries[0]!)
+        }
+
         const country = state.get<string>(this.countryId)
         container.addActionRowComponents(
             new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
@@ -104,7 +108,7 @@ export class TimezoneInput implements FormComponent {
                     .setCustomId(`${componentId}/${Selects.Country}`)
                     .setPlaceholder("Select your country")
                     .addOptions(
-                        Array.from(new Set(options.map((zone) => zone.countryName)))
+                        countries
                             .slice(0, 25)
                             .sort()
                             .map((v) => ({ label: v, value: v, default: v === country })),

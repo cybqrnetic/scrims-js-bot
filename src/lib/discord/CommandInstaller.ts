@@ -24,8 +24,9 @@ export class CommandInstaller {
     private readonly components: string[] = []
     private readonly globalCommands: CommandBuilder[] = []
     private readonly guildCommands: Record<string, CommandBuilder[]> = {}
+    private readonly configs: Record<string, CommandConfig> = {}
 
-    constructor(readonly bot: Client) {
+    constructor(private readonly bot: Client) {
         this.bot
             .on(Events.GuildCreate, (guild) => this.postGuildCommands(guild))
             .on(Events.ClientReady, async (client) => {
@@ -124,6 +125,10 @@ export class CommandInstaller {
             } else {
                 this.globalCommands.push(builder)
             }
+
+            if (config) {
+                this.configs[builder.name] = config
+            }
         }
 
         const id = typeof builder === "string" ? builder : builder.name
@@ -138,6 +143,10 @@ export class CommandInstaller {
                 return `/${builder.name}`
             })
             .concat(this.components.map((name) => `${name} (Component)`))
+    }
+
+    public getConfig(name: string) {
+        return this.configs[name]
     }
 }
 

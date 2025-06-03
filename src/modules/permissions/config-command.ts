@@ -97,7 +97,7 @@ async function onStatusSubcommand(interaction: ChatInputCommandInteraction<"cach
 
     await interaction.reply(
         new MessageOptionsBuilder()
-            .setContent(`## Permission Roles\n${content}`)
+            .setContainerContent(`## Permission Roles\n${content}`)
             .setEphemeral(true)
             .removeMentions(),
     )
