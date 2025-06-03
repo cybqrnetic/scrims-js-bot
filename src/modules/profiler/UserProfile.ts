@@ -66,7 +66,7 @@ class UserProfileClass {
 
     getCurrentTime() {
         if (this.timezone) return DateTime.now().setZone(this.timezone)
-        if (this.offset) DateTime.utc().plus({ minutes: this.offset })
+        if (this.offset) return DateTime.utc().plus({ minutes: this.offset })
         return undefined
     }
 

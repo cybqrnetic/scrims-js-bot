@@ -19,8 +19,8 @@ export const RANKS = {
     Premium: "Premium",
 }
 
-export const MAIN_GUILD_ID = process.env["MAIN_GUILD_ID"] ?? "759894401957888031"
-export const ROLE_APP_HUB = process.env["ROLE_APP_HUB"] ?? "874783384042340392"
+export const MAIN_GUILD_ID = process.env["MAIN_GUILD_ID"]!
+export const ROLE_APP_HUB = process.env["ROLE_APP_HUB"]!
 
 export const RANKED_SEASON = process.env["RANKED_SEASON"] ?? "test"
 export const DEFAULT_ELO = process.env["DEFAULT_ELO"] ?? "1000"

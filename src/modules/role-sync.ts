@@ -54,7 +54,7 @@ export class RoleSyncModule extends BotModule {
     onReady() {
         const guild = getMainGuild()
         if (!guild) {
-            console.warn(`[Role Sync] Host guild not available!`)
+            console.warn(`[Role Sync] Main guild '${MAIN_GUILD_ID}' not available!`)
             return
         }
 

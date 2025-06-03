@@ -31,6 +31,7 @@ function CreateRankApplications(rank: string, cooldown: number) {
     const componentId = handler.register().getId()
     BotMessage({
         name: `${rank} Applications`,
+        permission: `council.${rank.toLowerCase()}.manageApp`,
         builder(i18n, member) {
             const minVouches = handler.minVouches(member.guild.id)
             const council = PositionRole.getRoles(`${rank} Council`, member.guild.id)[0] ?? `@${rank} Council`

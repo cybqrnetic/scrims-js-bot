@@ -70,10 +70,8 @@ export class CouncilListFeature extends BotModule {
     async buildMessage(guild: Guild, role: string) {
         const container = new ContainerBuilder()
 
-        const councilHead = OnlinePositions.getMembersWithPosition(`${role} Head`, guild.id)
-        const council = OnlinePositions.getMembersWithPosition(`${role} Council`, guild.id).subtract(
-            councilHead,
-        )
+        const councilHead = OnlinePositions.getMembersWithPosition(`${role} Head`)
+        const council = OnlinePositions.getMembersWithPosition(`${role} Council`).subtract(councilHead)
 
         const councilIds = [...councilHead.keys(), ...council.keys()]
         const profiles = (await UserProfile.find({ _id: { $in: councilIds } })).toMap((v) => v._id)
@@ -88,7 +86,7 @@ export class CouncilListFeature extends BotModule {
 
         const content = await Promise.all(
             sortMembers(councilHead)
-                .map((m) => this.buildCouncilInfo(profiles, m).then((v) => bold(v) as string))
+                .map((m) => this.buildCouncilInfo(profiles, m, true))
                 .concat(sortMembers(council).map((m) => this.buildCouncilInfo(profiles, m))),
         )
 
@@ -104,7 +102,7 @@ export class CouncilListFeature extends BotModule {
         )
     }
 
-    async buildCouncilInfo(profiles: Record<string, UserProfile>, member: GuildMember) {
+    async buildCouncilInfo(profiles: Record<string, UserProfile>, member: GuildMember, head = false) {
         const profile = profiles[member.id]
         const localTime = profile?.getCurrentTime()
         const stats = [
@@ -116,7 +114,8 @@ export class CouncilListFeature extends BotModule {
                     ` (GMT${TimeUtil.stringifyOffset(profile!.getOffset())})`,
         ]
 
-        return `- ${stats.filter((v) => v).join(" | ")}`
+        const content = stats.filter((v) => v).join(" | ")
+        return `- ${head ? bold(content) : content}`
     }
 }
 
