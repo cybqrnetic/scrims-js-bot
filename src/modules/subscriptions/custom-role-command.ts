@@ -1,14 +1,18 @@
 import {
+    AuditLogEvent,
     ChatInputCommandInteraction,
     Events,
+    GuildMember,
     GuildPremiumTier,
     InteractionContextType,
+    PartialGuildMember,
     SlashCommandBuilder,
     SlashCommandSubcommandBuilder,
 } from "discord.js"
 
+import { RolePermissions } from "@module/permissions/RolePermissions"
 import { PositionRole, Positions } from "@module/positions"
-import { BotListener, ColorUtil, Profanity, SlashCommand, TextUtil, UserError } from "lib"
+import { auditedEvents, BotListener, ColorUtil, Profanity, SlashCommand, TextUtil, UserError } from "lib"
 import { SubscriptionFeaturePermissions } from "."
 import { CustomRole } from "./CustomRole"
 
@@ -162,14 +166,29 @@ function buildCreateSubcommand() {
         )
 }
 
-BotListener(Events.GuildMemberRemove, async (_bot, member) => {
+BotListener(Events.GuildMemberRemove, async (_bot, member) => await deleteCustomRole(member))
+auditedEvents.on(AuditLogEvent.MemberRoleUpdate, async ({ member, removed }) => {
+    if (!member || member.user.bot || member.hasPermission(SubscriptionFeaturePermissions.CustomRole)) return
+
+    const lostPermission = removed.some((id) =>
+        RolePermissions.cache.find(
+            (role) => role.id === id && role.permissions.includes(SubscriptionFeaturePermissions.CustomRole),
+        ),
+    )
+
+    if (lostPermission) await deleteCustomRole(member)
+})
+
+async function deleteCustomRole(member: GuildMember | PartialGuildMember) {
     const customRole = await CustomRole.findOne({
         guildId: member.guild.id,
         userId: member.id,
     })
 
     if (customRole) {
-        await member.guild.roles.delete(customRole._id).catch(() => null)
-        await customRole.deleteOne()
+        await Promise.all([
+            member.guild.roles.delete(customRole._id).catch(() => null),
+            customRole.deleteOne(),
+        ])
     }
-})
+}

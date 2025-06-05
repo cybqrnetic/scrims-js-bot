@@ -54,7 +54,8 @@ class SubscriptionModule extends BotModule {
     }
 
     async enforceRoleDependencies(member: GuildMember) {
-        if (member.guild.id !== MAIN_GUILD_ID || member.permissions.has("Administrator")) return
+        if (member.guild.id !== MAIN_GUILD_ID || member.user.bot || member.permissions.has("Administrator"))
+            return
 
         const rolesToGive = new Set<string>()
         const rolesToRemove = new Set<string>()

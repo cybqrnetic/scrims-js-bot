@@ -18,6 +18,9 @@ class PinnedMessageSchema {
 
     @Prop({ type: String, required: true })
     url!: string
+
+    @Prop({ type: Boolean, required: true })
+    archived!: boolean
 }
 
 export const PinnedMessage = modelClass(PinnedMessageSchema)
