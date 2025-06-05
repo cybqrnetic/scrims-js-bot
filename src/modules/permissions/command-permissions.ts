@@ -4,6 +4,7 @@ import {
     ApplicationCommandPermissionType,
     ApplicationCommandType,
     chatInputApplicationCommandMention,
+    Guild,
     inlineCode,
     MessageFlags,
     SlashCommandBuilder,
@@ -24,6 +25,8 @@ SlashCommand({
         .setDefaultMemberPermissions("0"),
 
     async handler(interaction) {
+        const commands = getCommandRoles(interaction.guild)
+
         const token = interaction.options.getString("token")
         if (!token) {
             const params = new URLSearchParams({
@@ -36,8 +39,19 @@ SlashCommand({
             return interaction.reply(
                 new MessageOptionsBuilder()
                     .setContainerContent(
-                        `Run the command again with the token from the following OAuth2 link: ` +
-                            `[Authorize URL](https://discord.com/oauth2/authorize?${params})`,
+                        `### Command Permissions\nRun the command again with the token from this ` +
+                            `[Authorization URL](https://discord.com/oauth2/authorize?${params}) ` +
+                            `to set the command permissions to the following:\n` +
+                            commands
+                                .map(({ command, roles }) => {
+                                    const mention =
+                                        command.type === ApplicationCommandType.ChatInput
+                                            ? chatInputApplicationCommandMention(command.name, command.id)
+                                            : inlineCode(command.name)
+
+                                    return `- ${mention} -> ${roles.join(" ")}`
+                                })
+                                .reduce((pv, cv) => `${pv}\n${cv}`, ""),
                         Colors.NiceBlue,
                     )
                     .setEphemeral(true),
@@ -46,55 +60,50 @@ SlashCommand({
 
         await interaction.deferReply({ flags: MessageFlags.Ephemeral })
 
-        const updates: string[] = []
         await Promise.all(
-            interaction.guild.commands.cache.map(async (command) => {
-                const config = commands.getConfig(command.name)
-                if (config?.permission) {
-                    const hostRoles = new Set(
-                        RolePermissions.cache
-                            .filter((v) => v.permissions.includes(config.permission!))
-                            .map((v) => v._id),
-                    )
-
-                    const positions = Array.from(
-                        new Set(
-                            PositionRole.cache.filter((v) => hostRoles.has(v.roleId)).map((v) => v.position),
-                        ),
-                    )
-
-                    const roles = Array.from(
-                        new Set(
-                            positions.flatMap((position) =>
-                                PositionRole.getRoles(position, interaction.guild.id),
-                            ),
-                        ),
-                    )
-
-                    const mention =
-                        command.type === ApplicationCommandType.ChatInput
-                            ? chatInputApplicationCommandMention(command.name, command.id)
-                            : inlineCode(command.name)
-
-                    updates.push(`- ${mention} -> ${roles.join(" ")}`)
-                    await interaction.guild.commands.permissions.set({
-                        token,
-                        command: command.id,
-                        permissions: roles.map((role) => ({
-                            id: role.id,
-                            type: ApplicationCommandPermissionType.Role,
-                            permission: true,
-                        })),
-                    })
-                }
-            }),
+            commands.map(({ command, roles }) =>
+                interaction.guild.commands.permissions.set({
+                    token,
+                    command: command.id,
+                    permissions: roles.map((role) => ({
+                        id: role.id,
+                        type: ApplicationCommandPermissionType.Role,
+                        permission: true,
+                    })),
+                }),
+            ),
         )
 
         await interaction.editReply(
             new MessageOptionsBuilder().setContainerContent(
-                `### Command permissions set:\n${updates.join("\n")}`,
+                `Command permissions set.`,
                 Colors.BrightSeaGreen,
             ),
         )
     },
 })
+
+function* getCommandRoles(guild: Guild) {
+    for (const command of guild.client.application.commands.cache.concat(guild.commands.cache).values()) {
+        const config = commands.getConfig(command.name)
+        if (config?.permission) {
+            const hostRoles = new Set(
+                RolePermissions.cache
+                    .filter((v) => v.permissions.includes(config.permission!))
+                    .map((v) => v._id),
+            )
+
+            const positions = Array.from(
+                new Set(PositionRole.cache.filter((v) => hostRoles.has(v.roleId)).map((v) => v.position)),
+            )
+
+            const roles = Array.from(
+                new Set(positions.flatMap((position) => PositionRole.getRoles(position, guild.id))),
+            )
+
+            yield { command, roles }
+        }
+
+        yield { command, roles: [] }
+    }
+}

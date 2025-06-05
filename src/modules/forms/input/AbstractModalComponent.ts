@@ -5,7 +5,6 @@ import {
     BaseModalData,
     codeBlock,
     ContainerBuilder,
-    ModalActionRowComponentBuilder,
     ModalBuilder,
     ModalSubmitInteraction,
 } from "discord.js"
@@ -93,7 +92,7 @@ export abstract class AbstractModalComponent<D extends BaseModalData, I, V> impl
     addModalComponent(ctx: BaseInteraction<"cached">, state: ExchangeState, modal: ModalBuilder) {
         const data = state.get<FormValue<V, I>>(this.id)
         modal.addComponents(
-            new ActionRowBuilder<ModalActionRowComponentBuilder>({
+            new ActionRowBuilder({
                 components: [this.component(ctx.i18n, data?.value, data?.inputted)],
             }),
         )

@@ -229,14 +229,14 @@ async function onTicketCloseCommand(interaction: ChatInputCommandInteraction<"ca
         if (!duration || duration <= 0 || duration > 30 * 24 * 60 * 60)
             throw new LocalizedError("tickets.invalid_timeout")
 
-        const message = await interaction.reply({
+        const response = await interaction.reply({
             ...getCloseRequestMessage(ticket, interaction.user, reason, duration),
-            fetchReply: true,
+            withResponse: true,
         })
 
-        void manager.addCloseTimeout(
+        manager.addCloseTimeout(
             {
-                messageId: message.id,
+                messageId: response.resource!.message!.id,
                 closerId: interaction.user.id,
                 timestamp: new Date(Date.now() + duration * 1000),
                 reason,
@@ -275,7 +275,7 @@ async function onTicketCloseResponse(interaction: MessageComponentInteraction<"c
             components: [],
         })
 
-        void manager.cancelCloseTimeouts(interaction.message.id)
+        manager.cancelCloseTimeouts(interaction.message.id)
 
         await interaction
             .followUp(

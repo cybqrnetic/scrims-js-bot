@@ -34,8 +34,8 @@ export class I18n {
     static getLocalizations(identifier: string, ...params: unknown[]) {
         return Object.fromEntries(
             this.getInstances()
-                .map((i18n): [string, string] => [i18n.locale, i18n.get(identifier, ...params)])
-                .filter(([, v]) => v !== UNKNOWN_RESOURCE),
+                .filter((i18n) => i18n.hasString(identifier))
+                .map((i18n): [string, string] => [i18n.locale, i18n.get(identifier, ...params)]),
         )
     }
 
@@ -70,7 +70,15 @@ export class I18n {
 
     get(id: string, ...params: unknown[]) {
         const value = this.lookup(splitId(id))
-        return Array.isArray(value) ? this.formatGroups(value, wrapParams(params)) : UNKNOWN_RESOURCE
+        if (value === undefined) {
+            console.warn(`[I18n] Resource "${id}" not found in locale "${this.locale}".`)
+            return UNKNOWN_RESOURCE
+        } else if (!Array.isArray(value)) {
+            console.warn(`[I18n] Resource "${id}" is not a string in locale "${this.locale}".`)
+            return UNKNOWN_RESOURCE
+        }
+
+        return this.formatGroups(value, wrapParams(params))
     }
 
     getMessageOptions(id: string, ...params: unknown[]) {
@@ -134,6 +142,9 @@ export class I18n {
                 } else {
                     if (group.optional) return ""
                     output += UNKNOWN_RESOURCE
+                    console.warn(
+                        `[I18n] Resource "${value.id.split.join(".")}" not found in locale "${this.locale}".`,
+                    )
                 }
             } else {
                 let param

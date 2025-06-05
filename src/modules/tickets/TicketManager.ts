@@ -20,7 +20,7 @@ import {
     type GuildTextBasedChannel,
 } from "discord.js"
 
-import { AuditedChannelAction, auditedEvents, bot, BotListener, LocalizedError, UserError } from "lib"
+import { AuditedChannelAction, auditedEvents, bot, BotListener, DB, LocalizedError, UserError } from "lib"
 import { Types } from "mongoose"
 import { CloseTimeout, Ticket } from "./Ticket"
 import TicketTranscriber, { TicketTranscriberOptions } from "./TicketTranscriber"
@@ -43,8 +43,9 @@ export interface TicketManagerConfig {
     creatorPermissions?: PermissionResolvable
 }
 
-BotListener("initialized", async () => {
-    const tickets = (await Ticket.find({ status: { $ne: "deleted" } })).toMultiMap((v) => v.type)
+const deletedTickets = DB.addStartupTask(() => Ticket.find({ status: { $ne: "deleted" } }))
+BotListener("ready", () => {
+    const tickets = deletedTickets.value.toMultiMap((v) => v.type)
     for (const manager of Object.values(TicketManager.managers)) {
         manager.initialize(tickets[manager.type] ?? [])
     }
@@ -88,7 +89,6 @@ export class TicketManager {
     private readonly transcriber?: TicketTranscriber
     private readonly guildConfig
 
-    private readonly initialized = Promise.withResolvers()
     private readonly timeoutTimers = new Map<TicketCloseTimeout, NodeJS.Timeout>()
     private readonly timeouts = new Map<string, Set<TicketCloseTimeout>>()
     private readonly channels = new Set<string>()
@@ -137,12 +137,9 @@ export class TicketManager {
                 }
             }
         }
-        this.initialized.resolve(null)
     }
 
-    async cancelCloseTimeouts(resolvable: string) {
-        await this.initialized.promise
-
+    cancelCloseTimeouts(resolvable: string) {
         const timeouts = this.timeouts.get(resolvable)
         if (timeouts) {
             for (const timeout of timeouts) {
@@ -155,9 +152,7 @@ export class TicketManager {
         }
     }
 
-    async addCloseTimeout(timeout: CloseTimeout, ticket: Ticket) {
-        await this.initialized.promise
-
+    addCloseTimeout(timeout: CloseTimeout, ticket: Ticket) {
         this.startCloseTimeout({ ...timeout, ticketId: ticket._id.toString() })
         Ticket.updateOne(
             { _id: ticket._id, status: { $ne: "deleted" } },
@@ -268,7 +263,6 @@ export class TicketManager {
     }
 
     async onChannelDelete({ channelId, executor, channel }: AuditedChannelAction) {
-        await this.initialized.promise
         if (!this.channels.has(channelId)) return
 
         const ticket = await Ticket.findOne({ channelId, type: this.type })
@@ -300,7 +294,7 @@ export class TicketManager {
         )
 
         if (ticket) {
-            this.initialized.promise.then(() => this.channels.delete(ticket.channelId)).catch(console.error)
+            this.channels.delete(ticket.channelId)
 
             const guild = bot.guilds.cache.get(ticket.guildId)
             if (!channel) {
