@@ -126,13 +126,8 @@ SlashCommand({
 auditedEvents.on(AuditLogEvent.MemberRoleUpdate, async ({ member, added, removed }) => {
     if (!member || member.user.bot || member.permissions.has("Administrator")) return
 
-    if (member.hasPermission(SubscriptionFeaturePermissions.PinMessages) && hasPinMessagePerms(added)) {
-        return await togglePinnedMessages(member, true)
-    }
-
-    if (!member.hasPermission(SubscriptionFeaturePermissions.PinMessages) && hasPinMessagePerms(removed)) {
-        return await togglePinnedMessages(member, false)
-    }
+    if (hasPinMessagePerms(added)) await togglePinnedMessages(member, true)
+    else if (hasPinMessagePerms(removed)) await togglePinnedMessages(member, false)
 })
 
 BotListener(
