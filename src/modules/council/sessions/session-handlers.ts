@@ -1,5 +1,5 @@
 import { MessageComponentInteraction } from "discord.js"
-import { Component, LocalizedError, UserError } from "lib"
+import { Component, UserError } from "lib"
 import { VouchDuelSession } from "./VouchDuelSession"
 
 Component({
@@ -11,7 +11,10 @@ Component({
         if (!session) throw new UserError("This session expired.")
 
         if (!interaction.user.hasPermission(`council.${session.rank.toLowerCase()}.vouchDuels`)) {
-            throw new LocalizedError("Insufficient Permissions")
+            throw new UserError(
+                "Insufficient Permissions",
+                `Only other ${session.rank} Council can join this vouch duel session.`,
+            )
         }
 
         await session.addCouncil(interaction.member.id)

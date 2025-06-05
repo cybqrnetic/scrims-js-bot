@@ -102,21 +102,13 @@ export class CommandHandler {
         if (error instanceof LocalizedError) return error.toMessage(i18n)
         if (error instanceof UserError) return error.toMessage()
 
-        if (error instanceof DiscordAPIError) return this.unexpectedErrorPayload(i18n, "discord")
+        if (error instanceof DiscordAPIError)
+            return new LocalizedError("unexpected_error.discord").toMessage(i18n)
+
         if (error instanceof MongoError || error instanceof ErrorReply)
-            return this.unexpectedErrorPayload(i18n, "database")
+            return new LocalizedError("unexpected_error.database").toMessage(i18n)
 
-        return this.unexpectedErrorPayload(i18n, "unknown")
-    }
-
-    protected unexpectedErrorPayload(i18n: I18n, type: string) {
-        return new MessageOptionsBuilder()
-            .setEphemeral(true)
-            .setContainerContent(
-                `### ${i18n.get("unexpected_error.title")}\n${i18n.get(`unexpected_error.${type}`)} ` +
-                    `${i18n.get("unexpected_error.apology")}\n\n-# ${i18n.get("unexpected_error.footer")}`,
-                0xfb2943,
-            )
+        return new LocalizedError("unexpected_error.unknown").toMessage(i18n)
     }
 
     protected async interactionReturn(interaction: Interaction, payload: unknown) {

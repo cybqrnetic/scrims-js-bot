@@ -1,5 +1,4 @@
 import { I18n } from "./I18n"
-import { MessageOptionsBuilder } from "./MessageOptionsBuilder"
 
 export class LocalizedError extends Error {
     readonly params: unknown[]
@@ -13,9 +12,8 @@ export class LocalizedError extends Error {
     }
 
     toMessage(i18n: I18n) {
-        const content = i18n.get(this.resourceId, ...this.params)
-        return new MessageOptionsBuilder()
-            .setContainerContent(content, 0xfb2943)
+        return i18n
+            .getMessageOptions(this.resourceId, 0xfb2943, ...this.params)
             .removeMentions()
             .setEphemeral(true)
     }

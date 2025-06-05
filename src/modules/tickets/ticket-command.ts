@@ -30,15 +30,10 @@ const Options = {
     Name: "name",
 }
 
-const subHandlers = {
-    permissions: onTicketPermissionsCommand,
-    delete: onTicketDeleteCommand,
-    rename: onTicketRenameCommand,
-    close: onTicketCloseCommand,
-}
-
-const componentHandlers = {
-    CLOSE: onTicketCloseResponse,
+const Actions = {
+    Accept: "ACCEPT",
+    Deny: "DENY",
+    Force: "FORCE",
 }
 
 SlashCommand({
@@ -52,8 +47,17 @@ SlashCommand({
         .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions("0"),
 
-    subHandlers,
-    componentHandlers,
+    subHandlers: {
+        permissions: onTicketPermissionsCommand,
+        delete: onTicketDeleteCommand,
+        rename: onTicketRenameCommand,
+        close: onTicketCloseCommand,
+    },
+
+    componentHandlers: {
+        CLOSE: onTicketCloseResponse,
+    },
+
     handleAutocomplete,
 })
 
@@ -164,16 +168,20 @@ async function onTicketPermissionsCommand(interaction: ChatInputCommandInteracti
 
     await interaction.reply(
         interaction.i18n
-            .getMessageOptions("tickets.permissions_updated", `${interaction.user}`, `${target}`)
+            .getMessageOptions(
+                "tickets.permissions_updated",
+                Colors.BrightSeaGreen,
+                `${interaction.user}`,
+                `${target}`,
+            )
             .setAllowedMentions({ parse: ["users"] }),
     )
 
     if (!member)
         await interaction.followUp(
-            interaction.i18n
-                .getMessageOptions("tickets.not_pinged_info", `${target}`)
-                .setEphemeral(true)
-                .setAllowedMentions(),
+            new MessageOptionsBuilder()
+                .setContent(interaction.i18n.get("tickets.not_pinged_info", `${target}`))
+                .setEphemeral(true),
         )
 }
 
@@ -257,42 +265,48 @@ async function onTicketCloseResponse(interaction: MessageComponentInteraction<"c
         ?.value.slice(3, -3)
         .trim()
 
-    if (action === "FORCE") {
-        const { ticket, manager } = await TicketManager.findTicket(interaction, true)
-        await interaction.update({ content: "Ticket closing...", embeds: [], components: [] })
-        await manager.closeTicket(ticket._id, requester?.id ?? interaction.user.id, reason)
-        return
+    const { ticket, manager } = await TicketManager.findTicket(interaction, false)
+    if (interaction.user.id !== ticket.userId) {
+        if (action === Actions.Force) {
+            const { ticket, manager } = await TicketManager.findTicket(interaction, true)
+            await interaction.update({ content: "Ticket closing...", embeds: [], components: [] })
+            await manager.closeTicket(ticket._id, requester?.id ?? interaction.user.id, reason)
+            return
+        }
+
+        throw new LocalizedError("tickets.creator_only", `${userMention(ticket.userId)}`)
     }
 
-    const { ticket, manager } = await TicketManager.findTicket(interaction, false)
-    if (interaction.user.id !== ticket.userId)
-        throw new LocalizedError("tickets.creator_only", `${userMention(ticket.userId)}`)
+    switch (action) {
+        case Actions.Force:
+        case Actions.Accept:
+            await interaction.update({ content: "Ticket closing...", embeds: [], components: [] })
+            await manager.closeTicket(ticket._id, requester?.id, reason)
+            break
 
-    if (action === "DENY") {
-        await interaction.update({
-            content: `*Close request from ${userMention(requesterId!)} denied.*`,
-            embeds: [],
-            components: [],
-        })
+        case Actions.Deny:
+            await interaction.update({
+                content: `*Close request from ${userMention(requesterId!)} denied.*`,
+                embeds: [],
+                components: [],
+            })
 
-        manager.cancelCloseTimeouts(interaction.message.id)
+            manager.cancelCloseTimeouts(interaction.message.id)
 
-        await interaction
-            .followUp(
-                new MessageOptionsBuilder()
-                    .setContent(`${userMention(requesterId!)} your close request was denied.`)
-                    .addActions(buildForceCloseAction(requesterId!)),
-            )
-            .catch(console.error)
-
-        if (interaction.channel?.isSendable()) {
-            await interaction.channel
-                .send(`${interaction.user} why do you want to keep this open?`)
+            await interaction
+                .followUp(
+                    new MessageOptionsBuilder()
+                        .setContent(`${userMention(requesterId!)} your close request was denied.`)
+                        .addActions(buildForceCloseAction(requesterId!)),
+                )
                 .catch(console.error)
-        }
-    } else if (action === "ACCEPT") {
-        await interaction.update({ content: "Ticket closing...", embeds: [], components: [] })
-        await manager.closeTicket(ticket._id, requester?.id, reason)
+
+            if (interaction.channel?.isSendable()) {
+                await interaction.channel
+                    .send(`${interaction.user} why do you want to keep this open?`)
+                    .catch(console.error)
+            }
+            break
     }
 }
 
@@ -306,21 +320,25 @@ function getCloseRequestMessage(ticket: Ticket, requester: User, reason?: string
         .setColor(Colors.Discord)
         .setTitle("Can we close this?")
         .setDescription(
-            `${requester} would like to close this ticket. Please let us know, if you feel the same way, with the buttons below.${timeoutText}`,
+            `${requester} would like to close this ticket. Please let us know, ` +
+                `if you feel the same way, with the buttons below.${timeoutText}`,
         )
-    if (reason) embed.addFields({ name: "Reason", value: `\`\`\`${reason}\`\`\``, inline: false })
+
+    if (reason) {
+        embed.addFields({ name: "Reason", value: `\`\`\`${reason}\`\`\``, inline: false })
+    }
 
     return new MessageOptionsBuilder()
         .setContent(userMention(ticket.userId))
         .addEmbeds(embed)
         .addActions(
             new ButtonBuilder()
-                .setCustomId(`ticket/CLOSE/${requester.id}/ACCEPT`)
+                .setCustomId(`ticket/CLOSE/${requester.id}/${Actions.Accept}`)
                 .setLabel("Close This")
                 .setStyle(ButtonStyle.Primary),
 
             new ButtonBuilder()
-                .setCustomId(`ticket/CLOSE/${requester.id}/DENY`)
+                .setCustomId(`ticket/CLOSE/${requester.id}/${Actions.Deny}`)
                 .setLabel("Keep Open")
                 .setStyle(ButtonStyle.Secondary),
 
@@ -330,7 +348,7 @@ function getCloseRequestMessage(ticket: Ticket, requester: User, reason?: string
 
 function buildForceCloseAction(requesterId: string) {
     return new ButtonBuilder()
-        .setCustomId(`ticket/CLOSE/${requesterId}/FORCE`)
+        .setCustomId(`ticket/CLOSE/${requesterId}/${Actions.Force}`)
         .setLabel("Force Close")
         .setStyle(ButtonStyle.Danger)
 }

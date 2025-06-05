@@ -46,7 +46,7 @@ class SuggestionClass {
 
     toEmbed(hue = 60) {
         return new EmbedBuilder()
-            .setColor(hue < 0 ? "#AC1DB8" : ColorUtil.hsvToRgb(hue, 1, 1))
+            .setColor(hue < 0 ? 0xac1db8 : ColorUtil.hsvToRgb(hue, 1, 1))
             .setImage(this.imageURL ?? null)
             .setTitle(this.title ?? null)
             .setDescription(this.idea)

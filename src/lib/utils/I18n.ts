@@ -1,4 +1,4 @@
-import { EmbedBuilder } from "discord.js"
+import { ContainerBuilder, EmbedBuilder } from "discord.js"
 import fs from "fs/promises"
 import path from "path"
 
@@ -81,18 +81,38 @@ export class I18n {
         return this.formatGroups(value, wrapParams(params))
     }
 
-    getMessageOptions(id: string, ...params: unknown[]) {
+    getMessageOptions(id: string, accentColor?: number, ...params: unknown[]) {
         const value = this.lookup(id.split("."))
-        if (value === undefined) return new MessageOptionsBuilder().setContent(UNKNOWN_RESOURCE)
-        if (Array.isArray(value)) {
-            return new MessageOptionsBuilder()
-                .setContent(this.formatGroups(value, wrapParams(params)))
-                .removeMentions()
+        if (value === undefined) {
+            console.warn(`[I18n] Resource "${id}" not found in locale "${this.locale}".`)
+            return new MessageOptionsBuilder().setContainerContent(UNKNOWN_RESOURCE, accentColor)
         }
 
-        return new MessageOptionsBuilder()
-            .addEmbeds(new EmbedBuilder(this.formatObject(value, wrapParams(params))))
-            .removeMentions()
+        if (Array.isArray(value)) {
+            return new MessageOptionsBuilder().setContainerContent(
+                this.formatGroups(value, wrapParams(params)),
+                accentColor,
+            )
+        }
+
+        const message = this.formatObject(value, wrapParams(params)) as MessageData
+        if (!message.title && !message.description && !message.footer) {
+            console.warn(`[I18n] Resource "${id}" is not a valid message in locale "${this.locale}".`)
+            return new MessageOptionsBuilder().setContainerContent(UNKNOWN_RESOURCE, accentColor)
+        }
+
+        const container = new ContainerBuilder().setAccentColor(accentColor)
+        if (message.title)
+            container.addTextDisplayComponents((text) => text.setContent(`### ${message.title!}`))
+        if (message.description)
+            container.addTextDisplayComponents((text) => text.setContent(message.description!))
+        if (message.footer) {
+            container
+                .addSeparatorComponents()
+                .addTextDisplayComponents((text) => text.setContent(`\n-# ${message.footer!}`))
+        }
+
+        return new MessageOptionsBuilder().setContainer(container)
     }
 
     getEmbed(id: string, ...params: unknown[]) {
@@ -165,6 +185,12 @@ export class I18n {
         }
         return output
     }
+}
+
+interface MessageData {
+    title?: string
+    description?: string
+    footer?: string
 }
 
 interface Identifier {

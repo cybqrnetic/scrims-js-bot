@@ -3,9 +3,21 @@
         "title": "Whoopsie!",
         "apology": "Sorry for the inconvenience. Feel free to try again later.",
         "footer": "This incident was reported to the developers.",
-        "discord": "It seems we're currently having trouble communicating with Discord.",
-        "database": "It looks like there is currently a problem with our database.",
-        "unknown": "Unfortunately your command could not be handled due to something unexpected going wrong."
+        "discord": {
+            "title": "${unexpected_error.title}",
+            "description": "It seems we're currently having trouble communicating with Discord. ${unexpected_error.apology}",
+            "footer": "${unexpected_error.footer}"
+        },
+        "database": {
+            "title": "${unexpected_error.title}",
+            "description": "It looks like there is currently a problem with our database. ${unexpected_error.apology}",
+            "footer": "${unexpected_error.footer}"
+        },
+        "unknown": {
+            "title": "${unexpected_error.title}",
+            "description": "Unfortunately your command could not be handled due to something unexpected going wrong. ${unexpected_error.apology}",
+            "footer": "${unexpected_error.footer}"
+        }
     },
     "type_error": {
         "position": {
@@ -334,7 +346,7 @@
             "title": "${missing_permissions}",
             "description": "You don't have permission to manage this position!"
         },
-        "none": { "description": "%s doesn't have any positions." },
+        "none": "%s doesn't have any positions.",
         "already_taken": "Couldn't remove **%s**, since %s does not have it!",
         "update_unavailable": "%s already has `%s` %s",
         "removed": "%s lost `%s`.",
@@ -394,7 +406,7 @@
         },
         "unauthorized_manage": {
             "title": "${missing_permissions}",
-            "description": "You do not have management permissions for `%s` tickets!"
+            "description": "You don't have permission to manage `%s` tickets!"
         },
         "invalid_timeout": {
             "title": "${invalid_timeout}",
@@ -483,7 +495,7 @@
     "app_not_enough_vouches": {
         "title": "You need at least %s vouches to apply for %s!",
         "description": "To learn how to obtain vouches see <#%s>. If you require further assistance, feel free to create a support ticket in <#%s>.",
-        "footer": { "text": "Please also note that vouches expire after %s." }
+        "footer": "Please also note that vouches expire after %s."
     },
     "app_received": "***Your application was received by the council!***",
     "vs": "V/S",

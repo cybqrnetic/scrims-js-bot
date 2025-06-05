@@ -1,4 +1,5 @@
 import {
+    bold,
     ButtonStyle,
     Events,
     MessageFlags,
@@ -116,7 +117,7 @@ function getFinishPayload(
         .sort((a, b) => b.role()!.comparePositionTo(a.role()!))
 
     if (positionRoles.length === 0 && content === null)
-        return interaction.i18n.getMessageOptions("position_roles.none").setEphemeral(true)
+        return new LocalizedError("position_roles.none").toMessage(interaction.i18n)
 
     return new MessageOptionsBuilder()
         .setContent(content)
@@ -127,10 +128,10 @@ function getFinishPayload(
                 .getEmbed("position_roles.status")
                 .setDescription(
                     positionRoles
-                        .map((posRole) => `\`•\`${posRole.role()!} -> ` + `**${posRole.position}**`)
+                        .map((posRole) => `- ${posRole.role()!} -> ${bold(posRole.position)}`)
                         .join("\n"),
                 )
-                .setColor("#673AB7"),
+                .setColor(0x673ab7),
         )
 }
 
