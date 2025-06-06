@@ -18,9 +18,9 @@ const MAX_PINNED_MESSAGES = Config.declareType("Max Pinned Messages")
 SlashCommand({
     builder: new SlashCommandBuilder()
         .setLocalizations("commands.pin")
-        .addStringOption((option) => option.setLocalizations("commands.pin.message_option").setRequired(true))
-        .setContexts(InteractionContextType.Guild)
-        .setDefaultMemberPermissions("0"),
+        .addStringOption((option) =>
+            option.setLocalizations("commands.pin.message_option").setRequired(true),
+        ),
 
     config: { defer: "EphemeralReply", permission: SubscriptionFeaturePermissions.PinMessages },
 
@@ -65,7 +65,6 @@ SlashCommand({
         }
 
         await message.pin()
-
         await PinnedMessage.create({
             _id: message.id,
             channelId: channel.id,
@@ -179,7 +178,7 @@ async function togglePinnedMessages(member: GuildMember | PartialGuildMember, sh
                 if (shouldPin) await message.pin()
                 else await message.unpin()
                 successfulIds.add(_id)
-            } catch (error) {
+            } catch {
                 failedIds.add(_id)
             }
         }),

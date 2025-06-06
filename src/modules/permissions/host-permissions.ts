@@ -1,9 +1,20 @@
 import { MAIN_GUILD_ID } from "@Constants"
+import { membersFetched } from "@module/member-fetcher"
 import { Events, GuildMember, User, type PartialGuildMember } from "discord.js"
+import EventEmitter from "events"
 import { BotListener, getMainGuild } from "lib"
+import {
+    AllPermissionsAddedUpdate,
+    AllPermissionsRemovedUpdate,
+    DiffPermissionsUpdate,
+    FreshPermissionsUpdate,
+    PermissionsGainedUpdate,
+    PermissionsLostUpdate,
+    PermissionUpdate,
+} from "./permission-update"
 import { RolePermissions } from "./RolePermissions"
 
-const ADMIN = "ADMIN"
+const ADMIN = Symbol("Administrator")
 const memberPermissions = new Map<string, Set<string> | typeof ADMIN>()
 
 declare module "discord.js" {
@@ -36,18 +47,15 @@ function isAdmin(member: GuildMember | PartialGuildMember) {
     return member.permissions.has("Administrator")
 }
 
-RolePermissions.cache.on("add", () => recalculate())
-RolePermissions.cache.on("delete", () => recalculate())
-
 BotListener(Events.GuildMemberAdd, (_bot, member) => {
     if (member.guild.id === MAIN_GUILD_ID) {
-        recalculateMember(member)
+        recalculateMember(member, true)
     }
 })
 
 BotListener(Events.GuildMemberRemove, (_bot, member) => {
     if (member.guild.id === MAIN_GUILD_ID) {
-        memberPermissions.delete(member.id)
+        deleteMember(member.id)
     }
 })
 
@@ -57,19 +65,26 @@ BotListener(Events.GuildMemberUpdate, (_bot, old, member) => {
             isAdmin(old) !== isAdmin(member) ||
             JSON.stringify(getRoles(old)) !== JSON.stringify(getRoles(member))
         ) {
-            recalculateMember(member)
+            recalculateMember(member, false)
         }
     }
 })
 
-BotListener("initialized", () => recalculate())
+RolePermissions.cache.on("add", () => recalculate())
+RolePermissions.cache.on("delete", () => recalculate())
+void membersFetched().then(() => recalculate())
 
 function recalculate() {
-    const members = getMainGuild()?.members.cache.values()
+    const members = getMainGuild()?.members.cache
     if (members) {
-        memberPermissions.clear()
-        for (const member of Array.from(members)) {
-            recalculateMember(member)
+        for (const memberId of memberPermissions.keys()) {
+            if (!members.has(memberId)) {
+                deleteMember(memberId)
+            }
+        }
+
+        for (const member of members.values()) {
+            recalculateMember(member, false)
         }
     }
 }
@@ -78,9 +93,15 @@ function getPermission(id: string) {
     return RolePermissions.cache.get(id)?.permissions ?? []
 }
 
-function recalculateMember(member: GuildMember) {
+function recalculateMember(member: GuildMember, newMember: boolean) {
+    const previous = memberPermissions.get(member.id)
     if (isAdmin(member)) {
-        memberPermissions.set(member.id, ADMIN)
+        if (previous !== ADMIN) {
+            memberPermissions.set(member.id, ADMIN)
+            if (newMember || previous !== undefined) {
+                emit("update", member.id, resolveAdminUpdate(previous))
+            }
+        }
         return
     }
 
@@ -96,5 +117,41 @@ function recalculateMember(member: GuildMember) {
         }
     }
 
-    memberPermissions.set(member.id, permissions)
+    if (
+        !(previous instanceof Set) ||
+        previous.size !== permissions.size ||
+        !Array.from(previous).every((perm) => permissions.has(perm))
+    ) {
+        memberPermissions.set(member.id, permissions)
+        if (newMember || previous !== undefined) {
+            emit("update", member.id, resolvePermUpdate(previous, permissions))
+        }
+    }
+}
+
+function resolveAdminUpdate(previous: Set<string> | undefined) {
+    return previous === undefined ? new AllPermissionsAddedUpdate() : new PermissionsGainedUpdate(previous)
+}
+
+function resolvePermUpdate(previous: typeof ADMIN | Set<string> | undefined, permissions: Set<string>) {
+    if (previous === undefined) return new FreshPermissionsUpdate(permissions)
+    if (previous === ADMIN) return new PermissionsLostUpdate(permissions)
+    return new DiffPermissionsUpdate(previous, permissions)
+}
+
+function deleteMember(memberId: string) {
+    if (memberPermissions.delete(memberId)) {
+        emit("update", memberId, new AllPermissionsRemovedUpdate())
+    }
+}
+
+export const events = new EventEmitter()
+events.on("error", console.error)
+
+function emit<K extends keyof PermissionEvents>(event: K, ...args: PermissionEvents[K]) {
+    events.emit(event, ...args)
+}
+
+export interface PermissionEvents {
+    ["update"]: [user: string, update: PermissionUpdate]
 }

@@ -1,18 +1,15 @@
 import {
-    AuditLogEvent,
     ChatInputCommandInteraction,
     Events,
-    GuildMember,
     GuildPremiumTier,
-    InteractionContextType,
-    PartialGuildMember,
     SlashCommandBuilder,
     SlashCommandSubcommandBuilder,
 } from "discord.js"
 
-import { RolePermissions } from "@module/permissions/RolePermissions"
+import { membersFetched } from "@module/member-fetcher"
+import { HostPermissions } from "@module/permissions"
 import { PositionRole, Positions } from "@module/positions"
-import { auditedEvents, BotListener, ColorUtil, Profanity, SlashCommand, TextUtil, UserError } from "lib"
+import { bot, BotListener, ColorUtil, DB, Profanity, SlashCommand, TextUtil, UserError } from "lib"
 import { SubscriptionFeaturePermissions } from "."
 import { CustomRole } from "./CustomRole"
 
@@ -20,11 +17,10 @@ SlashCommand({
     builder: new SlashCommandBuilder()
         .setLocalizations("commands.custom_role")
         .addSubcommand(buildCreateSubcommand())
-        .addSubcommand((sub) => sub.setLocalizations("commands.custom_role.remove"))
-        .setDefaultMemberPermissions("0")
-        .setContexts(InteractionContextType.Guild),
+        .addSubcommand((sub) => sub.setLocalizations("commands.custom_role.remove")),
 
     config: { defer: "EphemeralReply", permission: SubscriptionFeaturePermissions.CustomRole },
+
     subHandlers: {
         create: onCreateSubcommand,
         // Might wanna add this later: just pass undefined instead of null or default values for the options.
@@ -107,6 +103,8 @@ async function onCreateSubcommand(interaction: ChatInputCommandInteraction<"cach
             await interaction.member.roles.add(existingRole._id, "Custom Role")
         }
     } else {
+        existingRole?.deleteOne().catch(console.error)
+
         // Should be right under the lowest trial support role
         const trialSupportRoles = PositionRole.getRoles(Positions.TrialSupport, interaction.guildId)
         const customRolePosition = Math.min(...trialSupportRoles.map((role) => role.position))
@@ -119,33 +117,32 @@ async function onCreateSubcommand(interaction: ChatInputCommandInteraction<"cach
             position: customRolePosition,
         })
 
-        await interaction.member.roles.add(role, "Custom Role")
-
-        await CustomRole.create({
-            _id: role.id,
-            guildId: interaction.guildId,
-            userId: interaction.user.id,
-        })
+        try {
+            await interaction.member.roles.add(role, "Custom Role")
+            await CustomRole.create({
+                _id: role.id,
+                guildId: interaction.guildId,
+                userId: interaction.user.id,
+            })
+        } catch (error) {
+            role.delete().catch(console.error)
+            throw error
+        }
     }
 
     await interaction.editReply(
-        `Successfully created the custom role **${name}**! You can remove it with **\`/custom-role remove\`**.`,
+        `Successfully created the custom role **${name}**! ` +
+            `You can remove it with **\`/custom-role remove\`**.`,
     )
 }
 
 async function onRemoveSubcommand(interaction: ChatInputCommandInteraction<"cached">) {
-    const customRole = await CustomRole.findOne({
-        guildId: interaction.guildId,
-        userId: interaction.user.id,
-    })
-
+    const customRole = await CustomRole.findOne({ guildId: interaction.guildId, userId: interaction.user.id })
     if (!customRole) {
         throw new UserError("No Custom Role", "You do not have a custom role.")
     }
 
-    await interaction.guild.roles.delete(customRole._id)
-    await customRole.deleteOne()
-
+    await deleteCustomRole(customRole)
     await interaction.editReply("Successfully removed your custom role!")
 }
 
@@ -166,29 +163,38 @@ function buildCreateSubcommand() {
         )
 }
 
-BotListener(Events.GuildMemberRemove, async (_bot, member) => await deleteCustomRole(member))
-auditedEvents.on(AuditLogEvent.MemberRoleUpdate, async ({ member, removed }) => {
-    if (!member || member.user.bot || member.hasPermission(SubscriptionFeaturePermissions.CustomRole)) return
-
-    const lostPermission = removed.some((id) =>
-        RolePermissions.cache.find(
-            (role) => role.id === id && role.permissions.includes(SubscriptionFeaturePermissions.CustomRole),
-        ),
-    )
-
-    if (lostPermission) await deleteCustomRole(member)
+BotListener(Events.GuildMemberRemove, async (_bot, member) => {
+    const customRole = await CustomRole.findOne({ guildId: member.guild.id, userId: member.id })
+    if (customRole) {
+        await deleteCustomRole(customRole)
+    }
 })
 
-async function deleteCustomRole(member: GuildMember | PartialGuildMember) {
-    const customRole = await CustomRole.findOne({
-        guildId: member.guild.id,
-        userId: member.id,
-    })
-
-    if (customRole) {
-        await Promise.all([
-            member.guild.roles.delete(customRole._id).catch(() => null),
-            customRole.deleteOne(),
-        ])
+HostPermissions.on("update", async (user, update) => {
+    if (update.removed(SubscriptionFeaturePermissions.CustomRole)) {
+        await deleteCustomRoles(user)
     }
+})
+
+const customRoles = DB.addStartupTask(() => CustomRole.find())
+void membersFetched().then(() => {
+    for (const customRole of customRoles.value) {
+        const guild = bot.guilds.cache.get(customRole.guildId)
+        const member = guild?.members.cache.get(customRole.userId)
+        if (!member?.hasPermission(SubscriptionFeaturePermissions.CustomRole)) {
+            deleteCustomRole(customRole).catch(console.error)
+        }
+    }
+})
+
+async function deleteCustomRoles(user: string) {
+    const customRoles = await CustomRole.find({ userId: user })
+    for (const customRole of customRoles) {
+        deleteCustomRole(customRole).catch(console.error)
+    }
+}
+
+async function deleteCustomRole(customRole: CustomRole) {
+    const guild = bot.guilds.cache.get(customRole.guildId)
+    await Promise.all([guild?.roles.delete(customRole._id).catch(() => null), customRole.deleteOne()])
 }

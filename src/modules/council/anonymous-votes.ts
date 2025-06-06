@@ -116,8 +116,8 @@ Component({
         Object.entries(vote).forEach(([id, v]) => {
             const user = interaction.client.users.cache.get(id)
             if (user) {
-                votes.push([user, v as string])
-                voteValues.push(parseFloat(v as string))
+                votes.push([user, v])
+                voteValues.push(parseFloat(v))
             }
         })
 

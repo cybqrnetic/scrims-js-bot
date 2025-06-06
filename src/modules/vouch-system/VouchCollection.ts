@@ -123,7 +123,7 @@ export class VouchCollection {
 
         const options = this.vouches.map((v, i) => ({
             label: TextUtil.limitText(VouchUtil.toString(v, i18n, i + 1).replace(/\*/g, ""), 100, "..."),
-            value: v.id,
+            value: v._id.toString(),
         }))
 
         Array.from(new Array(Math.ceil(options.length / 25)).keys())
