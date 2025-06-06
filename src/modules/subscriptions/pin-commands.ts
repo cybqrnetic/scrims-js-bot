@@ -1,14 +1,9 @@
+import { MAIN_GUILD_ID } from "@Constants"
 import { Config } from "@module/config"
-import { RolePermissions } from "@module/permissions/RolePermissions"
-import {
-    AuditLogEvent,
-    Events,
-    GuildMember,
-    InteractionContextType,
-    PartialGuildMember,
-    SlashCommandBuilder,
-} from "discord.js"
-import { auditedEvents, BotListener, SlashCommand, UserError } from "lib"
+import { membersFetched } from "@module/member-fetcher"
+import { HostPermissions } from "@module/permissions"
+import { Events, InteractionContextType, SlashCommandBuilder } from "discord.js"
+import { bot, BotListener, DB, SlashCommand, UserError } from "lib"
 import { SubscriptionFeaturePermissions } from "."
 import { PinnedMessage } from "./PinnedMessage"
 
@@ -122,20 +117,6 @@ SlashCommand({
     },
 })
 
-auditedEvents.on(AuditLogEvent.MemberRoleUpdate, async ({ member, added, removed }) => {
-    if (!member || member.user.bot || member.permissions.has("Administrator")) return
-
-    if (hasPinMessagePerms(added)) await togglePinnedMessages(member, true)
-    else if (hasPinMessagePerms(removed)) await togglePinnedMessages(member, false)
-})
-
-BotListener(
-    Events.GuildMemberRemove,
-    async (_bot, member) =>
-        hasPinMessagePerms(member.roles.cache.map((r) => r.id)) &&
-        (await togglePinnedMessages(member, false)),
-)
-
 BotListener(Events.MessageDelete, async (_bot, message) => {
     if (message.pinned === false) return
     await PinnedMessage.deleteOne({ _id: message.id })
@@ -147,17 +128,35 @@ BotListener(Events.MessageBulkDelete, async (_bot, messages) => {
     })
 })
 
-function hasPinMessagePerms(array: string[]) {
-    return array.some((id) =>
-        RolePermissions.cache.find(
-            (role) => role.id === id && role.permissions.includes(SubscriptionFeaturePermissions.PinMessages),
-        ),
-    )
-}
+BotListener(Events.GuildMemberRemove, async (_bot, member) => {
+    if (member.guild.id === MAIN_GUILD_ID) return
+    if (!member.hasPermission(SubscriptionFeaturePermissions.PinMessages)) return
 
-async function togglePinnedMessages(member: GuildMember | PartialGuildMember, shouldPin: boolean) {
+    await togglePinnedMessages(member.id, false)
+})
+
+HostPermissions.on("update", async (userId, update) => {
+    if (update.added(SubscriptionFeaturePermissions.PinMessages)) {
+        await togglePinnedMessages(userId, true)
+    } else if (update.removed(SubscriptionFeaturePermissions.PinMessages)) {
+        await togglePinnedMessages(userId, false)
+    }
+})
+
+const pinnedMessages = DB.addStartupTask(() => PinnedMessage.find())
+void membersFetched().then(() => {
+    for (const pinnedMessage of pinnedMessages.value) {
+        const guild = bot.guilds.cache.get(pinnedMessage.guildId)
+        const member = guild?.members.cache.get(pinnedMessage.userId)
+        if (!member?.hasPermission(SubscriptionFeaturePermissions.PinMessages)) {
+            togglePinnedMessages(pinnedMessage.userId, false).catch(console.error)
+        }
+    }
+})
+
+async function togglePinnedMessages(userId: string, shouldPin: boolean) {
     const pinnedMessages = await PinnedMessage.find({
-        userId: member.id,
+        userId: userId,
         archived: shouldPin,
     })
 
@@ -169,7 +168,7 @@ async function togglePinnedMessages(member: GuildMember | PartialGuildMember, sh
     await Promise.all(
         pinnedMessages.map(async ({ channelId, _id }) => {
             try {
-                const channel = await member.client.channels.fetch(channelId)
+                const channel = await bot.channels.fetch(channelId)
                 if (!channel?.isTextBased()) return failedIds.add(_id)
 
                 const message = await channel.messages.fetch(_id).catch(() => null)
@@ -185,13 +184,10 @@ async function togglePinnedMessages(member: GuildMember | PartialGuildMember, sh
     )
 
     if (successfulIds.size > 0) {
-        await PinnedMessage.updateMany(
-            { userId: member.id, _id: { $in: [...successfulIds] } },
-            { archived: !shouldPin },
-        )
+        await PinnedMessage.updateMany({ userId, _id: { $in: [...successfulIds] } }, { archived: !shouldPin })
     }
 
     if (failedIds.size > 0) {
-        await PinnedMessage.deleteMany({ userId: member.id, _id: { $in: [...failedIds] } })
+        await PinnedMessage.deleteMany({ userId, _id: { $in: [...failedIds] } })
     }
 }

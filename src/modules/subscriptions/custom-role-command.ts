@@ -6,6 +6,7 @@ import {
     SlashCommandSubcommandBuilder,
 } from "discord.js"
 
+import { MAIN_GUILD_ID } from "@Constants"
 import { membersFetched } from "@module/member-fetcher"
 import { HostPermissions } from "@module/permissions"
 import { PositionRole, Positions } from "@module/positions"
@@ -164,6 +165,9 @@ function buildCreateSubcommand() {
 }
 
 BotListener(Events.GuildMemberRemove, async (_bot, member) => {
+    if (member.guild.id === MAIN_GUILD_ID) return
+    if (!member.hasPermission(SubscriptionFeaturePermissions.CustomRole)) return
+
     const customRole = await CustomRole.findOne({ guildId: member.guild.id, userId: member.id })
     if (customRole) {
         await deleteCustomRole(customRole)
