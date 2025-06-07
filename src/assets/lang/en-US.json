@@ -331,6 +331,7 @@
             "description": "You can't manage the roles of the positions above yours!"
         },
         "none": "You haven't configured anything for this guild yet.",
+        "removed": "%s was disconnected from %s.",
         "status": { "title": "Connected Roles" },
         "reloaded": "Positions and position-roles were reloaded.",
         "connected": "%s is now connected to **%s**",

@@ -11,6 +11,7 @@ import {
 } from "discord.js"
 import { I18n, LocalizedError, MessageOptionsBuilder, TextUtil, TimeUtil } from "lib"
 
+import { Colors } from "@Constants"
 import { Config } from "@module/config"
 import { ExchangeState, IgnInput, TextInput } from "@module/forms"
 import { BotMessage } from "@module/messages"
@@ -182,8 +183,9 @@ class RankAppCreateHandler extends TicketCreateHandler {
     /** @override */
     protected onCreate(_ctx: BaseInteraction<"cached">, _ticket: Ticket, _channel: TextChannel) {
         return Promise.resolve(
-            new MessageOptionsBuilder().setContent(
+            new MessageOptionsBuilder().setContainerContent(
                 `Your application was received! You will be informed through DMs once a decision is made.`,
+                Colors.BrightSeaGreen,
             ),
         )
     }

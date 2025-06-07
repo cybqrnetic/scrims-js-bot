@@ -70,11 +70,25 @@ BotListener(Events.GuildMemberUpdate, (_bot, old, member) => {
     }
 })
 
+BotListener(Events.GuildRoleUpdate, async (_bot, oldRole, newRole) => {
+    if (newRole.guild.id === MAIN_GUILD_ID) {
+        if (oldRole.permissions.has("Administrator") !== newRole.permissions.has("Administrator")) {
+            await membersFetched()
+            for (const member of getMainGuild()?.members.cache.values() ?? []) {
+                if (getRoles(member).includes(newRole.id)) {
+                    recalculateMember(member, false)
+                }
+            }
+        }
+    }
+})
+
 RolePermissions.cache.on("add", () => recalculate())
 RolePermissions.cache.on("delete", () => recalculate())
-void membersFetched().then(() => recalculate())
+recalculate().catch(console.error)
 
-function recalculate() {
+async function recalculate() {
+    await membersFetched()
     const members = getMainGuild()?.members.cache
     if (members) {
         for (const memberId of memberPermissions.keys()) {

@@ -76,7 +76,7 @@ async function onCreateSubcommand(interaction: ChatInputCommandInteraction<"cach
     }
 
     const hexColor = color ? ColorUtil.parseHex(color) : 0
-    if (hexColor && isNaN(hexColor)) {
+    if (isNaN(hexColor)) {
         throw new UserError("Invalid Color", "The color provided is not a valid hex color. (eg. #FF0000)")
     }
 
