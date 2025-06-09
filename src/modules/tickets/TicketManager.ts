@@ -68,9 +68,10 @@ export class TicketManager {
         }
 
         if (
-            perms && manager.options.permission
+            perms &&
+            (manager.options.permission
                 ? !interaction.user.hasPermission(manager.options.permission)
-                : !interaction.memberPermissions?.has("Administrator")
+                : !interaction.memberPermissions?.has("Administrator"))
         ) {
             throw new LocalizedError("tickets.unauthorized_manage", ticket.type)
         }
