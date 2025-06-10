@@ -65,8 +65,8 @@ export class VouchUtil {
     }
 
     static checkVouchPermissions(user: User, rank: string, council?: User) {
-        if (council && !council.hasPermission(`council.${rank.toLowerCase()}.vouch`))
-            throw new UserError(`You are missing the required permission to give ${user} a ${rank} vouch.`)
+        if (council && !OnlinePositions.hasPosition(user, `${rank} Council`))
+            throw new UserError(`Only the ${rank} council can give ${rank} vouches.`)
         return rank
     }
 

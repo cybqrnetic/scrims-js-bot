@@ -129,8 +129,6 @@ Component({
         if (!user) throw new UserError("Unknown User.")
 
         const rank = interaction.args.shift()!
-        VouchUtil.checkVouchPermissions(user, rank, interaction.user)
-
         const vouch = await Vouch.findOneAndDelete({ _id: interaction.values[0] })
         if (vouch) LogUtil.logDelete(vouch, interaction.user)
 
