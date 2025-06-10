@@ -175,7 +175,7 @@ async function handleEvaluate(
     if (!(manager instanceof RankAppTicketManager))
         throw new UserError("This command can only be used in rank application channels!")
 
-    if (!interaction.user.hasPermission(`council.${manager.rank.toLowerCase()}.evaluateVote`))
+    if (!interaction.user.hasPermission(`council.${manager.rank.toLowerCase()}.evaluate_vote`))
         throw new LocalizedError("command_handler.missing_permissions")
 
     await interaction.reply(

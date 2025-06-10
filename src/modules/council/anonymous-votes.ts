@@ -104,7 +104,7 @@ Component({
 
         const rank = voteChannels.get(interaction.channelId)
         if (rank) {
-            if (!interaction.user.hasPermission(`council.${rank.toLowerCase()}.evaluateVote`))
+            if (!interaction.user.hasPermission(`council.${rank.toLowerCase()}.evaluate_vote`))
                 throw new UserError(`You are not allow to view ${rank} vote outcomes.`)
         } else if (vote["creator"] !== interaction.member.id) {
             throw new UserError("Only the person who created this vote can view the outcome!")
