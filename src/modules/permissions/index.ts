@@ -1,4 +1,4 @@
-import { events, PermissionEvents } from "./host-permissions"
+import { events, initialized, PermissionEvents } from "./host-permissions"
 
 export { PermissionUpdate } from "./permission-update"
 export { RolePermissions } from "./RolePermissions"
@@ -10,5 +10,9 @@ export class HostPermissions {
     ) {
         events.on(event, listener)
         return this
+    }
+
+    static async initialized() {
+        await initialized
     }
 }

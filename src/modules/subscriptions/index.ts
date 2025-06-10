@@ -1,7 +1,7 @@
 import { MAIN_GUILD_ID, RANKS } from "@Constants"
-import { membersFetched } from "@module/member-fetcher"
-import { PositionRole } from "@module/positions"
-import { AuditLogEvent, Events, GuildMember } from "discord.js"
+import { HostPermissions } from "@module/permissions"
+import { OnlinePositions, PositionRole } from "@module/positions"
+import { AuditLogEvent, GuildMember } from "discord.js"
 import { auditedEvents, AuditedRoleUpdate, BotModule, getMainGuild } from "lib"
 
 const SubscriptionFeaturePositions = PositionRole.declarePositions({
@@ -29,16 +29,16 @@ const ROLE_SYNC_REASON = "Subscription Role Sync"
 class SubscriptionModule extends BotModule {
     protected addListeners() {
         auditedEvents.on(AuditLogEvent.MemberRoleUpdate, (action) => this.onRolesChange(action))
-        this.bot.on(Events.GuildMemberAdd, (member) => this.enforceRoleDependencies(member))
+        HostPermissions.on("update", (user) => this.onPermissionsUpdate(user))
     }
 
-    async onInitialized() {
+    protected async onInitialized() {
         await this.syncEveryone().catch(console.error)
         setInterval(() => this.syncEveryone().catch(console.error), 20 * 60 * 1000)
     }
 
     async syncEveryone() {
-        await membersFetched()
+        await HostPermissions.initialized()
         const guild = getMainGuild()
         if (guild) {
             await Promise.all(
@@ -47,15 +47,21 @@ class SubscriptionModule extends BotModule {
         }
     }
 
-    async onRolesChange({ reason, member }: AuditedRoleUpdate) {
-        if (reason === ROLE_SYNC_REASON || !member) return
+    async onRolesChange({ reason, member, guild }: AuditedRoleUpdate) {
+        if (guild.id !== MAIN_GUILD_ID || reason === ROLE_SYNC_REASON || !member) return
 
         await this.enforceRoleDependencies(member)
     }
 
+    async onPermissionsUpdate(user: string) {
+        const member = getMainGuild()?.members.cache.get(user)
+        if (member) {
+            await this.enforceRoleDependencies(member)
+        }
+    }
+
     async enforceRoleDependencies(member: GuildMember) {
-        if (member.guild.id !== MAIN_GUILD_ID || member.user.bot || member.permissions.has("Administrator"))
-            return
+        if (member.user.bot || member.permissions.has("Administrator")) return
 
         const rolesToGive = new Set<string>()
         const rolesToRemove = new Set<string>()
@@ -155,8 +161,7 @@ class SubscriptionModule extends BotModule {
     private getNextMemberRank(member: GuildMember) {
         let nextRank
         for (const rank of Object.values(RANKS).reverse()) {
-            const roles = PositionRole.getPositionRoles(rank, member.guild.id)
-            if (roles.some((r) => member.roles.cache.has(r.roleId))) {
+            if (OnlinePositions.hasPosition(member.user, rank)) {
                 break
             }
             nextRank = rank

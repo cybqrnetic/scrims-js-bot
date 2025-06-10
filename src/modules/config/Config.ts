@@ -120,6 +120,13 @@ class ConfigClass {
         return this.guild()?.roles.cache.get(this.value)
     }
 
+    asArray() {
+        return this.value
+            .split(",")
+            .map((value) => value.trim())
+            .map((value) => new Config({ type: this.type, guildId: this.guildId, value }))
+    }
+
     parsedValue() {
         const message = this.getMessage()
         if (message) return messageLink(message.channelId, message.id, message.guildId)

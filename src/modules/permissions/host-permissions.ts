@@ -85,7 +85,7 @@ BotListener(Events.GuildRoleUpdate, async (_bot, oldRole, newRole) => {
 
 RolePermissions.cache.on("add", () => recalculate())
 RolePermissions.cache.on("delete", () => recalculate())
-recalculate().catch(console.error)
+export const initialized = recalculate().catch(console.error)
 
 async function recalculate() {
     await membersFetched()
