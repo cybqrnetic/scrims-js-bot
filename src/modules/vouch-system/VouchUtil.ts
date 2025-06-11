@@ -1,5 +1,5 @@
 import { EmbedField, Role, User, userMention, type CommandInteraction } from "discord.js"
-import { getMainGuild, I18n, UserError } from "lib"
+import { getMainGuild, I18n } from "lib"
 
 import { RANKS } from "@Constants"
 import { OnlinePositions } from "@module/positions"
@@ -50,38 +50,16 @@ export class VouchUtil {
         )
     }
 
-    static determineVouchRank(user: User, rankOverride: string | null, council?: User) {
-        if (rankOverride) return this.checkVouchPermissions(user, rankOverride, council)
-
+    static determineVouchRank(user: User) {
         let previous = null
-        for (const rank of Object.values(RANKS).reverse().concat("Member")) {
-            if (rank === "Member" || OfflinePositions.hasPosition(user, rank)) {
-                return this.checkVouchPermissions(user, previous ?? rank, council)
+        for (const rank of Object.values(RANKS).reverse()) {
+            if (OfflinePositions.hasPosition(user, rank)) {
+                return previous ?? rank
             }
             previous = rank
         }
 
-        throw new Error("Impossible")
-    }
-
-    static checkVouchPermissions(user: User, rank: string, council?: User) {
-        if (council && !OnlinePositions.hasPosition(user, `${rank} Council`))
-            throw new UserError(`Only the ${rank} council can give ${rank} vouches.`)
-        return rank
-    }
-
-    static determineDemoteRank(user: User | string, council: User) {
-        const mention = typeof user === "string" ? userMention(user) : user.toString()
-        for (const rank of Object.values(RANKS).reverse()) {
-            if (OfflinePositions.hasPosition(user, rank)) {
-                if (!council.hasPermission(`council.${rank.toLowerCase()}.demote`))
-                    throw new UserError(
-                        `You are missing the required permission to demote ${mention} from ${rank}.`,
-                    )
-                return rank
-            }
-        }
-        throw new UserError(`You can't demote ${mention} since they only have the default rank of member.`)
+        return previous as string
     }
 
     static async finishVouchesInteraction(

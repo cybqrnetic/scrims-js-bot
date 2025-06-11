@@ -21,7 +21,7 @@ BotListener(Events.MessageCreate, async (_bot, msg) => {
     if (msg.guildId !== ROLE_APP_HUB || msg.content.toLowerCase() !== "$duels") return
 
     const rank = channelRanks[msg.channelId]
-    if (!rank || !msg.author.hasPermission(`council.${rank.toLowerCase()}.vouchDuels`)) return
+    if (!rank || !msg.author.hasPermission(`council.${rank.toLowerCase()}.vouchDuels`, false)) return
 
     const role = PositionRole.getRoles(PING_POSITIONS[rank]!, msg.guildId)[0]
     await Promise.all([msg.delete(), role ? msg.channel.send(`${msg.author}: ${role}`) : null])

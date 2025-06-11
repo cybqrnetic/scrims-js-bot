@@ -98,7 +98,7 @@ SlashCommand({
         const reason = interaction.options.getString("reason", true)
         const rank = determinePromoteRank(user)
 
-        if (!interaction.user.hasPermission(`council.${rank.toLowerCase()}.promote`))
+        if (!interaction.user.hasPermission(`council.${rank.toLowerCase()}.promote`, false))
             throw new UserError(`You are missing the required permission to promote ${user} to ${rank}.`)
 
         await promote(user.id, rank, reason, interaction.user)

@@ -93,7 +93,7 @@ SlashCommand({
             .catch(() => null)
 
         const showExpired = interaction.options.getBoolean(Options.ShowExpired) ?? undefined
-        const rank = VouchUtil.determineVouchRank(user, interaction.options.getString(Options.Rank))
+        const rank = interaction.options.getString(Options.Rank) ?? VouchUtil.determineVouchRank(user)
         await VouchUtil.finishVouchesInteraction(interaction, user, rank, showExpired)
     },
 
@@ -123,7 +123,7 @@ ContextMenu({
     async handler(interaction) {
         if (!interaction.isUserContextMenuCommand()) return
 
-        const rank = VouchUtil.determineVouchRank(interaction.targetUser, null)
+        const rank = VouchUtil.determineVouchRank(interaction.targetUser)
         await VouchUtil.finishVouchesInteraction(interaction, interaction.targetUser, rank)
     },
 })

@@ -4,6 +4,7 @@ import {
     InteractionContextType,
     SlashCommandBuilder,
     SlashCommandStringOption,
+    User,
     bold,
     userMention,
     type ChatInputCommandInteraction,
@@ -30,6 +31,11 @@ function buildRankOption(command: string) {
         .setChoices(...Object.values(RANKS).map((v) => ({ name: v, value: v })))
 }
 
+function checkManagePerms(user: User, rank: string) {
+    if (!user.hasPermission(`council.${rank.toLowerCase()}.manageVouches`))
+        throw new UserError(`You don't have permissions to manage ${rank} vouches!`)
+}
+
 SlashCommand({
     builder: new SlashCommandBuilder()
         .setLocalizations("commands.remove_vouch")
@@ -46,9 +52,8 @@ SlashCommand({
 
     async handler(interaction) {
         const user = interaction.options.getUser(Options.User, true)
-        const rank = VouchUtil.determineVouchRank(user, interaction.options.getString(Options.Rank))
-        if (!interaction.user.hasPermission(`council.${rank.toLowerCase()}.manageVouches`))
-            throw new UserError(`You don't have permissions to manage ${rank} vouches!`)
+        const rank = interaction.options.getString(Options.Rank) ?? VouchUtil.determineVouchRank(user)
+        checkManagePerms(interaction.user, rank)
 
         const vouches = await VouchCollection.fetch(user.id, rank)
         await interaction.editReply(vouches.toRemoveMessage(interaction.i18n, interaction.guildId))
@@ -80,8 +85,7 @@ SlashCommand({
     async handler(interaction) {
         const user = interaction.options.getUser(Options.User, true)
         const rank = interaction.options.getString("rank", true)
-        if (!interaction.user.hasPermission(`council.${rank.toLowerCase()}.manageVouches`))
-            throw new UserError(`You don't have permissions to manage ${rank} vouches!`)
+        checkManagePerms(interaction.user, rank)
 
         const count = await Vouch.countDocuments({ executorId: user.id, position: rank })
         await interaction.editReply(
@@ -109,6 +113,7 @@ Component({
     async handler(interaction) {
         const userId = interaction.args.shift()!
         const rank = interaction.args.shift()!
+        checkManagePerms(interaction.user, rank)
 
         const result = await Vouch.deleteMany({ executorId: userId, position: rank })
         await interaction.editReply(
@@ -129,6 +134,8 @@ Component({
         if (!user) throw new UserError("Unknown User.")
 
         const rank = interaction.args.shift()!
+        checkManagePerms(interaction.user, rank)
+
         const vouch = await Vouch.findOneAndDelete({ _id: interaction.values[0] })
         if (vouch) LogUtil.logDelete(vouch, interaction.user)
 
@@ -210,11 +217,9 @@ async function addVouch(interaction: ChatInputCommandInteraction<"cached">, wort
     }
 
     const comment = interaction.options.getString(Options.Comment) ?? undefined
-    const rank = VouchUtil.determineVouchRank(
-        user,
-        interaction.options.getString(Options.Rank),
-        interaction.user,
-    )
+    const rank = interaction.options.getString(Options.Rank) ?? VouchUtil.determineVouchRank(user)
+    if (!interaction.user.hasPermission(`council.${rank.toLowerCase()}.vouch`, false))
+        throw new UserError(`You are missing the required permission to give ${user} a ${rank} vouch.`)
 
     const filter = {
         executorId: interaction.user.id,

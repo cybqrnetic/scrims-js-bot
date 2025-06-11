@@ -13,6 +13,7 @@ import {
 import { MessageOptionsBuilder, SlashCommand, UserError } from "lib"
 import { DateTime } from "luxon"
 
+import { RANKS } from "@Constants"
 import { Config } from "@module/config"
 import { LogUtil } from "@module/council/vouches/LogUtil"
 import { OnlinePositions } from "@module/positions"
@@ -20,7 +21,6 @@ import { UserProfile } from "@module/profiler"
 import { OfflinePositions } from "@module/sticky-roles"
 import { SubscriptionFeaturePermissions } from "@module/subscriptions"
 import { Vouch } from "@module/vouch-system"
-import { VouchUtil } from "@module/vouch-system/VouchUtil"
 
 SlashCommand({
     builder: new SlashCommandBuilder()
@@ -124,6 +124,14 @@ SlashCommand({
     },
 })
 
+function determineDemoteRank(user: string) {
+    for (const rank of Object.values(RANKS).reverse()) {
+        if (OfflinePositions.hasPosition(user, rank)) {
+            return rank
+        }
+    }
+}
+
 async function purge(
     interaction: BaseInteraction<"cached">,
     resolved: Set<string>,
@@ -139,10 +147,17 @@ async function purge(
     if (resolved.has(user)) return `Duplicate entry detected for ${mention}!`
     resolved.add(user)
 
-    const rank = VouchUtil.determineDemoteRank(user, interaction.user)
+    const rank = determineDemoteRank(user)
+    if (!rank) {
+        return `${mention} doesn't have any ranks.`
+    }
+
     if (rankInput && rank.toLowerCase() !== rankInput) {
         return `${mention} is wrong rank for purge (${rank}).`
     }
+
+    if (!interaction.user.hasPermission(`council.${rank.toLowerCase()}.demote`, false))
+        return `Insufficient permission to demote ${mention} from ${rank}.`
 
     const member = interaction.guild.members.resolve(user)
     if (member && OnlinePositions.hasPosition(member, `${rank} Council`)) {

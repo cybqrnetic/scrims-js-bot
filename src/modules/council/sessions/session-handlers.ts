@@ -10,7 +10,7 @@ Component({
         const session = VouchDuelSession.findSession(startedAt)
         if (!session) throw new UserError("This session expired.")
 
-        if (!interaction.user.hasPermission(`council.${session.rank.toLowerCase()}.vouchDuels`)) {
+        if (!interaction.user.hasPermission(`council.${session.rank.toLowerCase()}.vouchDuels`, false)) {
             throw new UserError(
                 "Insufficient Permissions",
                 `Only other ${session.rank} Council can join this vouch duel session.`,
