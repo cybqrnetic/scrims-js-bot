@@ -125,7 +125,7 @@ export class CouncilVoteManager {
 Component({
     builder: "COUNCIL_VOTE",
     async handler(interaction) {
-        const { manager, ticket } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction)
+        const { manager, ticket } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction, false)
         if (!(manager instanceof RankAppTicketManager))
             throw new UserError(`This interaction is not available in this channel.`)
 
@@ -171,7 +171,7 @@ async function handleEvaluate(
             return handleDeny(interaction)
     }
 
-    const { ticket, manager } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction)
+    const { ticket, manager } = await RankAppTicketManager.findTicket<RankAppExtras>(interaction, false)
     if (!(manager instanceof RankAppTicketManager))
         throw new UserError("This command can only be used in rank application channels!")
 

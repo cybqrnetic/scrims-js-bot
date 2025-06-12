@@ -47,7 +47,7 @@ SlashCommand({
 export async function handleAccept(
     interaction: MessageComponentInteraction<"cached"> | ChatInputCommandInteraction<"cached">,
 ) {
-    const { ticket, manager } = await TicketManager.findTicket(interaction)
+    const { ticket, manager } = await TicketManager.findTicket(interaction, false)
     if (!(manager instanceof RankAppTicketManager))
         throw new UserError("This command can only be used in rank application channels!")
 
@@ -129,7 +129,7 @@ SlashCommand({
 export async function handleDeny(
     interaction: MessageComponentInteraction<"cached"> | ChatInputCommandInteraction<"cached">,
 ) {
-    const { ticket, manager } = await TicketManager.findTicket(interaction)
+    const { ticket, manager } = await TicketManager.findTicket(interaction, false)
     if (!(manager instanceof RankAppTicketManager))
         throw new UserError("This command can only be used in rank application channels!")
 

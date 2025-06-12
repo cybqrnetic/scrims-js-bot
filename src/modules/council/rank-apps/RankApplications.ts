@@ -32,7 +32,7 @@ function CreateRankApplications(rank: string, cooldown: number) {
     const componentId = handler.register().getId()
     BotMessage({
         name: `${rank} Applications`,
-        permission: `council.${rank.toLowerCase()}.manageApp`,
+        permission: `council.${rank.toLowerCase()}.manage_app`,
         builder(i18n, member) {
             const minVouches = handler.minVouches(member.guild.id)
             const council = PositionRole.getRoles(`${rank} Council`, member.guild.id)[0] ?? `@${rank} Council`
@@ -69,7 +69,7 @@ export class RankAppTicketManager extends TicketManager {
             creatorPermissions: [],
             closeIfLeave: false,
             cooldown,
-            permission: `council.${rank.toLowerCase()}.manageApp`,
+            permission: `council.${rank.toLowerCase()}.manage_app`,
         })
 
         this.vote = new CouncilVoteManager(rank)
