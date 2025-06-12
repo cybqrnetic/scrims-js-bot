@@ -179,7 +179,9 @@ export abstract class AbstractFormHandler extends AbstractExchangeHandler {
                     followUp = new UserError("Something went wrong while submitting your form.").toMessage()
                 }
 
-                interaction.followUp(followUp.setEphemeral(true)).catch(console.error)
+                interaction
+                    .response!.then(() => interaction.followUp(followUp.setEphemeral(true)))
+                    .catch(console.error)
             }
         })
 
