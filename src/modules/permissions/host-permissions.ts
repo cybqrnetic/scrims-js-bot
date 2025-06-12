@@ -15,9 +15,8 @@ import {
 } from "./permission-update"
 import { RolePermissions } from "./RolePermissions"
 
-const ADMIN = Symbol("Administrator")
-export type Permissions = Set<string | typeof ADMIN>
-const memberPermissions = new Map<string, Permissions>()
+const ADMIN = "*"
+const memberPermissions = new Map<string, Set<string>>()
 
 declare module "discord.js" {
     interface GuildMember {
@@ -111,7 +110,7 @@ function getPermission(id: string) {
 
 function recalculateMember(member: GuildMember, newMember: boolean) {
     const previous = memberPermissions.get(member.id)
-    const permissions: Permissions = new Set()
+    const permissions = new Set<string>()
     if (isAdmin(member)) {
         permissions.add(ADMIN)
     }
@@ -133,7 +132,7 @@ function recalculateMember(member: GuildMember, newMember: boolean) {
     }
 }
 
-function emitUpdate(member: GuildMember, previous: Permissions | undefined, permissions: Permissions) {
+function emitUpdate(member: GuildMember, previous: Set<string> | undefined, permissions: Set<string>) {
     if (permissions.has(ADMIN) && previous?.has(ADMIN)) {
         return // <-- Still has all perms
     }
@@ -149,7 +148,7 @@ function emitUpdate(member: GuildMember, previous: Permissions | undefined, perm
     emit("update", member.id, resolvePermUpdate(previous, permissions))
 }
 
-function resolvePermUpdate(previous: Permissions | undefined, permissions: Permissions) {
+function resolvePermUpdate(previous: Set<string> | undefined, permissions: Set<string>) {
     if (previous === undefined) {
         return permissions.has(ADMIN) ? new NoneToAdminUpdate() : new NoneToPermsUpdate(permissions)
     } else if (previous.has(ADMIN)) {

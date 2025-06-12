@@ -71,7 +71,9 @@ export class VouchUtil {
         const guildId = interaction.guildId ?? undefined
         const [vouches] = await Promise.all([
             VouchCollection.fetch(user.id, rank),
-            getMainGuild()?.members.fetch({ user: interaction.user.id, force: true }),
+            getMainGuild()
+                ?.members.fetch({ user: interaction.user.id, force: true })
+                .catch(() => null),
         ])
 
         if (includeExpired === undefined) {

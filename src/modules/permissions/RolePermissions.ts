@@ -7,6 +7,9 @@ class RolePermissionsClass {
     @Prop({ type: Types.Long, required: true })
     _id!: string
 
+    @Prop({ type: String, required: false })
+    name?: string
+
     @Prop({ type: [String], required: true })
     permissions!: string[]
 

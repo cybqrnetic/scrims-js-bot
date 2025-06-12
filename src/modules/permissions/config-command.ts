@@ -1,8 +1,11 @@
 import {
+    GuildMember,
     MessageFlags,
+    Role,
     SlashCommandBuilder,
-    SlashCommandRoleOption,
+    SlashCommandMentionableOption,
     SlashCommandStringOption,
+    User,
     inlineCode,
     roleMention,
     userMention,
@@ -19,7 +22,7 @@ const SubCommands = {
 }
 
 const Options = {
-    Role: "role",
+    Target: "target",
     Permission: "permission",
 }
 
@@ -34,14 +37,14 @@ SlashCommand({
             sub
                 .setName(SubCommands.Add)
                 .setDescription("Grant a bot permission.")
-                .addRoleOption(buildRoleOption())
+                .addMentionableOption(buildTargetOption())
                 .addStringOption(buildPermissionOption()),
         )
         .addSubcommand((sub) =>
             sub
                 .setName(SubCommands.Remove)
                 .setDescription("Revoke a bot permission.")
-                .addRoleOption(buildRoleOption())
+                .addMentionableOption(buildTargetOption())
                 .addStringOption(buildPermissionOption()),
         ),
 
@@ -59,10 +62,10 @@ SlashCommand({
     },
 })
 
-function buildRoleOption() {
-    return new SlashCommandRoleOption()
-        .setName(Options.Role)
-        .setDescription("The Discord role.")
+function buildTargetOption() {
+    return new SlashCommandMentionableOption()
+        .setName(Options.Target)
+        .setDescription("The Discord user or role.")
         .setRequired(true)
 }
 
@@ -104,23 +107,37 @@ async function onStatusSubcommand(interaction: ChatInputCommandInteraction<"cach
 }
 
 async function onAddSubcommand(interaction: ChatInputCommandInteraction<"cached">) {
-    const role = interaction.options.getRole(Options.Role, true)
+    const target = interaction.options.getMentionable(Options.Target, true)
     const permission = interaction.options.getString(Options.Permission, true)
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral })
     await RolePermissions.updateOne(
-        { _id: role.id },
-        { name: role.name, $addToSet: { permissions: permission } },
+        { _id: target.id },
+        { name: getName(target), $addToSet: { permissions: permission } },
         { upsert: true },
     )
     await interaction.editReply(`Added ${inlineCode(permission)}.`)
 }
 
 async function onRemoveSubcommand(interaction: ChatInputCommandInteraction<"cached">) {
-    const role = interaction.options.getRole(Options.Role, true)
+    const target = interaction.options.getMentionable(Options.Target, true)
     const permission = interaction.options.getString(Options.Permission, true)
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral })
-    await RolePermissions.updateOne({ _id: role.id }, { name: role.name, $pull: { permissions: permission } })
+    await RolePermissions.updateOne(
+        { _id: target.id },
+        { name: getName(target), $pull: { permissions: permission } },
+    )
+    await RolePermissions.deleteMany({ permissions: [] })
     await interaction.editReply(`Removed ${inlineCode(permission)}.`)
+}
+
+function getName(target: User | GuildMember | Role) {
+    if (target instanceof User) {
+        return target.username
+    } else if (target instanceof GuildMember) {
+        return target.user.username
+    } else if (target instanceof Role) {
+        return target.name
+    }
 }
