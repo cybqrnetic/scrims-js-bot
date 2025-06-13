@@ -13,7 +13,7 @@ import { I18n, LocalizedError, MessageOptionsBuilder, TextUtil, TimeUtil } from 
 
 import { Colors } from "@Constants"
 import { Config } from "@module/config"
-import { ExchangeState, IgnInput, TextInput } from "@module/forms"
+import { ExchangeState, TextInput } from "@module/forms"
 import { BotMessage } from "@module/messages"
 import { PositionRole } from "@module/positions"
 import { Ticket, TicketCreateHandler, TicketManager } from "@module/tickets"
@@ -82,7 +82,15 @@ export class RankAppTicketManager extends TicketManager {
     }
 }
 
-const IGN_INPUT = IgnInput.builder().setId("ign").setLabel("Minecraft Username").setRequired(true).build()
+const IGN_INPUT = TextInput.builder()
+    .setId("ign")
+    .setLabel("Minecraft Username")
+    .setStyle(TextInputStyle.Short)
+    .setMinLength(3)
+    .setMaxLength(16)
+    .setRequired(true)
+    .build()
+
 const COMMENTS_INPUT = TextInput.builder()
     .setId("comments")
     .setLabel("Any additional reasons why to accept?")
