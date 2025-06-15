@@ -134,7 +134,7 @@ export class TicketManager {
             this.channels.add(ticket.channelId)
             if (ticket.closeTimeouts) {
                 for (const timeout of ticket.closeTimeouts) {
-                    this.startCloseTimeout({ ...timeout, ticketId: ticket._id.toString() })
+                   if (timeout.timestamp) this.startCloseTimeout({ ...timeout, ticketId: ticket._id.toString() })
                 }
             }
         }
