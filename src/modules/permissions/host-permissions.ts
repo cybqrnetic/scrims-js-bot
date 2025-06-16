@@ -16,15 +16,15 @@ import {
 import { RolePermissions } from "./RolePermissions"
 
 const ADMIN = "*"
-const memberPermissions = new Map<string, Set<string>>()
+const memberPermissions = new Map<string, Set<Permission>>()
 
 declare module "discord.js" {
     interface GuildMember {
-        hasPermission(permission: string, checkAdmin?: boolean): boolean
+        hasPermission(permission: Permission, checkAdmin?: boolean): boolean
     }
 
     interface User {
-        hasPermission(permission: string, checkAdmin?: boolean): boolean
+        hasPermission(permission: Permission, checkAdmin?: boolean): boolean
     }
 }
 
@@ -110,7 +110,7 @@ function getPermission(id: string) {
 
 function recalculateMember(member: GuildMember, newMember: boolean) {
     const previous = memberPermissions.get(member.id)
-    const permissions = new Set<string>()
+    const permissions = new Set<Permission>()
     if (isAdmin(member)) {
         permissions.add(ADMIN)
     }
@@ -132,7 +132,11 @@ function recalculateMember(member: GuildMember, newMember: boolean) {
     }
 }
 
-function emitUpdate(member: GuildMember, previous: Set<string> | undefined, permissions: Set<string>) {
+function emitUpdate(
+    member: GuildMember,
+    previous: Set<Permission> | undefined,
+    permissions: Set<Permission>,
+) {
     if (permissions.has(ADMIN) && previous?.has(ADMIN)) {
         return // <-- Still has all perms
     }
@@ -148,7 +152,7 @@ function emitUpdate(member: GuildMember, previous: Set<string> | undefined, perm
     emit("update", member.id, resolvePermUpdate(previous, permissions))
 }
 
-function resolvePermUpdate(previous: Set<string> | undefined, permissions: Set<string>) {
+function resolvePermUpdate(previous: Set<Permission> | undefined, permissions: Set<Permission>) {
     if (previous === undefined) {
         return permissions.has(ADMIN) ? new NoneToAdminUpdate() : new NoneToPermsUpdate(permissions)
     } else if (previous.has(ADMIN)) {
@@ -182,3 +186,6 @@ function emit<K extends keyof PermissionEvents>(event: K, ...args: PermissionEve
 export interface PermissionEvents {
     ["update"]: [user: string, update: PermissionUpdate]
 }
+
+export const declaredPermissions = new Set<Permission>([ADMIN])
+export type Permission = typeof ADMIN | (string & {})

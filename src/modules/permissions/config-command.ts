@@ -13,7 +13,7 @@ import {
 } from "discord.js"
 import { MessageOptionsBuilder, SlashCommand } from "lib"
 
-import { RolePermissions } from "./RolePermissions"
+import { HostPermissions, RolePermissions } from "."
 
 const SubCommands = {
     Status: "status",
@@ -50,6 +50,22 @@ SlashCommand({
 
     config: { restricted: true },
 
+    async handleAutocomplete(interaction) {
+        const focused = interaction.options.getFocused().toLowerCase()
+        await interaction.respond(
+            Array.from(
+                new Set([
+                    ...RolePermissions.cache.map((p) => p.permissions).flat(),
+                    ...HostPermissions.declaredPermissions,
+                ]),
+            )
+                .filter((v) => v.toLowerCase().includes(focused))
+                .sort()
+                .slice(0, 25)
+                .map((p) => ({ name: p, value: p })),
+        )
+    },
+
     async handler(interaction) {
         switch (interaction.options.getSubcommand(true)) {
             case SubCommands.Add:
@@ -74,6 +90,7 @@ function buildPermissionOption() {
         .setName(Options.Permission)
         .setDescription("The bot permission string.")
         .setRequired(true)
+        .setAutocomplete(true)
 }
 
 async function onStatusSubcommand(interaction: ChatInputCommandInteraction<"cached">) {

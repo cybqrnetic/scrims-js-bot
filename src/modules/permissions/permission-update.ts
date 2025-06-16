@@ -1,16 +1,18 @@
+import { Permission } from "./host-permissions"
+
 export interface PermissionUpdate {
-    added(permission: string): boolean
-    removed(permission: string): boolean
+    added(permission: Permission): boolean
+    removed(permission: Permission): boolean
     /** true if admin gained and false if admin lost otherwise undefined */
     admined(): boolean | undefined
 }
 
 export class AdminToNoneUpdate implements PermissionUpdate {
-    added(_permission: string): boolean {
+    added(_permission: Permission): boolean {
         return false
     }
 
-    removed(_permission: string): boolean {
+    removed(_permission: Permission): boolean {
         return true
     }
 
@@ -20,13 +22,13 @@ export class AdminToNoneUpdate implements PermissionUpdate {
 }
 
 export class PermsToNoneUpdate implements PermissionUpdate {
-    constructor(private readonly previous: Set<string>) {}
+    constructor(private readonly previous: Set<Permission>) {}
 
-    added(_permission: string): boolean {
+    added(_permission: Permission): boolean {
         return false
     }
 
-    removed(permission: string): boolean {
+    removed(permission: Permission): boolean {
         return this.previous.has(permission)
     }
 
@@ -36,11 +38,11 @@ export class PermsToNoneUpdate implements PermissionUpdate {
 }
 
 export class NoneToAdminUpdate implements PermissionUpdate {
-    added(_permission: string): boolean {
+    added(_permission: Permission): boolean {
         return true
     }
 
-    removed(_permission: string): boolean {
+    removed(_permission: Permission): boolean {
         return false
     }
 
@@ -50,13 +52,13 @@ export class NoneToAdminUpdate implements PermissionUpdate {
 }
 
 export class NoneToPermsUpdate implements PermissionUpdate {
-    constructor(private readonly permissions: Set<string>) {}
+    constructor(private readonly permissions: Set<Permission>) {}
 
-    added(permission: string): boolean {
+    added(permission: Permission): boolean {
         return this.permissions.has(permission)
     }
 
-    removed(_permission: string): boolean {
+    removed(_permission: Permission): boolean {
         return false
     }
 
@@ -66,13 +68,13 @@ export class NoneToPermsUpdate implements PermissionUpdate {
 }
 
 export class AdminToPermsUpdate implements PermissionUpdate {
-    constructor(private readonly permissions: Set<string>) {}
+    constructor(private readonly permissions: Set<Permission>) {}
 
-    added(_permission: string): boolean {
+    added(_permission: Permission): boolean {
         return false
     }
 
-    removed(permission: string): boolean {
+    removed(permission: Permission): boolean {
         return !this.permissions.has(permission)
     }
 
@@ -82,13 +84,13 @@ export class AdminToPermsUpdate implements PermissionUpdate {
 }
 
 export class PermsToAdminUpdate implements PermissionUpdate {
-    constructor(private readonly previous: Set<string>) {}
+    constructor(private readonly previous: Set<Permission>) {}
 
-    added(permission: string): boolean {
+    added(permission: Permission): boolean {
         return !this.previous.has(permission)
     }
 
-    removed(_permission: string): boolean {
+    removed(_permission: Permission): boolean {
         return false
     }
 
@@ -99,15 +101,15 @@ export class PermsToAdminUpdate implements PermissionUpdate {
 
 export class DiffPermissionsUpdate implements PermissionUpdate {
     constructor(
-        private readonly previous: Set<string>,
-        private readonly updated: Set<string>,
+        private readonly previous: Set<Permission>,
+        private readonly updated: Set<Permission>,
     ) {}
 
-    added(permission: string): boolean {
+    added(permission: Permission): boolean {
         return !this.previous.has(permission) && this.updated.has(permission)
     }
 
-    removed(permission: string): boolean {
+    removed(permission: Permission): boolean {
         return this.previous.has(permission) && !this.updated.has(permission)
     }
 

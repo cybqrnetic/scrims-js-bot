@@ -1,6 +1,7 @@
 import { DocumentType, Prop } from "@typegoose/typegoose"
 import { Document, getMainGuild, modelClassCached } from "lib"
 import { Types } from "mongoose"
+import { Permission } from "./host-permissions"
 
 @Document("RolePermissions", "permissions")
 class RolePermissionsClass {
@@ -11,7 +12,7 @@ class RolePermissionsClass {
     name?: string
 
     @Prop({ type: [String], required: true })
-    permissions!: string[]
+    permissions!: Permission[]
 
     role() {
         return getMainGuild()?.roles.cache.get(this._id)

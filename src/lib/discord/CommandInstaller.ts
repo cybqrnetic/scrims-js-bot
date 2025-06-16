@@ -16,6 +16,7 @@ import {
     type ModalSubmitInteraction,
 } from "discord.js"
 
+import { HostPermissions } from "@module/permissions"
 import { MAIN_GUILD_ID } from "."
 import { CommandHandler } from "./CommandHandler"
 
@@ -131,6 +132,7 @@ export class CommandInstaller {
             }
         }
 
+        if (config?.permission) HostPermissions.declarePermission(config.permission)
         const id = typeof builder === "string" ? builder : builder.name
         this.handler.addHandler(id, { callback: this.getCommandCallback(command), config })
     }

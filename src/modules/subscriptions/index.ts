@@ -13,7 +13,7 @@ const SubscriptionFeaturePositions = PositionRole.declarePositions({
     PremiumChatAccess: "Premium Chat Access",
 })
 
-export const SubscriptionFeaturePermissions = {
+export const SubscriptionFeaturePermissions = HostPermissions.declarePermissions({
     ColoredRole: "subscription.colored_role",
     TTSPerms: "subscription.tts_perms",
     NextChatAccess: "subscription.next_chat_access",
@@ -21,7 +21,7 @@ export const SubscriptionFeaturePermissions = {
     CustomRole: "subscription.custom_role",
     PinMessages: "subscription.pin_messages",
     JoinFullCalls: "subscription.join_full_calls",
-}
+})
 
 const MANUALLY_GIVEN_POSITIONS = new Set(["ColoredRole"])
 const ROLE_SYNC_REASON = "Subscription Role Sync"
