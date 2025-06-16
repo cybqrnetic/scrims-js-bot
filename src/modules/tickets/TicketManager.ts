@@ -134,7 +134,10 @@ export class TicketManager {
             this.channels.add(ticket.channelId)
             if (ticket.closeTimeouts) {
                 for (const timeout of ticket.closeTimeouts) {
-                   if (timeout.timestamp) this.startCloseTimeout({ ...timeout, ticketId: ticket._id.toString() })
+                    this.startCloseTimeout({
+                        ...timeout.toObject({ getters: true }),
+                        ticketId: ticket._id.toString(),
+                    })
                 }
             }
         }
@@ -280,7 +283,7 @@ export class TicketManager {
         reason?: string,
         channel?: Channel | null,
     ) {
-        void this.cancelCloseTimeouts(ticketId.toString())
+        this.cancelCloseTimeouts(ticketId.toString())
 
         const ticket = await Ticket.findOneAndUpdate(
             { _id: ticketId, status: { $ne: "deleted" } },

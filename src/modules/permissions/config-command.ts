@@ -53,12 +53,7 @@ SlashCommand({
     async handleAutocomplete(interaction) {
         const focused = interaction.options.getFocused().toLowerCase()
         await interaction.respond(
-            Array.from(
-                new Set([
-                    ...RolePermissions.cache.map((p) => p.permissions).flat(),
-                    ...HostPermissions.declaredPermissions,
-                ]),
-            )
+            HostPermissions.getKnownPermissions()
                 .filter((v) => v.toLowerCase().includes(focused))
                 .sort()
                 .slice(0, 25)

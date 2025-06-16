@@ -41,7 +41,7 @@ SlashCommand({
                     .setContainerContent(
                         `### Command Permissions\nRun the command again with the token from this ` +
                             `[Authorization URL](https://discord.com/oauth2/authorize?${params}) ` +
-                            `to set the command permissions to the following:\n` +
+                            `to set the following command permissions:\n` +
                             commands
                                 .map(({ command, roles }) => {
                                     const mention =
@@ -101,9 +101,9 @@ function* getCommandRoles(guild: Guild) {
                 new Set(positions.flatMap((position) => PositionRole.getRoles(position, guild.id))),
             )
 
-            yield { command, roles }
+            if (roles.length > 0) {
+                yield { command, roles }
+            }
         }
-
-        yield { command, roles: [] }
     }
 }

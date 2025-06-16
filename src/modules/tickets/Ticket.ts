@@ -45,8 +45,8 @@ class TicketClass {
     @Prop()
     closeReason?: string
 
-    @Prop({ type: CloseTimeout, _id: false })
-    closeTimeouts?: CloseTimeout[]
+    @Prop({ type: [CloseTimeout], _id: false })
+    closeTimeouts?: (CloseTimeout & DocumentType<CloseTimeout>)[]
 
     @Prop()
     extras?: object

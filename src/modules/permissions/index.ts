@@ -1,4 +1,6 @@
+import { commands } from "lib"
 import { declaredPermissions, events, initialized, PermissionEvents } from "./host-permissions"
+import { RolePermissions } from "./RolePermissions"
 
 export { PermissionUpdate } from "./permission-update"
 export { RolePermissions } from "./RolePermissions"
@@ -27,7 +29,16 @@ export class HostPermissions {
         return permission
     }
 
-    static get declaredPermissions() {
-        return declaredPermissions
+    static getKnownPermissions() {
+        return Array.from(
+            new Set([
+                ...RolePermissions.cache.map((p) => p.permissions).flat(),
+                ...declaredPermissions,
+                ...commands
+                    .getConfigs()
+                    .filter((config) => config.permission)
+                    .map((config) => config.permission!),
+            ]),
+        )
     }
 }
