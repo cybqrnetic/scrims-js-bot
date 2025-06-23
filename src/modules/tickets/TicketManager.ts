@@ -222,6 +222,7 @@ export class TicketManager {
                 allow: this.options.creatorPermissions,
                 deny: parentOverwrites.get(member.id)?.deny,
             },
+            ...(channelOptions.permissionOverwrites?.values() ?? []),
         )
 
         const channel = await member.guild.channels.create(channelOptions as GuildChannelCreateOptions)

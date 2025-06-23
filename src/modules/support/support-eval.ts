@@ -4,6 +4,7 @@ import { SlashCommand, TimeUtil, UserError } from "lib"
 
 import { OnlinePositions, Positions } from "@module/positions"
 import { Ticket } from "@module/tickets"
+import { reportHandler, supportHandler } from "./support-tickets"
 
 const Options = {
     Expiration: "time-period",
@@ -13,8 +14,8 @@ SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("support-eval")
         .setDescription("Generate a support validation.")
-        .addStringOption((o) =>
-            o
+        .addStringOption((option) =>
+            option
                 .setName(Options.Expiration)
                 .setDescription(
                     "The time period to consider (e.g. 30d, 3months or 1y). [Default: no restrictions]",
@@ -38,9 +39,10 @@ SlashCommand({
                 "The Bridge Scrims support team could not be identified.",
             )
 
-        const tickets = await Ticket.find({ deletedAt: { $exists: true } }).then((v) =>
-            v.filter((v) => v.createdAt > expiration || v.deletedAt! > expiration),
-        )
+        const tickets = await Ticket.find({
+            deletedAt: { $exists: true },
+            type: { $in: [supportHandler.tickets.type, reportHandler.tickets.type] },
+        }).then((v) => v.filter((v) => v.createdAt > expiration || v.deletedAt! > expiration))
 
         const stats = new AsciiTable3("Support Eval")
             .setHeading("User", "Tickets Closed")

@@ -16,10 +16,10 @@ import { DateTime } from "luxon"
 import { RANKS } from "@Constants"
 import { Config } from "@module/config"
 import { LogUtil } from "@module/council/vouches/LogUtil"
+import { PatronFeaturePermissions } from "@module/patrons"
 import { OnlinePositions } from "@module/positions"
 import { UserProfile } from "@module/profiler"
 import { OfflinePositions } from "@module/sticky-roles"
-import { SubscriptionFeaturePermissions } from "@module/subscriptions"
 import { Vouch } from "@module/vouch-system"
 
 SlashCommand({
@@ -164,7 +164,7 @@ async function purge(
         return `${mention} is a ${rank} council member.`
     }
 
-    if (isInactivityPurge && member?.hasPermission(SubscriptionFeaturePermissions.PurgeImmunity)) {
+    if (isInactivityPurge && member?.hasPermission(PatronFeaturePermissions.PurgeImmunity)) {
         return `${mention} is immune to inactivity purge.`
     }
 

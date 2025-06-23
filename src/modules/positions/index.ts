@@ -8,10 +8,12 @@ export const Positions = PositionRole.declarePositions({
     TrialStaff: "Trial Staff",
     Support: "Support",
     TrialSupport: "Trial Support",
+    Screenshare: "Screenshare",
 
     Member: "Bridge Scrims Member",
     Banned: "Banned",
     Muted: "Muted",
+    Frozen: "Frozen",
 
     SupportBlacklisted: "Support Blacklisted",
     SuggestionsBlacklisted: "Suggestions Blacklisted",

@@ -4,7 +4,7 @@ import { OnlinePositions, PositionRole } from "@module/positions"
 import { AuditLogEvent, GuildMember } from "discord.js"
 import { auditedEvents, AuditedRoleUpdate, BotModule, getMainGuild } from "lib"
 
-const SubscriptionFeaturePositions = PositionRole.declarePositions({
+const PatronFeaturePositions = PositionRole.declarePositions({
     ColoredRole: "Colored Role",
     TTSPerms: "TTS Perms",
     PristineChatAccess: "Pristine Chat Access",
@@ -13,20 +13,20 @@ const SubscriptionFeaturePositions = PositionRole.declarePositions({
     PremiumChatAccess: "Premium Chat Access",
 })
 
-export const SubscriptionFeaturePermissions = HostPermissions.declarePermissions({
-    ColoredRole: "subscription.colored_role",
-    TTSPerms: "subscription.tts_perms",
-    NextChatAccess: "subscription.next_chat_access",
-    PurgeImmunity: "subscription.purge_immunity",
-    CustomRole: "subscription.custom_role",
-    PinMessages: "subscription.pin_messages",
-    JoinFullCalls: "subscription.join_full_calls",
+export const PatronFeaturePermissions = HostPermissions.declarePermissions({
+    ColoredRole: "patron.colored_role",
+    TTSPerms: "patron.tts_perms",
+    NextChatAccess: "patron.next_chat_access",
+    PurgeImmunity: "patron.purge_immunity",
+    CustomRole: "patron.custom_role",
+    PinMessages: "patron.pin_messages",
+    JoinFullCalls: "patron.join_full_calls",
 })
 
 const MANUALLY_GIVEN_POSITIONS = new Set(["ColoredRole"])
-const ROLE_SYNC_REASON = "Subscription Role Sync"
+const ROLE_SYNC_REASON = "Patron Role Sync"
 
-class SubscriptionModule extends BotModule {
+class PatronModule extends BotModule {
     protected addListeners() {
         auditedEvents.on(AuditLogEvent.MemberRoleUpdate, (action) => this.onRolesChange(action))
         HostPermissions.on("update", (user) => this.onPermissionsUpdate(user))
@@ -84,13 +84,13 @@ class SubscriptionModule extends BotModule {
         rolesToGive: Set<string>,
         rolesToRemove: Set<string>,
     ) {
-        const featureWithPermissionAndPosition = Object.entries(SubscriptionFeaturePermissions).filter(
-            ([key]) => key in SubscriptionFeaturePositions,
+        const featureWithPermissionAndPosition = Object.entries(PatronFeaturePermissions).filter(
+            ([key]) => key in PatronFeaturePositions,
         )
 
         for (const [key, slug] of featureWithPermissionAndPosition) {
             const roles = PositionRole.getPermittedRoles(
-                SubscriptionFeaturePositions[key as keyof typeof SubscriptionFeaturePositions],
+                PatronFeaturePositions[key as keyof typeof PatronFeaturePositions],
                 member.guild.id,
             )
 
@@ -119,13 +119,11 @@ class SubscriptionModule extends BotModule {
     ) {
         const getRoles = (rank: string) =>
             PositionRole.getPermittedRoles(
-                SubscriptionFeaturePositions[
-                    (rank + "ChatAccess") as keyof typeof SubscriptionFeaturePositions
-                ],
+                PatronFeaturePositions[(rank + "ChatAccess") as keyof typeof PatronFeaturePositions],
                 member.guild.id,
             )
 
-        if (!member.hasPermission(SubscriptionFeaturePermissions.NextChatAccess)) {
+        if (!member.hasPermission(PatronFeaturePermissions.NextChatAccess)) {
             for (const rank of Object.values(RANKS)) {
                 const roles = getRoles(rank)
                 roles.forEach(({ id }) => {
@@ -170,4 +168,4 @@ class SubscriptionModule extends BotModule {
     }
 }
 
-export default SubscriptionModule.getInstance()
+export default PatronModule.getInstance()

@@ -1,3 +1,4 @@
+import { TicketManager } from "@module/tickets"
 import { commands } from "lib"
 import { declaredPermissions, events, initialized, PermissionEvents } from "./host-permissions"
 import { RolePermissions } from "./RolePermissions"
@@ -38,6 +39,7 @@ export class HostPermissions {
                     .getConfigs()
                     .filter((config) => config.permission)
                     .map((config) => config.permission!),
+                ...TicketManager.managers.map(({ options }) => options.permission!).filter((p) => p),
             ]),
         )
     }

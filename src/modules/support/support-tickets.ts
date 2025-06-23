@@ -180,8 +180,8 @@ function isTestTicket(state: ExchangeState) {
     return TEST_REASONS.has(SUPPORT_REASON.getValue(state)!.toLowerCase())
 }
 
-const SUPPORT_TICKET = new SupportTicketCreateHandler().register().getId()
-const REPORT_TICKET = new ReportTicketCreateHandler().register().getId()
+export const supportHandler = new SupportTicketCreateHandler().register()
+export const reportHandler = new ReportTicketCreateHandler().register()
 
 BotMessage({
     name: "Support Message",
@@ -213,12 +213,12 @@ BotMessage({
             )
             .addActions(
                 new ButtonBuilder()
-                    .setCustomId(SUPPORT_TICKET)
+                    .setCustomId(supportHandler.getId())
                     .setLabel("Support")
                     .setEmoji("❤️")
                     .setStyle(ButtonStyle.Primary),
                 new ButtonBuilder()
-                    .setCustomId(REPORT_TICKET)
+                    .setCustomId(reportHandler.getId())
                     .setLabel("Report")
                     .setEmoji("⚖️")
                     .setStyle(ButtonStyle.Danger),

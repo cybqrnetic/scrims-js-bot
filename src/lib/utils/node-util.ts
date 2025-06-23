@@ -6,6 +6,7 @@ declare global {
     interface Array<T> {
         toMap<K extends string | number | symbol>(extractor: (value: T) => K): Record<K, T>
         toMultiMap<K extends string | number | symbol>(extractor: (value: T) => K): Record<K, T[]>
+        shuffle(): T[]
     }
 
     function record<T>(constant: Record<string, T>): Readonly<Record<string, T>>
@@ -38,6 +39,14 @@ Array.prototype.toMultiMap = function <K extends string | number | symbol>(extra
     }
 
     return map
+}
+
+Array.prototype.shuffle = function () {
+    for (let i = this.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[this[i], this[j]] = [this[j], this[i]]
+    }
+    return this
 }
 
 global.record = (constant) => Object.freeze(constant)

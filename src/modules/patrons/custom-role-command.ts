@@ -11,7 +11,7 @@ import { membersFetched } from "@module/member-fetcher"
 import { HostPermissions } from "@module/permissions"
 import { PositionRole, Positions } from "@module/positions"
 import { bot, BotListener, ColorUtil, DB, Profanity, SlashCommand, TextUtil, UserError } from "lib"
-import { SubscriptionFeaturePermissions } from "."
+import { PatronFeaturePermissions } from "."
 import { CustomRole } from "./CustomRole"
 
 SlashCommand({
@@ -20,7 +20,7 @@ SlashCommand({
         .addSubcommand(buildCreateSubcommand())
         .addSubcommand((sub) => sub.setLocalizations("commands.custom_role.remove")),
 
-    config: { defer: "EphemeralReply", permission: SubscriptionFeaturePermissions.CustomRole },
+    config: { defer: "EphemeralReply", permission: PatronFeaturePermissions.CustomRole },
 
     subHandlers: {
         create: onCreateSubcommand,
@@ -104,7 +104,7 @@ async function onCreateSubcommand(interaction: ChatInputCommandInteraction<"cach
             await interaction.member.roles.add(existingRole._id, "Custom Role")
         }
     } else {
-        existingRole?.deleteOne().catch(console.error)
+        await existingRole?.deleteOne().catch(console.error)
 
         // Should be right under the lowest trial support role
         const trialSupportRoles = PositionRole.getRoles(Positions.TrialSupport, interaction.guildId)
@@ -166,7 +166,7 @@ function buildCreateSubcommand() {
 
 BotListener(Events.GuildMemberRemove, async (_bot, member) => {
     if (member.guild.id === MAIN_GUILD_ID) return
-    if (!member.hasPermission(SubscriptionFeaturePermissions.CustomRole)) return
+    if (!member.hasPermission(PatronFeaturePermissions.CustomRole)) return
 
     const customRole = await CustomRole.findOne({ guildId: member.guild.id, userId: member.id })
     if (customRole) {
@@ -175,7 +175,7 @@ BotListener(Events.GuildMemberRemove, async (_bot, member) => {
 })
 
 HostPermissions.on("update", async (user, update) => {
-    if (update.removed(SubscriptionFeaturePermissions.CustomRole)) {
+    if (update.removed(PatronFeaturePermissions.CustomRole)) {
         await deleteCustomRoles(user)
     }
 })
@@ -185,7 +185,7 @@ void membersFetched().then(() => {
     for (const customRole of customRoles.value) {
         const guild = bot.guilds.cache.get(customRole.guildId)
         const member = guild?.members.cache.get(customRole.userId)
-        if (!member?.hasPermission(SubscriptionFeaturePermissions.CustomRole)) {
+        if (!member?.hasPermission(PatronFeaturePermissions.CustomRole)) {
             deleteCustomRole(customRole).catch(console.error)
         }
     }

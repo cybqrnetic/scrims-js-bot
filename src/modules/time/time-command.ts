@@ -20,16 +20,16 @@ SlashCommand({
     builder: new SlashCommandBuilder()
         .setName("time")
         .setDescription("Use this command to send a date/time that adjusts to each person's local time.")
-        .addStringOption((o) =>
-            o
+        .addStringOption((option) =>
+            option
                 .setName(Options.Time)
                 .setDescription("The time to show e.g. 5:00 pm, 17:00, today, tmr, 3/25/23, 25.03.2023, ...")
                 .setMinLength(1)
                 .setMaxLength(30)
                 .setRequired(true),
         )
-        .addStringOption((o) =>
-            o
+        .addStringOption((option) =>
+            option
                 .setName(Options.Format)
                 .setDescription("Format to show the date/time in")
                 .addChoices(
@@ -40,6 +40,9 @@ SlashCommand({
                 )
                 .setRequired(false),
         ),
+
+    anyContext: true,
+    userInstall: true,
 
     async handler(interaction) {
         const profile = await UserProfile.findOne({ _id: interaction.user.id })

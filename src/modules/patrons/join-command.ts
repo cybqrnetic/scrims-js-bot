@@ -1,6 +1,6 @@
 import { ChannelType, PermissionFlagsBits, SlashCommandBuilder } from "discord.js"
 import { SlashCommand, UserError } from "lib"
-import { SubscriptionFeaturePermissions } from "."
+import { PatronFeaturePermissions } from "."
 
 SlashCommand({
     builder: new SlashCommandBuilder()
@@ -12,7 +12,7 @@ SlashCommand({
                 .setRequired(true),
         ),
 
-    config: { defer: "EphemeralReply", permission: SubscriptionFeaturePermissions.JoinFullCalls },
+    config: { defer: "EphemeralReply", permission: PatronFeaturePermissions.JoinFullCalls },
 
     async handler(interaction) {
         const channel = interaction.options.getChannel<ChannelType.GuildVoice>("channel", true)

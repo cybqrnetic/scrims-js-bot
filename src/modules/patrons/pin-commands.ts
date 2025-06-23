@@ -4,7 +4,7 @@ import { membersFetched } from "@module/member-fetcher"
 import { HostPermissions } from "@module/permissions"
 import { Events, InteractionContextType, SlashCommandBuilder } from "discord.js"
 import { bot, BotListener, DB, SlashCommand, UserError } from "lib"
-import { SubscriptionFeaturePermissions } from "."
+import { PatronFeaturePermissions } from "."
 import { PinnedMessage } from "./PinnedMessage"
 
 const INVALID_LINK_ERROR = new UserError("Invalid Message Link", "Please provide a valid message link.")
@@ -17,7 +17,7 @@ SlashCommand({
             option.setLocalizations("commands.pin.message_option").setRequired(true),
         ),
 
-    config: { defer: "EphemeralReply", permission: SubscriptionFeaturePermissions.PinMessages },
+    config: { defer: "EphemeralReply", permission: PatronFeaturePermissions.PinMessages },
 
     async handler(interaction) {
         const pinnedAmount = await PinnedMessage.countDocuments({
@@ -84,7 +84,7 @@ SlashCommand({
         .setContexts(InteractionContextType.Guild)
         .setDefaultMemberPermissions("0"),
 
-    config: { defer: "EphemeralReply", permission: SubscriptionFeaturePermissions.PinMessages },
+    config: { defer: "EphemeralReply", permission: PatronFeaturePermissions.PinMessages },
 
     async handleAutocomplete(interaction) {
         const userId = interaction.user.id
@@ -130,15 +130,15 @@ BotListener(Events.MessageBulkDelete, async (_bot, messages) => {
 
 BotListener(Events.GuildMemberRemove, async (_bot, member) => {
     if (member.guild.id === MAIN_GUILD_ID) return
-    if (!member.hasPermission(SubscriptionFeaturePermissions.PinMessages)) return
+    if (!member.hasPermission(PatronFeaturePermissions.PinMessages)) return
 
     await togglePinnedMessages(member.id, false)
 })
 
 HostPermissions.on("update", async (userId, update) => {
-    if (update.added(SubscriptionFeaturePermissions.PinMessages)) {
+    if (update.added(PatronFeaturePermissions.PinMessages)) {
         await togglePinnedMessages(userId, true)
-    } else if (update.removed(SubscriptionFeaturePermissions.PinMessages)) {
+    } else if (update.removed(PatronFeaturePermissions.PinMessages)) {
         await togglePinnedMessages(userId, false)
     }
 })
@@ -148,7 +148,7 @@ void membersFetched().then(() => {
     for (const pinnedMessage of pinnedMessages.value) {
         const guild = bot.guilds.cache.get(pinnedMessage.guildId)
         const member = guild?.members.cache.get(pinnedMessage.userId)
-        if (!member?.hasPermission(SubscriptionFeaturePermissions.PinMessages)) {
+        if (!member?.hasPermission(PatronFeaturePermissions.PinMessages)) {
             togglePinnedMessages(pinnedMessage.userId, false).catch(console.error)
         }
     }
