@@ -7,6 +7,8 @@ import { GuildMember, Role, SlashCommandBuilder } from "discord.js"
 import { Component, MessageOptionsBuilder, SlashCommand, UserError } from "lib"
 import { SS_TICKETS } from "./screenshare-command"
 
+const FREEZE_PERMS = "screenshare.freeze"
+const UNFREEZE_PERMS = "screenshare.unfreeze"
 const FROZEN_CHANNEL = Config.declareType("Frozen Channel")
 const FROZEN_VC = Config.declareType("Frozen Voice Channel")
 
@@ -20,7 +22,7 @@ SlashCommand({
 
     config: {
         defer: "EphemeralReply",
-        permission: "screenshare.freeze",
+        permission: FREEZE_PERMS,
         restricted: true,
     },
 
@@ -42,7 +44,7 @@ SlashCommand({
 
     config: {
         defer: "Reply",
-        permission: "screenshare.unfreeze",
+        permission: UNFREEZE_PERMS,
         restricted: true,
     },
 
@@ -57,13 +59,13 @@ SlashCommand({
 export const FREEZE = "FREEZE"
 Component({
     builder: FREEZE,
-    config: { defer: "EphemeralReply", permission: "screenshare.freeze" },
+    config: { defer: "EphemeralReply", permission: FREEZE_PERMS },
     async handler(interaction) {
         const userId = interaction.args.shift()!
         const member = await interaction.guild.members.fetch(userId).catch(() => null)
         if (!member) throw new UserError("User Not Found")
         await freezeMember(member)
-        await interaction.editReply(`Successfully froze ${member}`)
+        await interaction.editReply(`Successfully froze ${member}.`)
     },
 })
 

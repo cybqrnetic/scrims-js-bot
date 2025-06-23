@@ -1,5 +1,4 @@
 import { MAIN_GUILD_ID, RANKS } from "@Constants"
-import { PositionRole } from "@module/positions"
 import { Collection, SlashCommandBuilder, time, TimestampStyles } from "discord.js"
 import { SlashCommand, UserError } from "lib"
 
@@ -9,13 +8,18 @@ setInterval(() => cooldowns.sweep((timestamp) => Date.now() > timestamp), 5 * 60
 for (const rank of Object.values(RANKS)) {
     const name = rank.toLowerCase().slice(0, rank.length > 5 ? 4 : rank.length)
 
-    const PingRoles = PositionRole.declarePositions({
+    const Options = {
+        Role: "role",
+        Text: "text",
+    }
+
+    const PingRoles = {
         "1v1": `${rank} 1v1`,
         "2v2": `${rank} 2v2`,
         "3v3": `${rank} 3v3`,
         "4v4": `${rank} 4v4`,
-        bullet: `${rank} Bullet`,
-    })
+        bullet: `${rank} Bullet Tourneys`,
+    }
 
     SlashCommand({
         builder: new SlashCommandBuilder()
@@ -23,7 +27,7 @@ for (const rank of Object.values(RANKS)) {
             .setDescription("Ping a desired role upon request.")
             .addStringOption((option) =>
                 option
-                    .setName("role")
+                    .setName(Options.Role)
                     .setDescription("The role you would like to mention.")
                     .setRequired(true)
                     .addChoices(
@@ -35,7 +39,7 @@ for (const rank of Object.values(RANKS)) {
             )
             .addStringOption((option) =>
                 option
-                    .setName("text")
+                    .setName(Options.Text)
                     .setDescription("An optional additional text to put in the message.")
                     .setRequired(false),
             ),
@@ -60,18 +64,18 @@ for (const rank of Object.values(RANKS)) {
 
             cooldowns.set(cooldownKey, Date.now() + 60 * 1000)
 
-            const position = interaction.options.getString("role", true)
-            const text = interaction.options.getString("text")
+            const roleName = interaction.options.getString(Options.Role, true)
+            const text = interaction.options.getString(Options.Text)
 
-            const roles = PositionRole.getRoles(position, interaction.guildId)
-            if (!roles.length) throw new UserError("Role Unavailable", "The specified role is not available.")
+            const role = interaction.guild.roles.cache.find((r) => r.name === roleName)
+            if (!role) throw new UserError("Role Unavailable", "The specified role is not available.")
 
             const regex = /https?:\/\/[^\s]+|discord\.(gg|com\/invite)\/[^\s]+/gi
             const cleanedText = text?.replaceAll(regex, "[Link Removed]") ?? ""
 
             await interaction.channel?.send({
-                content: `${interaction.user}: ${roles.join("")} ${cleanedText}`,
-                allowedMentions: { roles: roles.map((r) => r.id) },
+                content: `${interaction.user}: ${role} ${cleanedText}`,
+                allowedMentions: { roles: [role.id] },
             })
 
             await interaction.editReply("Ping sent!")
