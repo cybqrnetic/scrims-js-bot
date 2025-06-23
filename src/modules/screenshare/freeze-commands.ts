@@ -3,9 +3,9 @@ import { Config } from "@module/config"
 import { OnlinePositions, PositionRole, Positions } from "@module/positions"
 import { acquired, UserRejoinRoles } from "@module/sticky-roles"
 import { Ticket } from "@module/tickets"
-import { GuildMember, SlashCommandBuilder } from "discord.js"
+import { GuildMember, Role, SlashCommandBuilder } from "discord.js"
 import { Component, MessageOptionsBuilder, SlashCommand, UserError } from "lib"
-import { screenshareTicketManager } from "./screenshare-command"
+import { SS_TICKETS } from "./screenshare-command"
 
 const FROZEN_CHANNEL = Config.declareType("Frozen Channel")
 const FROZEN_VC = Config.declareType("Frozen Voice Channel")
@@ -15,7 +15,7 @@ SlashCommand({
         .setName("freeze")
         .setDescription("Freezes a user")
         .addUserOption((option) =>
-            option.setName("user").setDescription("The user to be frozen").setRequired(true),
+            option.setName("user").setDescription("The user to be frozen.").setRequired(true),
         ),
 
     config: {
@@ -26,9 +26,9 @@ SlashCommand({
 
     async handler(interaction) {
         const member = interaction.options.getMember("user")
-        if (!member) throw new UserError("User not found")
+        if (!member) throw new UserError("User not found.")
         await freezeMember(member)
-        await interaction.editReply(`Successfully froze ${member}`)
+        await interaction.editReply(`Successfully froze ${member}.`)
     },
 })
 
@@ -37,7 +37,7 @@ SlashCommand({
         .setName("unfreeze")
         .setDescription("Unfreezes a user")
         .addUserOption((option) =>
-            option.setName("user").setDescription("The user to unfreeze").setRequired(true),
+            option.setName("user").setDescription("The user to unfreeze.").setRequired(true),
         ),
 
     config: {
@@ -50,17 +50,18 @@ SlashCommand({
         const member = interaction.options.getMember("user")
         if (!member) throw new UserError("User not found")
         await unFreezeMember(member)
-        await interaction.editReply(`${Emojis.fire} ${member}, you are now unfrozen`)
+        await interaction.editReply(`${Emojis.fire} ${member}, you are now unfrozen.`)
     },
 })
 
+export const FREEZE = "FREEZE"
 Component({
-    builder: "FREEZE",
+    builder: FREEZE,
     config: { defer: "EphemeralReply", permission: "screenshare.freeze" },
     async handler(interaction) {
         const userId = interaction.args.shift()!
-        const member = await interaction.guild!.members.fetch(userId).catch(() => null)
-        if (!member) throw new UserError("User not found")
+        const member = await interaction.guild.members.fetch(userId).catch(() => null)
+        if (!member) throw new UserError("User Not Found")
         await freezeMember(member)
         await interaction.editReply(`Successfully froze ${member}`)
     },
@@ -69,33 +70,29 @@ Component({
 async function freezeMember(member: GuildMember) {
     if (!member.manageable) throw new UserError("Forbidden", "I cannot freeze this user.")
     if (OnlinePositions.hasPosition(member, Positions.Frozen)) {
-        throw new UserError("User already frozen", "This user is already frozen.")
+        throw new UserError("Already Frozen", "This user is already frozen.")
     }
 
     const tickets = await Ticket.find({
-        type: screenshareTicketManager.type,
+        type: SS_TICKETS.type,
         deletedAt: { $exists: false },
         extras: { targetId: member.id },
     })
 
-    tickets.forEach(({ _id }) => screenshareTicketManager.cancelCloseTimeouts(_id.toString()))
+    tickets.forEach(({ _id }) => SS_TICKETS.cancelCloseTimeouts(_id.toString()))
+    const frozenRoles = PositionRole.getPermittedRoles(Positions.Frozen, member.guild.id)
 
     await acquired(member.id, async () => {
-        const roles = member.roles.cache.filter((r) => !r.managed && r.id !== r.guild.id).map((r) => r.id)
-        if (roles.length) {
-            await Promise.all([
-                UserRejoinRoles.updateOne(
-                    { _id: member.id },
-                    { $addToSet: { roles: { $each: roles } } },
-                    { upsert: true },
-                ),
-                member.roles.remove(roles),
-            ])
-        }
+        const roles = member.roles.cache.filter((r) => !r.managed).map((r) => r.id)
+        await Promise.all([
+            UserRejoinRoles.updateOne(
+                { _id: member.id },
+                { $addToSet: { roles: { $each: roles } } },
+                { upsert: true },
+            ),
+            member.roles.set(frozenRoles, `Frozen by ${member.user.tag}.`),
+        ])
     })
-
-    const frozenRoles = PositionRole.getPermittedRoles(Positions.Frozen, member.guild.id)
-    await member.roles.add(frozenRoles)
 
     await sendFrozenMessage(member)
 }
@@ -103,19 +100,19 @@ async function freezeMember(member: GuildMember) {
 async function unFreezeMember(member: GuildMember) {
     if (!member.manageable) throw new UserError("Forbidden", "I cannot unfreeze this user.")
     if (!OnlinePositions.hasPosition(member, Positions.Frozen)) {
-        throw new UserError("User not frozen", "This user is not frozen.")
+        throw new UserError("Not Frozen", "This user is not frozen.")
     }
 
     await acquired(member.id, async () => {
         const rejoinRoles = await UserRejoinRoles.findByIdAndDelete(member.id)
         if (!rejoinRoles) return
 
-        const roleIds = rejoinRoles.roles
-            .map((r) => r.toString())
-            .filter((r) => member.guild.roles.cache.has(r))
-        await member.roles.add(roleIds)
+        const roles = rejoinRoles.roles
+            .map((r) => member.guild.roles.cache.get(r.toString()))
+            .filter((r): r is Role => r !== undefined && !r.managed)
 
-        const log = roleIds.filter((r) => PositionRole.cache.has(r))
+        await member.roles.add(roles, `Unfrozen by ${member.user.tag}.`)
+        const log = roles.filter((r) => PositionRole.declaredRoles().has(r.id))
 
         if (log.length) {
             Config.buildSendLogMessages(
@@ -137,9 +134,9 @@ async function sendFrozenMessage(member: GuildMember) {
     const frozenChannel = frozenChannelId ? member.guild.channels.cache.get(frozenChannelId) : null
 
     const frozenVcId = Config.getConfigValue(FROZEN_VC, member.guild.id)
-    const frozenVc = frozenVcId ? member.guild.channels.cache.get(frozenVcId) : undefined
+    const frozenVc = frozenVcId ? member.guild.channels.cache.get(frozenVcId) : "Frozen VC"
 
-    if (frozenChannel?.isTextBased() && frozenVc?.isVoiceBased()) {
+    if (frozenChannel?.isTextBased()) {
         await frozenChannel.send(
             [
                 `Hello ${member}, `,

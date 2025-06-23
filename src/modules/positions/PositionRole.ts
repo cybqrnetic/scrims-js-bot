@@ -20,6 +20,10 @@ class PositionRoleClass {
         return declaredPositions
     }
 
+    static declaredRoles() {
+        return declaredRoles
+    }
+
     static getRoles(position: string, guildId: string) {
         return this.getPositionRoles(position, guildId)
             .map((v) => v.role())
@@ -67,19 +71,25 @@ export type PositionRole = DocumentType<PositionRoleClass>
 
 const mapped: Record<string, Record<string, Set<PositionRole>>> = {}
 const declaredPositions = new Set<string>()
+const declaredRoles = new Set<string>()
 
 PositionRole.cache
-    .on("add", (posRole) => {
-        let guildMap = mapped[posRole.guildId]
+    .on("add", (v) => {
+        let guildMap = mapped[v.guildId]
         if (!guildMap) {
             guildMap = {}
-            mapped[posRole.guildId] = guildMap
+            mapped[v.guildId] = guildMap
         }
 
-        if (!guildMap[posRole.position]?.add(posRole)) {
-            guildMap[posRole.position] = new Set([posRole])
+        if (!guildMap[v.position]?.add(v)) {
+            guildMap[v.position] = new Set([v])
         }
+
+        declaredRoles.add(v.roleId)
     })
-    .on("delete", (posRole) => {
-        mapped[posRole.guildId]?.[posRole.position]?.delete(posRole)
+    .on("delete", (v) => {
+        mapped[v.guildId]?.[v.position]?.delete(v)
+        if (!PositionRole.cache.documents().find((d) => d.roleId === v.roleId)) {
+            declaredRoles.delete(v.roleId)
+        }
     })

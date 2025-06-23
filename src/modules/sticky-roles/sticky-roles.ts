@@ -10,15 +10,7 @@ import { TransientRole } from "./TransientRole"
 const LOG_CHANNEL = Config.declareType("Rejoin Roles Log Channel")
 
 class StickyRolesModule extends BotModule {
-    protected positionRoles: Set<string> = new Set()
-
     protected addListeners() {
-        PositionRole.cache.on("add", (v) => this.positionRoles.add(v.roleId))
-        PositionRole.cache.on("delete", (v) => {
-            if (!PositionRole.cache.documents().find((d) => d.roleId === v.roleId))
-                this.positionRoles.delete(v.roleId)
-        })
-
         this.bot.on(Events.GuildMemberRemove, (m) => this.onMemberRemove(m))
         this.bot.on(Events.GuildMemberAdd, (m) => this.onMemberAdd(m))
     }
@@ -52,7 +44,7 @@ class StickyRolesModule extends BotModule {
                     .map((r) =>
                         member.roles
                             .add(r)
-                            .then(() => (this.positionRoles.has(r.id) ? log.push(r) : null))
+                            .then(() => (PositionRole.declaredRoles().has(r.id) ? log.push(r) : null))
                             .catch(console.error),
                     ),
             )

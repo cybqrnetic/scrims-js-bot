@@ -8,6 +8,7 @@ import {
     VoiceBasedChannel,
 } from "discord.js"
 import { Component, MessageOptionsBuilder, SlashCommand, UserError } from "lib"
+import { isQueueCategory } from "./util"
 
 SlashCommand({
     builder: new SlashCommandBuilder().setName("teams").setDescription("Generate two teams playing scrims."),
@@ -22,13 +23,18 @@ SlashCommand({
             throw new UserError("Invalid Channel", "Use this command in the same category as your queue.")
         }
 
+        if (!isQueueCategory(vc.parentId)) {
+            throw new UserError("Invalid Channel", "This command can only be used in queue categories.")
+        }
+
         const message = getTeamsMessage(vc)
         await interaction.reply(message)
     },
 })
 
+const REROLL_TEAMS = "REROLL_TEAMS"
 Component({
-    builder: "REROLL_TEAMS",
+    builder: REROLL_TEAMS,
     async handler(interaction) {
         const vc = interaction.guild?.channels.cache.get(interaction.args.shift()!) as VoiceBasedChannel
 
@@ -68,6 +74,6 @@ function getTeamsMessage(vc: VoiceBasedChannel) {
                 .setLabel("Reroll")
                 .setEmoji(Emojis.game_die)
                 .setStyle(ButtonStyle.Primary)
-                .setCustomId(`REROLL_TEAMS/${vc.id}`),
+                .setCustomId(`${REROLL_TEAMS}/${vc.id}`),
         )
 }

@@ -1,4 +1,4 @@
-import { RANKS } from "@Constants"
+import { MAIN_GUILD_ID, RANKS } from "@Constants"
 import { PositionRole } from "@module/positions"
 import { Collection, SlashCommandBuilder, time, TimestampStyles } from "discord.js"
 import { SlashCommand, UserError } from "lib"
@@ -20,11 +20,11 @@ for (const rank of Object.values(RANKS)) {
     SlashCommand({
         builder: new SlashCommandBuilder()
             .setName(name)
-            .setDescription("Ping a desired role upon request")
+            .setDescription("Ping a desired role upon request.")
             .addStringOption((option) =>
                 option
                     .setName("role")
-                    .setDescription("The role you would like to mention")
+                    .setDescription("The role you would like to mention.")
                     .setRequired(true)
                     .addChoices(
                         Object.entries(PingRoles).map(([name, value]) => ({
@@ -36,11 +36,16 @@ for (const rank of Object.values(RANKS)) {
             .addStringOption((option) =>
                 option
                     .setName("text")
-                    .setDescription("An optional additional text to put in the message")
+                    .setDescription("An optional additional text to put in the message.")
                     .setRequired(false),
             ),
 
-        config: { defer: "EphemeralReply", restricted: true, permission: `${rank}.ping` },
+        config: {
+            defer: "EphemeralReply",
+            guilds: [MAIN_GUILD_ID],
+            permission: `${rank}.ping`,
+        },
+
         async handler(interaction) {
             const cooldownKey = `${interaction.user.id}-${rank}`
             const activeCooldown = cooldowns.get(cooldownKey) ?? 0
@@ -62,7 +67,7 @@ for (const rank of Object.values(RANKS)) {
             if (!roles.length) throw new UserError("Role Unavailable", "The specified role is not available.")
 
             const regex = /https?:\/\/[^\s]+|discord\.(gg|com\/invite)\/[^\s]+/gi
-            const cleanedText = text?.replace(regex, "[Link Removed]") ?? ""
+            const cleanedText = text?.replaceAll(regex, "[Link Removed]") ?? ""
 
             await interaction.channel?.send({
                 content: `${interaction.user}: ${roles.join("")} ${cleanedText}`,

@@ -1,6 +1,7 @@
 import { Emojis, MAIN_GUILD_ID } from "@Constants"
 import { Colors, EmbedBuilder, SlashCommandBuilder, VoiceBasedChannel } from "discord.js"
 import { MessageOptionsBuilder, SlashCommand, UserError } from "lib"
+import { isQueueCategory } from "./util"
 
 SlashCommand({
     builder: new SlashCommandBuilder().setName("captains").setDescription("Generate two team captains"),
@@ -13,6 +14,10 @@ SlashCommand({
 
         if (!vc.parentId || interaction.channel?.parentId !== vc.parentId) {
             throw new UserError("Invalid Channel", "Use this command in the same category as your queue.")
+        }
+
+        if (!isQueueCategory(vc.parentId)) {
+            throw new UserError("Invalid Channel", "This command can only be used in queue categories.")
         }
 
         const message = getCaptainsMessage(vc)
