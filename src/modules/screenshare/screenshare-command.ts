@@ -83,7 +83,7 @@ SlashCommand({
         SS_TICKETS.addCloseTimeout(
             {
                 closerId: interaction.client.user.id,
-                messageId: "",
+                messageId: target.id,
                 reason: "No Available Screensharer",
                 timestamp: DateTime.now().plus({ minutes: 15 }).toJSDate(),
             },

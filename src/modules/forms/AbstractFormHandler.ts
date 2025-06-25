@@ -70,13 +70,13 @@ export abstract class AbstractFormHandler extends AbstractExchangeHandler {
         const page = this.pages[index]!
 
         if (interaction.message?.flags.has(MessageFlags.Ephemeral)) {
-            interaction.response = interaction.update(
+            await interaction.update(
                 interaction.message?.flags.has(MessageFlags.IsComponentsV2)
                     ? new MessageOptionsBuilder().setContainerContent("Updating...").setEphemeral(true)
                     : new MessageOptionsBuilder().setContent("Updating...").setEphemeral(true),
             )
         } else {
-            interaction.response = interaction.deferReply({ flags: MessageFlags.Ephemeral })
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral })
         }
 
         const response = await this.useState(interaction, async (state) => {
@@ -108,7 +108,7 @@ export abstract class AbstractFormHandler extends AbstractExchangeHandler {
         const page = this.getIndex(interaction)
         const index = parseInt(interaction.args.shift()!)
         const component = this.pages[page]?.components[index]
-        interaction.response = interaction.deferUpdate()
+        await interaction.deferUpdate()
 
         const response = await this.useState(interaction, async (state) => {
             await component?.handleComponent?.(interaction, state)
@@ -126,7 +126,7 @@ export abstract class AbstractFormHandler extends AbstractExchangeHandler {
             )
             await interaction.showModal(modal)
         } else {
-            interaction.response = interaction.deferUpdate()
+            await interaction.deferUpdate()
             const response = await this.useState(interaction, (state) =>
                 this.buildModal(interaction, state, index),
             )
@@ -157,7 +157,7 @@ export abstract class AbstractFormHandler extends AbstractExchangeHandler {
 
     protected async handleSubmit(interaction: MessageComponentInteraction<"cached">) {
         const index = this.getIndex(interaction)
-        interaction.response = interaction.deferUpdate()
+        await interaction.deferUpdate()
 
         const response = await this.useState(interaction, async (state) => {
             if (index !== this.pages.length - 1) {
@@ -179,9 +179,7 @@ export abstract class AbstractFormHandler extends AbstractExchangeHandler {
                     followUp = new UserError("Something went wrong while submitting your form.").toMessage()
                 }
 
-                interaction
-                    .response!.then(() => interaction.followUp(followUp.setEphemeral(true)))
-                    .catch(console.error)
+                interaction.followUp(followUp.setEphemeral(true)).catch(console.error)
             }
         })
 

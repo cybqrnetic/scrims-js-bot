@@ -112,8 +112,6 @@ export class CommandHandler {
     }
 
     protected async interactionReturn(interaction: Interaction, payload: unknown) {
-        await interaction.response
-
         if (interaction.isAutocomplete()) {
             if (Array.isArray(payload)) await interaction.respond(payload)
         } else if (payload instanceof ModalBuilder) {
@@ -155,7 +153,6 @@ declare module "discord.js" {
         commandName: string
         subCommandName: string | null
         commandConfig?: CommandConfig
-        response?: Promise<InteractionResponse>
         return: (payload: InteractionsReturnable) => Promise<InteractionResponse | Message | void>
     }
 

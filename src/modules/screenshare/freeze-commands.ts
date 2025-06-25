@@ -2,7 +2,6 @@ import { Emojis } from "@Constants"
 import { Config } from "@module/config"
 import { OnlinePositions, PositionRole, Positions } from "@module/positions"
 import { acquired, UserRejoinRoles } from "@module/sticky-roles"
-import { Ticket } from "@module/tickets"
 import { GuildMember, Role, SlashCommandBuilder } from "discord.js"
 import { Component, MessageOptionsBuilder, SlashCommand, UserError } from "lib"
 import { SS_TICKETS } from "./screenshare-command"
@@ -75,24 +74,19 @@ async function freezeMember(member: GuildMember) {
         throw new UserError("Already Frozen", "This user is already frozen.")
     }
 
-    const tickets = await Ticket.find({
-        type: SS_TICKETS.type,
-        deletedAt: { $exists: false },
-        extras: { targetId: member.id },
-    })
-
-    tickets.forEach(({ _id }) => SS_TICKETS.cancelCloseTimeouts(_id.toString()))
+    SS_TICKETS.cancelCloseTimeouts(member.id)
     const frozenRoles = PositionRole.getPermittedRoles(Positions.Frozen, member.guild.id)
 
     await acquired(member.id, async () => {
-        const roles = member.roles.cache.filter((r) => !r.managed).map((r) => r.id)
+        const removeRoles = member.roles.cache.filter((r) => !r.managed).map((r) => r.id)
         await Promise.all([
             UserRejoinRoles.updateOne(
                 { _id: member.id },
-                { $addToSet: { roles: { $each: roles } } },
+                { $addToSet: { roles: { $each: removeRoles } } },
                 { upsert: true },
             ),
-            member.roles.set(frozenRoles, `Frozen by ${member.user.tag}.`),
+            Promise.all(removeRoles.map((r) => member.roles.remove(r, `Frozen by ${member.user.tag}.`))),
+            Promise.all(frozenRoles.map((r) => member.roles.add(r, `Frozen by ${member.user.tag}.`))),
         ])
     })
 
