@@ -10,7 +10,7 @@ import {
 } from "discord.js"
 import { BotModule, getMainGuild, MessageOptionsBuilder, SlashCommand, TimeUtil, UserError } from "lib"
 
-import { RANKS } from "@Constants"
+import { RANKS, ROLE_APP_HUB } from "@Constants"
 import { Config } from "@module/config"
 import { BotMessage } from "@module/messages"
 import { OnlinePositions, PositionRole } from "@module/positions"
@@ -32,8 +32,8 @@ SlashCommand({
     config: { defer: "EphemeralReply" },
 
     async handler(interaction) {
-        const guild = interaction.guild ?? getMainGuild()
-        if (!guild) throw new UserError("No Main Guild", "Retry the command in a server for the moment.")
+        const guild = interaction.client.guilds.cache.get(ROLE_APP_HUB) ?? getMainGuild() ?? interaction.guild
+        if (!guild) throw new UserError("Guild Only", "For the moment, rerun this in a server.")
 
         const rank = interaction.options.getString("rank", true)
         const message = await CouncilListFeature.getInstance().buildMessage(guild, rank)
