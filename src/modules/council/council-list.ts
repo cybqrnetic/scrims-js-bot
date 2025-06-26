@@ -1,11 +1,45 @@
-import { Collection, ContainerBuilder, Guild, GuildMember, MessageFlags, User, bold } from "discord.js"
-import { BotModule, MessageOptionsBuilder, TimeUtil } from "lib"
+import {
+    bold,
+    Collection,
+    ContainerBuilder,
+    Guild,
+    GuildMember,
+    MessageFlags,
+    SlashCommandBuilder,
+    User,
+} from "discord.js"
+import { BotModule, getMainGuild, MessageOptionsBuilder, SlashCommand, TimeUtil, UserError } from "lib"
 
 import { RANKS } from "@Constants"
 import { Config } from "@module/config"
 import { BotMessage } from "@module/messages"
 import { OnlinePositions, PositionRole } from "@module/positions"
 import { UserProfile } from "@module/profiler"
+
+SlashCommand({
+    builder: new SlashCommandBuilder()
+        .setName("council")
+        .setDescription("List the council members for a given rank.")
+        .addStringOption((option) =>
+            option
+                .setName("rank")
+                .setDescription("The rank of the council to display.")
+                .setRequired(true)
+                .addChoices(Object.values(RANKS).map((rank) => ({ name: rank, value: rank }))),
+        ),
+
+    anyContext: true,
+    config: { defer: "EphemeralReply" },
+
+    async handler(interaction) {
+        const guild = interaction.guild ?? getMainGuild()
+        if (!guild) throw new UserError("No Main Guild", "Retry the command in a server for the moment.")
+
+        const rank = interaction.options.getString("rank", true)
+        const message = await CouncilListFeature.getInstance().buildMessage(guild, rank)
+        await interaction.return(message)
+    },
+})
 
 for (const rank of Object.values(RANKS)) {
     const MESSAGE_CONFIG = Config.declareType(`${rank} Council List Message`)
