@@ -19,6 +19,7 @@ SlashCommand({
                     { name: "nmtourney", value: "911405126005190676" },
                     { name: "overlay", value: "912483717342187541" },
                     { name: "montage", value: "958074901263187998" },
+                    { name: "content", value: "1087428694060044318" },
                 )
                 .setRequired(true),
         )
