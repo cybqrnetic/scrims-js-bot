@@ -50,11 +50,12 @@ export class VouchCollection {
         return this.get().filter((v) => !v.isVoteOutcome() && v.isPositive())
     }
 
-    getPositiveSincePurge() {
+    getValueSincePurge() {
         const index = this.get().findIndex((v) => v.isPurge())
         return this.get()
             .slice(0, index === -1 ? this.size : index)
-            .filter((v) => !v.isVoteOutcome() && v.isPositive())
+            .filter((v) => !v.isVoteOutcome())
+            .reduce((pv, cv) => pv + cv.worth, 0)
     }
 
     getNegative() {

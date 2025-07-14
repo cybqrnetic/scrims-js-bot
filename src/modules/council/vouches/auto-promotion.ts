@@ -15,7 +15,7 @@ Vouch.onUpdate(async (vouch) => {
 
     if (autoAt && user && OnlinePositions.hasPosition(user, vouch.position) === false) {
         const vouches = await VouchCollection.fetch(vouch.userId, vouch.position)
-        if (vouches.getPositiveSincePurge().length < autoAt) return
+        if (vouches.getValueSincePurge() < autoAt) return
 
         const member = await getMainGuild()?.members.fetch(vouch.userId)
         if (!member) return
@@ -31,7 +31,8 @@ Vouch.onUpdate(async (vouch) => {
             vouches
                 .toMessage(I18n.getInstance(), {}, guild.id)
                 .setContent(
-                    `**${user} was automatically given ${vouch.position} for having ${autoAt} vouches.**`,
+                    `**${user} was automatically given ${vouch.position} ` +
+                        `for having a vouch score of ${autoAt}.**`,
                 ),
         )
 
