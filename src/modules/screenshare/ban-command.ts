@@ -1,5 +1,5 @@
-import { codeBlock, EmbedBuilder, Guild, roleMention, SlashCommandBuilder, User } from "discord.js"
-import { bot, MessageOptionsBuilder, SlashCommand, TimeUtil, UserError } from "lib"
+import { channelMention, codeBlock, EmbedBuilder, Guild, SlashCommandBuilder, User } from "discord.js"
+import { bot, getMainGuild, MessageOptionsBuilder, SlashCommand, TimeUtil, UserError } from "lib"
 
 import { Colors, MAIN_GUILD_ID } from "@Constants"
 import { Config } from "@module/config"
@@ -10,6 +10,7 @@ import { resetRoles } from "./freeze-commands"
 
 const PUBLIC_LOG = Config.declareType("Public Scrims Ban Log")
 const BAN_LOG = Config.declareType("Scrims Ban Log")
+const APPEAL_CHANNEL = Config.declareType("Scrims Ban Appeal")
 
 SlashCommand({
     builder: new SlashCommandBuilder()
@@ -133,13 +134,14 @@ export async function logUnban(ban: ScrimsBan, reason?: string, staff?: User) {
         embed.spliceFields(1, 0, { name: "Staff", value: staff.toString(), inline: true })
     }
 
-    const log = new MessageOptionsBuilder().addEmbeds(
-        embed.addFields({
-            name: "Roles",
-            value: ban.getRoles().map(roleMention).join(" ") || "None",
-        }),
-    )
+    const log = new MessageOptionsBuilder().addEmbeds(embed)
     Config.buildSendLogMessages(BAN_LOG, null, () => log)
+
+    user.send(
+        new MessageOptionsBuilder().addEmbeds(
+            embed.setAuthor(null).setTitle("You've been Unbanned").spliceFields(0, 1).setFooter(dmFooter()),
+        ),
+    ).catch(console.debugError)
 }
 
 function logBan(user: User, expiration: Date, reason: string, staff: User) {
@@ -155,10 +157,19 @@ function logBan(user: User, expiration: Date, reason: string, staff: User) {
     const publicLog = new MessageOptionsBuilder().addEmbeds(embed)
     Config.buildSendLogMessages(PUBLIC_LOG, null, () => publicLog)
 
-    const log = new MessageOptionsBuilder().addEmbeds(
-        embed.spliceFields(2, 0, { name: "Staff", value: staff.toString(), inline: true }),
-    )
-    Config.buildSendLogMessages(BAN_LOG, [MAIN_GUILD_ID], () => log)
+    embed.spliceFields(2, 0, { name: "Staff", value: staff.toString(), inline: true })
+    const log = new MessageOptionsBuilder().addEmbeds(embed)
+    Config.buildSendLogMessages(BAN_LOG, null, () => log)
+
+    user.send(
+        new MessageOptionsBuilder().addEmbeds(
+            embed
+                .setAuthor(null)
+                .setTitle("You've been banned from queuing Scrims")
+                .spliceFields(0, 1, appealField())
+                .setFooter(dmFooter()),
+        ),
+    ).catch(console.debugError)
 }
 
 function logBanUpdated(user: User, oldExpiration: Date, newExpiration: Date, reason: string, staff: User) {
@@ -178,10 +189,29 @@ function logBanUpdated(user: User, oldExpiration: Date, newExpiration: Date, rea
     const publicLog = new MessageOptionsBuilder().addEmbeds(embed)
     Config.buildSendLogMessages(PUBLIC_LOG, null, () => publicLog)
 
-    const log = new MessageOptionsBuilder().addEmbeds(
-        embed.spliceFields(2, 0, { name: "Staff", value: staff.toString(), inline: true }),
-    )
+    embed.spliceFields(2, 0, { name: "Staff", value: staff.toString(), inline: true })
+    const log = new MessageOptionsBuilder().addEmbeds(embed)
     Config.buildSendLogMessages(BAN_LOG, null, () => log)
+
+    user.send(
+        new MessageOptionsBuilder().addEmbeds(
+            embed
+                .setAuthor(null)
+                .setTitle("Your Scrim Ban was Updated")
+                .spliceFields(0, 1, appealField())
+                .setFooter(dmFooter()),
+        ),
+    ).catch(console.debugError)
+}
+
+function appealField() {
+    const channel = Config.getConfigValue(APPEAL_CHANNEL, MAIN_GUILD_ID)
+    return { name: "Appeal Channel", value: channel ? channelMention(channel) : "#ban-appeal", inline: true }
+}
+
+function dmFooter() {
+    const guild = getMainGuild()
+    return guild ? { text: guild.name, iconURL: guild.iconURL() ?? undefined } : null
 }
 
 async function stripRoles(target: User, guild: Guild, executor: User) {
