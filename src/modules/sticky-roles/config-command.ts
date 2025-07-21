@@ -1,7 +1,7 @@
 import { Events, MessageFlags, Role, SlashCommandBuilder } from "discord.js"
 import { BotListener, SlashCommand } from "lib"
 
-import { TransientRole } from "@module/sticky-roles"
+import { TransientRole } from "./TransientRole"
 
 BotListener(Events.GuildRoleDelete, (_bot, role) => TransientRole.deleteOne({ _id: role.id }))
 

@@ -3,7 +3,7 @@ import { BotModule, MAIN_GUILD_ID, MessageOptionsBuilder } from "lib"
 
 import { Config } from "@module/config"
 import { PositionRole } from "@module/positions"
-import { acquired } from "."
+import { acquired } from "./OfflinePositions"
 import { UserRejoinRoles } from "./RejoinRoles"
 import { TransientRole } from "./TransientRole"
 
@@ -21,7 +21,11 @@ class StickyRolesModule extends BotModule {
         await acquired(member.id, async () => {
             const roles = member.roles.cache.filter((r) => !r.managed && r.id !== r.guild.id).map((r) => r.id)
             if (roles.length) {
-                await UserRejoinRoles.updateOne({ _id: member.id }, { roles }, { upsert: true })
+                await UserRejoinRoles.updateOne(
+                    { _id: member.id },
+                    { $addToSet: { roles: { $each: roles } } },
+                    { upsert: true },
+                )
             }
         })
     }
@@ -30,26 +34,22 @@ class StickyRolesModule extends BotModule {
         if (member.guild.id !== MAIN_GUILD_ID) return
 
         await acquired(member.id, async () => {
-            const rejoinRoles = await UserRejoinRoles.findByIdAndDelete(member.id)
-            if (!rejoinRoles) return
-
-            const log: Role[] = []
-            await Promise.all(
-                rejoinRoles.roles
-                    .map((r) => member.guild.roles.cache.get(r.toString()))
-                    .filter((r): r is Role => r !== undefined)
+            const document = await UserRejoinRoles.findById(member.id)
+            if (document) {
+                const roles = member.roles.cache
+                const readdRoles = document
+                    .getRoles()
+                    .filter((id) => !roles.has(id))
+                    .map((id) => member.guild.roles.cache.get(id))
+                    .filter((r) => r instanceof Role)
                     .filter((r) => r.editable)
                     .filter((r) => !r.permissions.has("Administrator"))
                     .filter((r) => !TransientRole.isTransient(r.id))
-                    .map((r) =>
-                        member.roles
-                            .add(r)
-                            .then(() => (PositionRole.declaredRoles().has(r.id) ? log.push(r) : null))
-                            .catch(console.error),
-                    ),
-            )
 
-            if (log.length) {
+                await member.roles.add(readdRoles, "Sticky Roles")
+                await document.deleteOne().catch(console.error)
+
+                const log = readdRoles.filter((v) => PositionRole.declaredRoles().has(v.id))
                 Config.buildSendLogMessages(
                     LOG_CHANNEL,
                     [member.guild.id],

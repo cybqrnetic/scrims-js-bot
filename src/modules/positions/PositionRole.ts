@@ -1,5 +1,5 @@
 import { DocumentType, Prop } from "@typegoose/typegoose"
-import { Role } from "discord.js"
+import { Collection, Role } from "discord.js"
 import { bot, Document, modelClassCached } from "lib"
 import { Types } from "mongoose"
 
@@ -45,7 +45,7 @@ class PositionRoleClass {
 
     static resolvePermittedRoles(positionRoles: PositionRole[]) {
         const roles = Array.from(new Set(positionRoles.map((v) => v.role())))
-        return roles.filter((v): v is Role => v?.editable === true)
+        return new Collection(roles.filter((v): v is Role => v?.editable === true).map((v) => [v.id, v]))
     }
 
     @Prop({ type: String, required: true })

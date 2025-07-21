@@ -1,12 +1,12 @@
 import {
     ActionRowBuilder,
+    bold,
+    inlineCode,
     MessageFlags,
     ModalBuilder,
     SlashCommandBuilder,
     TextInputBuilder,
     TextInputStyle,
-    bold,
-    inlineCode,
     userMention,
     type BaseInteraction,
 } from "discord.js"

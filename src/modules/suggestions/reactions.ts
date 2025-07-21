@@ -1,15 +1,17 @@
 import { Message, MessageReaction, PartialMessage, PartialMessageReaction } from "discord.js"
-import { sequencedAsync } from "lib"
+import { SequencedAsyncExecutor } from "lib"
 
 import { Config } from "@module/config"
 import { Suggestion } from "./Suggestion"
 import { ConfigKeys, MessageRating, SuggestionsModule } from "./module"
 
-export default sequencedAsync(onReactionUpdate, {
-    merge: true,
-    cooldown: 3000,
-    mapper: (_, reaction) => reaction.message.channelId,
-})
+const sync = new SequencedAsyncExecutor({ merge: true, cooldown: 3000 })
+export default async function (
+    suggestions: SuggestionsModule,
+    reaction: MessageReaction | PartialMessageReaction,
+) {
+    return sync.submit(reaction.message.channelId, () => onReactionUpdate(suggestions, reaction))
+}
 
 async function onReactionUpdate(
     suggestions: SuggestionsModule,

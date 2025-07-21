@@ -1,10 +1,23 @@
-import { Emojis } from "@Constants"
+import {
+    Collection,
+    CommandInteraction,
+    GuildMember,
+    MessageComponentInteraction,
+    Role,
+    SlashCommandBuilder,
+    User,
+    userMention,
+} from "discord.js"
+import { Component, getMainGuild, MessageOptionsBuilder, SlashCommand, UserError } from "lib"
+import { Types } from "mongoose"
+
+import { Emojis, MAIN_GUILD_ID } from "@Constants"
 import { Config } from "@module/config"
-import { OnlinePositions, PositionRole, Positions } from "@module/positions"
-import { acquired, UserRejoinRoles } from "@module/sticky-roles"
-import { GuildMember, Role, SlashCommandBuilder } from "discord.js"
-import { Component, MessageOptionsBuilder, SlashCommand, UserError } from "lib"
+import { PositionRole, Positions } from "@module/positions"
+import { UserRejoinRoles } from "@module/sticky-roles"
+import { acquired } from "@module/sticky-roles/OfflinePositions"
 import { SS_TICKETS } from "./screenshare-command"
+import { ScrimsBan } from "./ScrimBan"
 
 const FREEZE_PERMS = "screenshare.freeze"
 const UNFREEZE_PERMS = "screenshare.unfreeze"
@@ -26,10 +39,8 @@ SlashCommand({
     },
 
     async handler(interaction) {
-        const member = interaction.options.getMember("user")
-        if (!member) throw new UserError("User not found.")
-        await freezeMember(member)
-        await interaction.editReply(`Successfully froze ${member}.`)
+        const userId = interaction.options.getUser("user", true).id
+        await freezeMember(interaction, userId)
     },
 })
 
@@ -48,10 +59,9 @@ SlashCommand({
     },
 
     async handler(interaction) {
-        const member = interaction.options.getMember("user")
-        if (!member) throw new UserError("User not found")
-        await unFreezeMember(member)
-        await interaction.editReply(`${Emojis.fire} ${member}, you are now unfrozen.`)
+        const target = interaction.options.getUser("user", true)
+        await unFreezeMember(target, interaction.user)
+        await interaction.editReply(`${Emojis.fire} ${target}, you are now unfrozen.`)
     },
 })
 
@@ -61,68 +71,114 @@ Component({
     config: { defer: "EphemeralReply", permission: FREEZE_PERMS },
     async handler(interaction) {
         const userId = interaction.args.shift()!
-        const member = await interaction.guild.members.fetch(userId).catch(() => null)
-        if (!member) throw new UserError("User Not Found")
-        await freezeMember(member)
-        await interaction.editReply(`Successfully froze ${member}.`)
+        await freezeMember(interaction, userId)
     },
 })
 
-async function freezeMember(member: GuildMember) {
-    if (!member.manageable) throw new UserError("Forbidden", "I cannot freeze this user.")
-    if (OnlinePositions.hasPosition(member, Positions.Frozen)) {
-        throw new UserError("Already Frozen", "This user is already frozen.")
+async function freezeMember(
+    interaction: CommandInteraction<"cached"> | MessageComponentInteraction<"cached">,
+    userId: string,
+) {
+    const guild = interaction.guild
+    const executor = interaction.user
+
+    SS_TICKETS.cancelCloseTimeouts(userId)
+    await interaction.followUp(
+        new MessageOptionsBuilder()
+            .setContent(`Screenshare ticket timeouts have been canceled for ${userMention(userId)}.`)
+            .setEphemeral(true),
+    )
+
+    const member = await guild.members.fetch(userId).catch(() => null)
+    if (!member) {
+        throw new UserError("User is no longer in the server.")
     }
 
-    SS_TICKETS.cancelCloseTimeouts(member.id)
-    const frozenRoles = PositionRole.getPermittedRoles(Positions.Frozen, member.guild.id)
-
-    await acquired(member.id, async () => {
-        const removeRoles = member.roles.cache.filter((r) => !r.managed).map((r) => r.id)
-        await Promise.all([
-            UserRejoinRoles.updateOne(
-                { _id: member.id },
-                { $addToSet: { roles: { $each: removeRoles } } },
-                { upsert: true },
-            ),
-            Promise.all(removeRoles.map((r) => member.roles.remove(r, `Frozen by ${member.user.tag}.`))),
-            Promise.all(frozenRoles.map((r) => member.roles.add(r, `Frozen by ${member.user.tag}.`))),
-        ])
-    })
-
-    await sendFrozenMessage(member)
-}
-
-async function unFreezeMember(member: GuildMember) {
-    if (!member.manageable) throw new UserError("Forbidden", "I cannot unfreeze this user.")
-    if (!OnlinePositions.hasPosition(member, Positions.Frozen)) {
-        throw new UserError("Not Frozen", "This user is not frozen.")
+    if (member.user.bot) {
+        throw new UserError("Forbidden", "I cannot freeze this user.")
     }
 
     await acquired(member.id, async () => {
-        const rejoinRoles = await UserRejoinRoles.findByIdAndDelete(member.id)
-        if (!rejoinRoles) return
+        const frozenRoles = PositionRole.getPermittedRoles(Positions.Frozen, guild.id)
+        const oldRoles = member.roles.cache
+        const newRoles = oldRoles.filter((r) => r.managed || r.id === guild.id).concat(frozenRoles)
+        const removeRoles = oldRoles.subtract(newRoles).map((v) => v.id)
 
-        const roles = rejoinRoles.roles
-            .map((r) => member.guild.roles.cache.get(r.toString()))
-            .filter((r): r is Role => r !== undefined && !r.managed)
+        const result = await ScrimsBan.findOneAndUpdate(
+            {
+                user: member.id,
+                roles: { $exists: true }, // if roles is set, the ban is still active
+            },
+            { $setOnInsert: { roles: removeRoles, executor: executor.id, creation: new Date() } },
+            { upsert: true, includeResultMetadata: true },
+        )
 
-        await member.roles.add(roles, `Unfrozen by ${member.user.tag}.`)
-        const log = roles.filter((r) => PositionRole.declaredRoles().has(r.id))
+        // bans without a expiration means its a freeze
+        if (result.value?.expiration !== undefined)
+            throw new UserError("Already Banned", `${member} has already been scrim banned.`)
 
-        if (log.length) {
-            Config.buildSendLogMessages(
-                "Positions Log Channel",
-                [member.guild.id],
-                new MessageOptionsBuilder().setContent(
-                    `${Emojis.snowflake} ${member} Got ${log.join(" ")} back after being frozen.`,
-                ),
-            )
+        if (result.value) {
+            throw new UserError("Already Frozen", `${member} is already frozen.`)
+        }
+
+        try {
+            await member.roles.set(newRoles, `Frozen by ${executor.tag}.`)
+        } catch (error) {
+            if (result.lastErrorObject?.upserted) {
+                await ScrimsBan.deleteOne(result.lastErrorObject.upserted).catch(console.error)
+            }
+
+            throw error
         }
     })
 
-    const frozenRoles = PositionRole.getPermittedRoles(Positions.Frozen, member.guild.id)
-    await member.roles.remove(frozenRoles)
+    await sendFrozenMessage(member)
+    await interaction.followUp(
+        new MessageOptionsBuilder().setContent(`Successfully froze ${member}.`).setEphemeral(true),
+    )
+}
+
+async function unFreezeMember(user: User, executor: User) {
+    await acquired(user.id, async () => {
+        // bans without a expiration means its a freeze
+        const unfreeze = await ScrimsBan.findOneAndDelete({ user: user.id, expiration: { $exists: false } })
+        if (!unfreeze) {
+            throw new UserError("Not Frozen", `${user} is not frozen.`)
+        }
+
+        await resetRoles(user.id, unfreeze.roles, `Unfrozen by ${executor.tag}.`)
+    })
+}
+
+export async function resetRoles(userId: string, roles: Types.Long[], reason: string) {
+    const guild = getMainGuild()
+    const member = await guild?.members.fetch(userId).catch(() => null)
+    if (member) {
+        try {
+            const readdRoles = new Collection(
+                roles
+                    .map((r) => member.guild.roles.cache.get(r.toString()))
+                    .filter((r) => r instanceof Role)
+                    .filter((r) => r.editable)
+                    .filter((r) => !r.permissions.has("Administrator"))
+                    .map((r) => [r.id, r]),
+            )
+
+            const frozenRoles = PositionRole.getPermittedRoles(Positions.Frozen, MAIN_GUILD_ID)
+            const banRoles = PositionRole.getPermittedRoles(Positions.Banned, MAIN_GUILD_ID)
+            const newRoles = member.roles.cache.concat(readdRoles).subtract(frozenRoles).subtract(banRoles)
+            await member.roles.set(newRoles, reason)
+            return
+        } catch (error) {
+            console.debugError(error)
+        }
+    }
+
+    await UserRejoinRoles.updateOne(
+        { _id: userId },
+        { $addToSet: { roles: { $each: roles } } },
+        { upsert: true },
+    )
 }
 
 async function sendFrozenMessage(member: GuildMember) {

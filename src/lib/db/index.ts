@@ -7,13 +7,15 @@ mongoose.Schema.Types.Long.get((v?: mongoose.Types.Long) => v?.toString())
 let startupTasks: (() => Promise<unknown>)[] | null = []
 
 export class DB {
-    static addStartupTask<T>(task: () => Promise<T>) {
+    static addStartupTask<T>(task: () => T) {
         if (startupTasks === null) {
             throw new Error("Already connected to the database, cannot add startup task.")
         }
 
-        const result = {} as { value: T }
-        startupTasks.push(() => task().then((v) => (result.value = v)))
+        const result = {} as { value: Awaited<T> }
+        startupTasks.push(async () => {
+            result.value = await task()
+        })
         return result
     }
 }

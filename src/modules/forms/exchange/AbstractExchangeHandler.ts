@@ -1,15 +1,12 @@
 import { BaseInteraction, type MessageComponentInteraction, type ModalSubmitInteraction } from "discord.js"
-import { Component, redis, sequencedAsync, UserError } from "lib"
+import { Component, redis, SequencedAsyncExecutor, UserError } from "lib"
 import { ExchangeState, ExchangeStateImpl } from "./ExchangeState"
 
 const EXPIRATION = 15 * 60
 
 export abstract class AbstractExchangeHandler {
     protected readonly states = new Map<string, ExchangeStateImpl>()
-    protected readonly oncePerUser = sequencedAsync(
-        <T>(ctx: BaseInteraction<"cached">, task: () => Promise<T>) => task(),
-        { mapper: (ctx) => ctx.user.id },
-    )
+    protected readonly userSync = new SequencedAsyncExecutor()
 
     constructor(protected readonly customId: string) {}
 
@@ -28,6 +25,10 @@ export abstract class AbstractExchangeHandler {
             handleModalSubmit: (i) => this.handleModal(i),
         })
         return this
+    }
+
+    protected async oncePerUser<T>(ctx: BaseInteraction<"cached">, task: () => Promise<T>) {
+        return this.userSync.submit(ctx.user.id, task)
     }
 
     protected async useState<T>(ctx: BaseInteraction<"cached">, action: (state: ExchangeState) => T) {

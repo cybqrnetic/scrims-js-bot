@@ -126,7 +126,12 @@ export class MessageOptionsBuilder {
     }
 
     addEmbeds(...embeds: BuilderOrCallback<EmbedBuilder>[]) {
-        this.embeds.push(...resolveBuilders(EmbedBuilder, embeds).map((v) => v.toJSON()))
+        this.embeds.push(
+            ...resolveBuilders(EmbedBuilder, embeds).map((v) => ({
+                ...v.data,
+                fields: [...(v.data.fields ?? [])],
+            })),
+        )
         if (this.embeds.length > 10) throw new TypeError("You can't have more than 10 embeds!")
         return this
     }

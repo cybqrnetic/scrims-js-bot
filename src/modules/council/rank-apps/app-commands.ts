@@ -12,7 +12,7 @@ import { getMainGuild, LocalizedError, MessageOptionsBuilder, SlashCommand, User
 
 import { MAIN_GUILD_ID, RANKS } from "@Constants"
 import { PositionRole } from "@module/positions"
-import { OfflinePositions } from "@module/sticky-roles"
+import { OfflinePositions } from "@module/sticky-roles/OfflinePositions"
 import { TicketManager } from "@module/tickets"
 import { Vouch } from "@module/vouch-system"
 import { LogUtil } from "../vouches/LogUtil"
