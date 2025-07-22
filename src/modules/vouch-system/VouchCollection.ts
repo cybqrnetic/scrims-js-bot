@@ -1,6 +1,8 @@
 import { StringSelectMenuBuilder, User } from "discord.js"
 import { bot, ColorUtil, I18n, LocalizedError, MessageOptionsBuilder, TextUtil, TimeUtil } from "lib"
 
+import { ROLE_APP_HUB } from "@Constants"
+import { Config } from "@module/config"
 import { PositionRole } from "@module/positions"
 import { Vouch } from "./Vouch"
 import { VouchUtil } from "./VouchUtil"
@@ -52,10 +54,16 @@ export class VouchCollection {
 
     getValueSincePurge() {
         const index = this.get().findIndex((v) => v.isPurge())
-        return this.get()
+        const vouches = this.get()
             .slice(0, index === -1 ? this.size : index)
             .filter((v) => !v.isVoteOutcome())
-            .reduce((pv, cv) => pv + cv.worth, 0)
+
+        const positive = vouches.filter((v) => v.isPositive())
+        const dampening = dampenings[`${this.position} Devouch Dampening`] ?? 0
+        if (dampening <= 0) return positive.length
+
+        const negative = vouches.length - positive.length
+        return positive.length - Math.floor(negative / dampening)
     }
 
     getNegative() {
@@ -141,3 +149,17 @@ export class VouchCollection {
         return message
     }
 }
+
+const DAMPENING_REGEX = /(.+) Devouch Dampening/g
+const dampenings: Record<string, number> = {}
+Config.cache
+    .on("add", (config) => {
+        if (config.type.match(DAMPENING_REGEX) && config.guildId === ROLE_APP_HUB) {
+            dampenings[config.type] = parseInt(config.value) || 0
+        }
+    })
+    .on("delete", (config) => {
+        if (config.guildId === ROLE_APP_HUB) {
+            delete dampenings[config.type]
+        }
+    })
