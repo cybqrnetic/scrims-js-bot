@@ -94,7 +94,7 @@ async function freezeMember(
         throw new UserError("User is no longer in the server.")
     }
 
-    if (member.user.bot) {
+    if (member.user.bot || member.permissions.has("Administrator")) {
         throw new UserError("Forbidden", "I cannot freeze this user.")
     }
 

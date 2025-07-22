@@ -33,6 +33,11 @@ SlashCommand({
     },
 
     async handler(interaction) {
+        const target = interaction.options.getUser("user", true)
+        if (target.bot) {
+            throw new UserError("Invalid User", "You cannot scrim ban a bot.")
+        }
+
         const reason = interaction.options.getString("reason", true)
         const durationInput = interaction.options.getString("duration")
         const duration = durationInput ? TimeUtil.parseDuration(durationInput) : 30 * 24 * 60 * 60
@@ -41,7 +46,6 @@ SlashCommand({
         }
 
         const expiration = new Date(Date.now() + duration * 1000)
-        const target = interaction.options.getUser("user", true)
         const existing = await acquired(target.id, async () => {
             const discordRoles = await stripRoles(target, interaction.guild, interaction.user)
             const rejoinRoles = await UserRejoinRoles.findByIdAndDelete(target.id)
@@ -218,6 +222,10 @@ async function stripRoles(target: User, guild: Guild, executor: User) {
     const member = await guild.members.fetch(target.id).catch(() => null)
     if (!member) {
         return []
+    }
+
+    if (member.permissions.has("Administrator")) {
+        throw new UserError("Forbidden", "I cannot scrim ban this user.")
     }
 
     const banRoles = PositionRole.getPermittedRoles(Positions.Banned, guild.id)
