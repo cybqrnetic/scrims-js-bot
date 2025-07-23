@@ -8,6 +8,7 @@ import {
     TextChannel,
 } from "discord.js"
 
+import { bot } from ".."
 import { SequencedAsync } from "../../utils/SequencedAsync"
 
 export type GetMessageCall = () => BaseMessageOptions
@@ -28,17 +29,13 @@ export class MessageFloater {
         this.message = message
 
         this.messageCreateHandler = (m: Message) => this.onMessageCreate(m)
-        this.bot!.on(Events.MessageCreate, this.messageCreateHandler)
+        bot.on(Events.MessageCreate, this.messageCreateHandler)
 
         this.messageDeleteHandler = (m: Message | PartialMessage) => this.onMessageDelete(m)
-        this.bot!.on(Events.MessageDelete, this.messageDeleteHandler)
+        bot.on(Events.MessageDelete, this.messageDeleteHandler)
 
         this.channelDeleteHandler = (c: DMChannel | NonThreadGuildBasedChannel) => this.onChannelDelete(c)
-        this.bot!.on(Events.ChannelDelete, this.channelDeleteHandler)
-    }
-
-    get bot() {
-        return this.channel?.client
+        bot.on(Events.ChannelDelete, this.channelDeleteHandler)
     }
 
     get channelId() {
@@ -68,19 +65,23 @@ export class MessageFloater {
         clearTimeout(this.resendTimeout)
 
         if (this.channel) {
-            await this.message?.delete()?.catch(() => null)
+            const message = this.message
+            this.message = undefined
+
+            await message?.delete()?.catch(() => null)
             this.message = await this.channel.send(this.getMessageCall())
 
             // 7 minutes is how long it takes too unstack Discord messages
-            if (unstack)
+            if (unstack) {
                 this.resendTimeout = setTimeout(() => this.send(false).catch(console.error), 7 * 60 * 1000)
+            }
         }
     }
 
     destroy() {
-        this.bot?.off(Events.MessageCreate, this.messageCreateHandler)
-        this.bot?.off(Events.MessageDelete, this.messageDeleteHandler)
-        this.bot?.off(Events.ChannelDelete, this.channelDeleteHandler)
+        bot.off(Events.MessageCreate, this.messageCreateHandler)
+        bot.off(Events.MessageDelete, this.messageDeleteHandler)
+        bot.off(Events.ChannelDelete, this.channelDeleteHandler)
 
         clearTimeout(this.resendTimeout)
         this.message?.delete()?.catch(() => null)

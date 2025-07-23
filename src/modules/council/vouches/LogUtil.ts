@@ -26,6 +26,7 @@ for (const rank of Object.values(RANKS)) {
     Config.declareType(`${rank} Auto Role Vouches`)
     Config.declareType(`${rank} Vouch Expiration`)
     Config.declareType(`${rank} Devouch Expiration`)
+    Config.declareType(`${rank} Devouch Dampening`)
 }
 
 const PROMOTION_PREFIX: Record<string, string> = {
